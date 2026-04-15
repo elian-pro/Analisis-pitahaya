@@ -75,40 +75,58 @@
     .result-arrow{color:#f0f0f0;font-size:16px;font-weight:700;}
     .error-box{padding:12px 15px;background:rgba(224,85,101,0.08);border:1px solid rgba(224,85,101,0.2);border-radius:8px;font-size:13px;color:#e88090;line-height:1.5;}
     /* ── Modal de progreso ── */
-    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center;}
-    .modal-backdrop.show{display:flex;}
-    .modal{background:var(--surface);border:1px solid var(--border-2);border-radius:20px;width:100%;max-width:480px;padding:32px 28px;position:relative;box-shadow:0 24px 80px rgba(0,0,0,0.6);}
-    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
-    .modal-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;}
-    .modal-subtitle{font-size:11px;color:var(--text-muted);margin-top:3px;}
-    .modal-close{width:30px;height:30px;border-radius:50%;border:1px solid var(--border-2);background:none;color:var(--text-muted);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;transition:all 0.15s;}
+    .modal-backdrop{
+      display:none;
+      position:fixed;
+      top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.8);
+      backdrop-filter:blur(6px);
+      -webkit-backdrop-filter:blur(6px);
+      z-index:9999;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+    }
+    .modal-backdrop.show{display:flex !important;}
+    .modal{
+      background:#141414;
+      border:1px solid #3d3d3d;
+      border-radius:20px;
+      width:100%;
+      max-width:480px;
+      padding:32px 28px;
+      box-shadow:0 24px 80px rgba(0,0,0,0.8);
+    }
+    .modal-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
+    .modal-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#f0f0f0;}
+    .modal-subtitle{font-size:11px;color:#888888;margin-top:4px;}
+    .modal-close{width:30px;height:30px;border-radius:50%;border:1px solid #3d3d3d;background:none;color:#888888;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
     .modal-close.show{display:flex;}
-    .modal-close:hover{background:var(--surface-2);color:var(--text);}
-    .progress-track{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:10px;}
+    .modal-close:hover{background:#1e1e1e;color:#f0f0f0;}
+    .progress-track{height:6px;background:#2a2a2a;border-radius:99px;overflow:hidden;margin-bottom:10px;}
     .progress-bar{height:100%;width:0%;background:#ffffff;border-radius:99px;transition:width 1s linear;}
     .progress-bar.done{background:#ffffff;transition:width 0.5s ease;}
     .progress-bar.error{background:#ff6060;transition:width 0.3s ease;}
-    .progress-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:24px;}
-    .progress-pct{font-weight:600;color:var(--text-muted);}
+    .progress-meta{display:flex;justify-content:space-between;font-size:11px;color:#555555;margin-bottom:24px;}
+    .progress-pct{font-weight:600;color:#888888;}
     .steps-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px;}
     .step-item{display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:10px;border:1px solid transparent;transition:all 0.3s;}
-    .step-item.active{background:rgba(255,255,255,0.04);border-color:var(--border-2);}
-    .step-item.done{opacity:0.5;}
-    .step-item.pending{opacity:0.3;}
-    .step-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;}
-    .step-icon.active{background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.3);}
-    .step-icon.done{background:rgba(255,255,255,0.08);color:#f0f0f0;font-size:12px;}
-    .step-icon.pending{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text-dim);}
-    .step-icon.error-icon{background:rgba(255,96,96,0.1);border:1.5px solid rgba(255,96,96,0.3);color:#ff6060;}
-    .spin-step{width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#ffffff;border-radius:50%;animation:spin 0.75s linear infinite;}
+    .step-item.active{background:rgba(255,255,255,0.04);border-color:#3d3d3d;}
+    .step-item.done{opacity:0.45;}
+    .step-item.pending{opacity:0.25;}
+    .step-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:#f0f0f0;}
+    .step-icon.active{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.25);}
+    .step-icon.done{background:rgba(255,255,255,0.06);font-size:12px;}
+    .step-icon.pending{background:#1e1e1e;border:1.5px solid #2a2a2a;color:#555555;}
+    .spin-step{width:14px;height:14px;border:2px solid rgba(255,255,255,0.15);border-top-color:#ffffff;border-radius:50%;animation:spin 0.75s linear infinite;}
     .step-text{font-size:13px;font-weight:500;flex:1;}
-    .step-text.active{color:var(--text);}
-    .step-text.done{color:var(--text-muted);}
-    .step-text.pending{color:var(--text-dim);}
-    .modal-result{display:none;}
+    .step-text.active{color:#f0f0f0;}
+    .step-text.done{color:#888888;}
+    .step-text.pending{color:#555555;}
+    .modal-result{display:none;margin-top:4px;}
     .modal-result.show{display:block;}
     @keyframes spin{to{transform:rotate(360deg);}}
-    @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{margin:16px;padding:24px 20px;}}
+    @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
   </style>
 </head>
 <body>
@@ -365,10 +383,13 @@
     pct.textContent='0%';
     elapsed.textContent='0:00 transcurrido';
     modalResult.className='modal-result';
+    modalResult.style.display='none';
     modalResult.innerHTML='';
     modalClose.className='modal-close';
+    modalClose.style.display='none';
     subtitle.textContent=steps[0];
     backdrop.classList.add('show');
+    backdrop.style.display='flex';
 
     // build step items
     stepsList.innerHTML='';
@@ -450,8 +471,10 @@
     pct.textContent='100%';
     subtitle.textContent='Reporte listo';
     modalClose.className='modal-close show';
+    modalClose.style.display='flex';
 
     modalResult.className='modal-result show';
+    modalResult.style.display='block';
     modalResult.innerHTML=`<a href="${url}" target="_blank" class="result-link" style="margin-top:0;"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
   }
 
@@ -466,12 +489,16 @@
     bar.className='progress-bar error';
     subtitle.textContent='Error al generar el reporte';
     modalClose.className='modal-close show';
+    modalClose.style.display='flex';
     modalResult.className='modal-result show';
+    modalResult.style.display='block';
     modalResult.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${msg}</div>`;
   }
 
   function closeModal(){
-    document.getElementById('modal-backdrop').classList.remove('show');
+    const b=document.getElementById('modal-backdrop');
+    b.classList.remove('show');
+    b.style.display='none';
   }
 
   async function generateReport(mode){

@@ -70,16 +70,45 @@
     .result-section{display:none;margin-top:4px;}
     .result-section.show{display:block;}
     .result-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;}
-    .loading-row{display:none;align-items:center;gap:11px;padding:11px 14px;background:var(--surface-2);border-radius:8px;font-size:13px;color:var(--text-muted);}
-    .loading-row.show{display:flex;}
-    .loading-detail{font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 14px;}
-    .spin-sm{width:15px;height:15px;border:2px solid var(--border);border-top-color:#ffffff;border-radius:50%;flex-shrink:0;animation:spin 0.75s linear infinite;}
     .result-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:9px;text-decoration:none;color:var(--text);font-size:14px;font-weight:500;transition:all 0.2s;}
     .result-link:hover{background:rgba(255,255,255,0.09);transform:translateX(3px);}
     .result-arrow{color:#f0f0f0;font-size:16px;font-weight:700;}
     .error-box{padding:12px 15px;background:rgba(224,85,101,0.08);border:1px solid rgba(224,85,101,0.2);border-radius:8px;font-size:13px;color:#e88090;line-height:1.5;}
+    /* ── Modal de progreso ── */
+    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center;}
+    .modal-backdrop.show{display:flex;}
+    .modal{background:var(--surface);border:1px solid var(--border-2);border-radius:20px;width:100%;max-width:480px;padding:32px 28px;position:relative;box-shadow:0 24px 80px rgba(0,0,0,0.6);}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+    .modal-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;}
+    .modal-subtitle{font-size:11px;color:var(--text-muted);margin-top:3px;}
+    .modal-close{width:30px;height:30px;border-radius:50%;border:1px solid var(--border-2);background:none;color:var(--text-muted);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;transition:all 0.15s;}
+    .modal-close.show{display:flex;}
+    .modal-close:hover{background:var(--surface-2);color:var(--text);}
+    .progress-track{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:10px;}
+    .progress-bar{height:100%;width:0%;background:#ffffff;border-radius:99px;transition:width 1s linear;}
+    .progress-bar.done{background:#ffffff;transition:width 0.5s ease;}
+    .progress-bar.error{background:#ff6060;transition:width 0.3s ease;}
+    .progress-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:24px;}
+    .progress-pct{font-weight:600;color:var(--text-muted);}
+    .steps-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px;}
+    .step-item{display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:10px;border:1px solid transparent;transition:all 0.3s;}
+    .step-item.active{background:rgba(255,255,255,0.04);border-color:var(--border-2);}
+    .step-item.done{opacity:0.5;}
+    .step-item.pending{opacity:0.3;}
+    .step-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;}
+    .step-icon.active{background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.3);}
+    .step-icon.done{background:rgba(255,255,255,0.08);color:#f0f0f0;font-size:12px;}
+    .step-icon.pending{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text-dim);}
+    .step-icon.error-icon{background:rgba(255,96,96,0.1);border:1.5px solid rgba(255,96,96,0.3);color:#ff6060;}
+    .spin-step{width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#ffffff;border-radius:50%;animation:spin 0.75s linear infinite;}
+    .step-text{font-size:13px;font-weight:500;flex:1;}
+    .step-text.active{color:var(--text);}
+    .step-text.done{color:var(--text-muted);}
+    .step-text.pending{color:var(--text-dim);}
+    .modal-result{display:none;}
+    .modal-result.show{display:block;}
     @keyframes spin{to{transform:rotate(360deg);}}
-    @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}}
+    @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{margin:16px;padding:24px 20px;}}
   </style>
 </head>
 <body>
@@ -157,15 +186,32 @@
   <div class="result-section" id="result-section">
     <div class="section-label">Reporte generado</div>
     <div class="result-card">
-      <div class="loading-row" id="loading-row">
-        <div class="spin-sm"></div>
-        <span id="loading-text">Iniciando análisis…</span>
-      </div>
-      <div class="loading-detail" id="loading-detail"></div>
-      <div id="result-content" style="margin-top:4px;"></div>
+      <div id="result-content"></div>
     </div>
   </div>
 </main>
+
+<!-- Modal de progreso -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Generando reporte</div>
+        <div class="modal-subtitle" id="modal-subtitle">Iniciando análisis…</div>
+      </div>
+      <button class="modal-close" id="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="progress-track">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="progress-meta">
+      <span id="progress-elapsed">0:00 transcurrido</span>
+      <span class="progress-pct" id="progress-pct">0%</span>
+    </div>
+    <div class="steps-list" id="steps-list"></div>
+    <div class="modal-result" id="modal-result"></div>
+  </div>
+</div>
 <script>
   const WEBHOOK_URL="https://n8n-n8n.9qd6cz.easypanel.host/webhook/pitahaya-reportes";
   const DA=[
@@ -299,6 +345,135 @@
   let busy=false;
   function lock(v){['btn-selected','btn-general'].forEach(id=>document.getElementById(id).disabled=v);}
 
+  // ── Modal helpers ──
+  let progressInterval=null;
+  let elapsedInterval=null;
+
+  function openModal(steps,totalSecs){
+    const backdrop=document.getElementById('modal-backdrop');
+    const stepsList=document.getElementById('steps-list');
+    const bar=document.getElementById('progress-bar');
+    const pct=document.getElementById('progress-pct');
+    const elapsed=document.getElementById('progress-elapsed');
+    const subtitle=document.getElementById('modal-subtitle');
+    const modalResult=document.getElementById('modal-result');
+    const modalClose=document.getElementById('modal-close');
+
+    // reset
+    bar.style.width='0%';
+    bar.className='progress-bar';
+    pct.textContent='0%';
+    elapsed.textContent='0:00 transcurrido';
+    modalResult.className='modal-result';
+    modalResult.innerHTML='';
+    modalClose.className='modal-close';
+    subtitle.textContent=steps[0];
+    backdrop.classList.add('show');
+
+    // build step items
+    stepsList.innerHTML='';
+    steps.forEach((s,i)=>{
+      const el=document.createElement('div');
+      el.className='step-item '+(i===0?'active':'pending');
+      el.id='step-'+i;
+      el.innerHTML=`<div class="step-icon ${i===0?'active':'pending'}" id="step-icon-${i}">${i===0?'<div class="spin-step"></div>':(i+1)}</div><span class="step-text ${i===0?'active':'pending'}" id="step-text-${i}">${s}</span>`;
+      stepsList.appendChild(el);
+    });
+
+    // elapsed timer
+    let secs=0;
+    elapsedInterval=setInterval(()=>{
+      secs++;
+      const m=Math.floor(secs/60);
+      const s2=String(secs%60).padStart(2,'0');
+      elapsed.textContent=`${m}:${s2} transcurrido`;
+    },1000);
+
+    // progress bar — fills to 90% over totalSecs, then holds
+    let tick=0;
+    progressInterval=setInterval(()=>{
+      tick++;
+      const p=Math.min(90,Math.round((tick/totalSecs)*90));
+      bar.style.width=p+'%';
+      pct.textContent=p+'%';
+
+      // advance steps at 25% intervals
+      const stepIndex=Math.min(steps.length-1,Math.floor((p/90)*(steps.length-1)));
+      steps.forEach((_,i)=>{
+        const item=document.getElementById('step-'+i);
+        const icon=document.getElementById('step-icon-'+i);
+        const txt=document.getElementById('step-text-'+i);
+        if(!item)return;
+        if(i<stepIndex){
+          item.className='step-item done';
+          icon.className='step-icon done';
+          icon.textContent='✓';
+          txt.className='step-text done';
+        } else if(i===stepIndex){
+          item.className='step-item active';
+          icon.className='step-icon active';
+          icon.innerHTML='<div class="spin-step"></div>';
+          txt.className='step-text active';
+          subtitle.textContent=steps[i];
+        } else {
+          item.className='step-item pending';
+          icon.className='step-icon pending';
+          icon.textContent=i+1;
+          txt.className='step-text pending';
+        }
+      });
+    },1000);
+  }
+
+  function finishModal(url,docName,ml){
+    clearInterval(progressInterval);
+    clearInterval(elapsedInterval);
+    const bar=document.getElementById('progress-bar');
+    const pct=document.getElementById('progress-pct');
+    const subtitle=document.getElementById('modal-subtitle');
+    const modalResult=document.getElementById('modal-result');
+    const modalClose=document.getElementById('modal-close');
+    const steps=document.querySelectorAll('.step-item');
+
+    // complete all steps
+    steps.forEach((item,i)=>{
+      item.className='step-item done';
+      const icon=item.querySelector('.step-icon');
+      const txt=item.querySelector('.step-text');
+      icon.className='step-icon done';
+      icon.textContent='✓';
+      txt.className='step-text done';
+    });
+
+    bar.className='progress-bar done';
+    bar.style.width='100%';
+    pct.textContent='100%';
+    subtitle.textContent='Reporte listo';
+    modalClose.className='modal-close show';
+
+    modalResult.className='modal-result show';
+    modalResult.innerHTML=`<a href="${url}" target="_blank" class="result-link" style="margin-top:0;"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
+  }
+
+  function errorModal(msg){
+    clearInterval(progressInterval);
+    clearInterval(elapsedInterval);
+    const bar=document.getElementById('progress-bar');
+    const subtitle=document.getElementById('modal-subtitle');
+    const modalResult=document.getElementById('modal-result');
+    const modalClose=document.getElementById('modal-close');
+
+    bar.className='progress-bar error';
+    subtitle.textContent='Error al generar el reporte';
+    modalClose.className='modal-close show';
+    modalResult.className='modal-result show';
+    modalResult.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${msg}</div>`;
+  }
+
+  function closeModal(){
+    document.getElementById('modal-backdrop').classList.remove('show');
+  }
+
   async function generateReport(mode){
     if(busy)return;
     const advisors=mode==='general'?ga().map(a=>a.name):gs();
@@ -306,21 +481,20 @@
     const month=ms.value;
     const ml=ms.options[ms.selectedIndex].text;
     busy=true;lock(true);
-    document.getElementById('result-section').classList.add('show');
-    document.getElementById('loading-row').classList.add('show');
+    document.getElementById('result-section').classList.remove('show');
     document.getElementById('result-content').innerHTML='';
 
     const n=advisors.length;
-    const steps=[
-      `Analizando llamadas de ${n===1?advisors[0]:n+' asesores'}…`,
-      `Generando reportes individuales con IA…`,
-      `Sintetizando reporte general del equipo…`,
-      `Finalizando Google Doc…`
+    const STEPS=[
+      `Analizando llamadas de ${n===1?advisors[0]:n+' asesores'}`,
+      'Generando reportes individuales con IA',
+      'Sintetizando reporte general del equipo',
+      'Finalizando Google Doc'
     ];
-    let si=0;
-    document.getElementById('loading-text').textContent=steps[0];
-    document.getElementById('loading-detail').textContent=`Tiempo estimado: ${n}–${n*3} min. Los reportes se escriben en el doc conforme se generan.`;
-    const iv=setInterval(()=>{si=Math.min(si+1,steps.length-1);document.getElementById('loading-text').textContent=steps[si];},35000);
+    // estimated max = n*3 min, but cap display at 15 min
+    const totalSecs=Math.min(n*3*60,15*60);
+    openModal(STEPS,totalSecs);
+    document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
 
     try{
       const res=await fetch(WEBHOOK_URL,{
@@ -330,18 +504,17 @@
       });
       if(!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data=await res.json();
-      clearInterval(iv);
-      document.getElementById('loading-row').classList.remove('show');
-      document.getElementById('loading-detail').textContent='';
       if(data.url){
-        document.getElementById('result-content').innerHTML=`<a href="${data.url}" target="_blank" class="result-link"><span>📄 &nbsp;${data.name||'Pitahaya | Reporte de evaluación de llamadas | '+ml}</span><span class="result-arrow">→</span></a>`;
+        const docName=data.name||'Pitahaya | Reporte de evaluación de llamadas | '+ml;
+        finishModal(data.url,docName,ml);
+        document.getElementById('result-section').classList.add('show');
+        document.getElementById('result-content').innerHTML=`<a href="${data.url}" target="_blank" class="result-link"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
       } else {
         throw new Error(data.error||'No se recibió URL del documento.');
       }
     }catch(e){
-      clearInterval(iv);
-      document.getElementById('loading-row').classList.remove('show');
-      document.getElementById('loading-detail').textContent='';
+      errorModal(e.message);
+      document.getElementById('result-section').classList.add('show');
       document.getElementById('result-content').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
     }
     busy=false;lock(false);

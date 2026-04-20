@@ -364,10 +364,10 @@
 
       let names=[];
       if(Array.isArray(data)){
-        names=data.map(a=>typeof a==='string'?a:(a.name||''));
+        names=data.map(a=>typeof a==='string'?a:(a.asesor||a.name||''));
       } else if(data.advisors){
         const arr=Array.isArray(data.advisors)?data.advisors:[data.advisors];
-        names=arr.map(a=>typeof a==='string'?a:(a.name||''));
+        names=arr.map(a=>typeof a==='string'?a:(a.asesor||a.name||''));
       }
       names=names.filter(Boolean);
 

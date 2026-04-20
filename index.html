@@ -310,7 +310,7 @@
   // ── Carga clients.json ──
   async function loadClients(){
     try{
-      const res=await fetch('./clients.json');
+      const res=await fetch('./clients.json?v=' + Date.now());
       if(!res.ok) throw new Error('No se pudo cargar clients.json');
       allClients=await res.json();
       const sel=document.getElementById('client-select');

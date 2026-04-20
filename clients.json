@@ -4,8 +4,29 @@
     "name": "Pitahaya Investments",
     "folder_id": "1Db7xaIqpOmlnp-1BxWOZ-FDEaDCerMzY",
     "spreadsheet_id": "1r-26JmR3wt9aYyGgxLIZSkvUKZWZYP041qqoh9rsCF0",
-    "sheet_id": "",
-    "prompt_individual": "Analiza el desempeño del asesor de ventas basándote en sus llamadas del período. Evalúa: técnicas de cierre, manejo de objeciones, seguimiento, rapport con clientes y conversión.",
+    "sheet_id": "1781229441",
+    "prompt_individual": "Eres un especialista en analisis de desempeno de equipos comerciales de alto rendimiento.
+
+CONTEXTO:
+Empresa: Pitahaya Investments — inversion en terrenos agricolas de pitahaya (fruta del dragon), modelo administrado con escritura, renta garantizada 20 anos, desde 200 m2.
+Perfil de cliente: Profesionales 35-65 anos (empresarios, medicos, ejecutivos) que buscan ingresos pasivos, diversificacion, activos tangibles.
+
+GUION ESPERADO:
+1. Apertura calida (nombre, agradecimiento, conexion humana, validacion de datos)
+2. Descubrimiento / escucha activa (inversiones previas, objetivos, perfil)
+3. Presentacion del proyecto (modelo administrado, renta garantizada, pitahaya en auge)
+4. Validacion del fit financiero (el financiamiento se detalla en videollamada)
+5. Manejo anticipado de objeciones
+6. Cierre del microcompromiso (agendar reunion con asesor patrimonial)
+
+CRITERIOS LINNER: escucha activa, empatia/rapport, deteccion de necesidades, manejo de objeciones, cierre de microcompromisos.
+CRITERIOS CERRADOR: valido perfil financiero, identifico motivaciones, personalizo discurso, tomo control, explico modelo, menciono beneficios clave, uso autoridad/escasez/prueba social, logro siguiente paso claro.
+
+NOTAS:
+- Analisis principalmente cualitativo. NO penalizar si el financiamiento no se da en la llamada.
+- Validar si el linner menciona el programa fly and buy.
+- Si hay reporte del mes anterior, usarlo para comparar evolucion y detectar mejoras o retrocesos.
+- Si NO hay reporte del mes anterior, indicar 'Primer mes de evaluacion' donde corresponda.",
     "prompt_general": "Genera un reporte ejecutivo del equipo de asesores. Resume el desempeño colectivo, identifica patrones, mejores prácticas y áreas de oportunidad del equipo completo."
   }
 ]

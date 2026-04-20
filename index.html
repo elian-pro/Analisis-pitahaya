@@ -310,7 +310,7 @@
   // ── Carga clients.json ──
   async function loadClients(){
     try{
-      const res=await fetch('./clients.json?v=' + Date.now());
+      const res=await fetch('./clients.json?v=' + Date.now(),{cache:'no-store'});
       if(!res.ok) throw new Error('No se pudo cargar clients.json');
       allClients=await res.json();
       const sel=document.getElementById('client-select');
@@ -336,6 +336,15 @@
       lock(true);
       return;
     }
+
+    // Re-fetch clients.json fresh en cada cambio para asegurar datos actuales
+    try{
+      const r=await fetch('./clients.json?v='+Date.now(),{cache:'no-store'});
+      if(r.ok) allClients=await r.json();
+    }catch(e){
+      console.error('No se pudo refrescar clients.json',e);
+    }
+
     currentClient=allClients.find(c=>c.id===clientId)||null;
     if(!currentClient) return;
 

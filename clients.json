@@ -1,0 +1,10 @@
+[
+  {
+    "id": "pitahaya-investments",
+    "name": "Pitahaya Investments",
+    "folder_id": "FOLDER_ID_AQUI",
+    "spreadsheet_id": "SPREADSHEET_ID_AQUI",
+    "prompt_individual": "Analiza el desempeño del asesor de ventas basándote en sus llamadas del período. Evalúa: técnicas de cierre, manejo de objeciones, seguimiento, rapport con clientes y conversión.",
+    "prompt_general": "Genera un reporte ejecutivo del equipo de asesores. Resume el desempeño colectivo, identifica patrones, mejores prácticas y áreas de oportunidad del equipo completo."
+  }
+]

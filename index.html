@@ -22,10 +22,14 @@
     .config-row{display:flex;gap:12px;align-items:flex-end;padding:18px 22px;background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:28px;}
     .field{display:flex;flex-direction:column;gap:6px;}
     .field-grow{flex:1;}
+    .field-wide{flex:1.6;}
     .field-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);}
     .field select{font-family:'DM Sans',sans-serif;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--text);}
     .field select:focus{outline:none;border-color:var(--border-2);}
     .field select option{background:var(--surface);}
+    .advisors-loading{display:flex;align-items:center;gap:8px;padding:12px 0;font-size:12px;color:var(--text-dim);}
+    .advisors-empty{padding:12px 0;font-size:12px;color:var(--text-dim);text-align:center;}
+    .spin-xs{width:12px;height:12px;border:2px solid var(--border);border-top-color:#ffffff;border-radius:50%;animation:spin 0.75s linear infinite;flex-shrink:0;}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;transition:border-color 0.25s;}
     .card:hover{border-color:var(--border-2);}
@@ -142,6 +146,12 @@
 </header>
 <main class="main">
   <div class="config-row">
+    <div class="field field-wide">
+      <div class="field-label">Cliente</div>
+      <select id="client-select" onchange="onClientChange()">
+        <option value="">— Selecciona un cliente —</option>
+      </select>
+    </div>
     <div class="field field-grow">
       <div class="field-label">Período a analizar</div>
       <select id="month-select"></select>
@@ -231,14 +241,9 @@
   </div>
 </div>
 <script>
-  const WEBHOOK_URL="https://n8n-n8n.9qd6cz.easypanel.host/webhook/pitahaya-reportes";
-  const DA=[
-    {name:"Eduardo Salazar",initials:"ES",bg:"rgba(255,255,255,0.08)",color:"#e0e0e0"},
-    {name:"Felipe Plascencia",initials:"FP",bg:"rgba(255,255,255,0.06)",color:"#cccccc"},
-    {name:"Alejandro López",initials:"AL",bg:"rgba(255,255,255,0.10)",color:"#f0f0f0"},
-    {name:"Omar García",initials:"OG",bg:"rgba(255,255,255,0.07)",color:"#d4d4d4"},
-    {name:"Ivonne Varela",initials:"IV",bg:"rgba(255,255,255,0.09)",color:"#e8e8e8"}
-  ];
+  const WEBHOOK_URL      = "https://n8n-n8n.9qd6cz.easypanel.host/webhook/pitahaya-reportes";
+  const ADVISORS_WEBHOOK = "https://n8n-n8n.9qd6cz.easypanel.host/webhook/139282ad-5b74-4501-8034-9242a4b264fd";
+
   const PC=[
     {bg:"rgba(255,255,255,0.10)",color:"#f0f0f0"},
     {bg:"rgba(255,255,255,0.08)",color:"#d0d0d0"},
@@ -249,8 +254,14 @@
     {bg:"rgba(255,255,255,0.11)",color:"#ebebeb"},
     {bg:"rgba(255,255,255,0.05)",color:"#aaaaaa"}
   ];
-  let sci=0;
-  const cr=document.getElementById('color-row');
+
+  let currentClient   = null;
+  let webhookAdvisors = [];
+  let allClients      = [];
+  let sci             = 0;
+
+  // ── Color picker ──
+  const cr = document.getElementById('color-row');
   PC.forEach((c,i)=>{
     const d=document.createElement('div');
     d.className='color-dot'+(i===0?' selected':'');
@@ -265,9 +276,10 @@
     cr.appendChild(d);
   });
 
-  const ms=document.getElementById('month-select');
-  const MOS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const now=new Date();
+  // ── Selector de meses ──
+  const ms  = document.getElementById('month-select');
+  const MOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const now = new Date();
   for(let i=0;i<14;i++){
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
     const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -278,21 +290,110 @@
     ms.appendChild(o);
   }
 
-  function gc(){try{return JSON.parse(localStorage.getItem('pitahaya_advisors')||'[]');}catch{return[];}}
-  function sc(a){localStorage.setItem('pitahaya_advisors',JSON.stringify(a));}
-  function ghd(){try{return JSON.parse(localStorage.getItem('pitahaya_hidden')||'[]');}catch{return[];}}
-  function shd(h){localStorage.setItem('pitahaya_hidden',JSON.stringify(h));}
-  function ga(){const hd=ghd();return[...DA.filter(a=>!hd.includes(a.name)),...gc()];}
+  // ── LocalStorage con scope por cliente ──
+  function clientKey(k){ return currentClient ? `${k}_${currentClient.id}` : k; }
+  function gc(){try{return JSON.parse(localStorage.getItem(clientKey('custom_advisors'))||'[]');}catch{return[];}}
+  function sc(a){localStorage.setItem(clientKey('custom_advisors'),JSON.stringify(a));}
+  function ghd(){try{return JSON.parse(localStorage.getItem(clientKey('hidden_advisors'))||'[]');}catch{return[];}}
+  function shd(h){localStorage.setItem(clientKey('hidden_advisors'),JSON.stringify(h));}
 
+  function ga(){
+    const hd=ghd();
+    return[...webhookAdvisors.filter(a=>!hd.includes(a.name)),...gc()];
+  }
+
+  function makeInitials(name){
+    const parts=name.trim().split(/\s+/);
+    return((parts[0]?.[0]||'')+(parts[1]?.[0]||'')).toUpperCase()||'?';
+  }
+
+  // ── Carga clients.json ──
+  async function loadClients(){
+    try{
+      const res=await fetch('./clients.json');
+      if(!res.ok) throw new Error('No se pudo cargar clients.json');
+      allClients=await res.json();
+      const sel=document.getElementById('client-select');
+      allClients.forEach(c=>{
+        const o=document.createElement('option');
+        o.value=c.id;
+        o.textContent=c.name;
+        sel.appendChild(o);
+      });
+    }catch(e){
+      console.error('Error cargando clientes:',e);
+    }
+  }
+
+  // ── Selección de cliente → GET asesores ──
+  async function onClientChange(){
+    const sel=document.getElementById('client-select');
+    const clientId=sel.value;
+    if(!clientId){
+      currentClient=null;
+      webhookAdvisors=[];
+      render();
+      lock(true);
+      return;
+    }
+    currentClient=allClients.find(c=>c.id===clientId)||null;
+    if(!currentClient) return;
+
+    const g=document.getElementById('advisor-grid');
+    g.innerHTML='<div class="advisors-loading"><div class="spin-xs"></div>Cargando asesores del cliente…</div>';
+    lock(true);
+
+    try{
+      const params=new URLSearchParams({
+        client_id:      currentClient.id,
+        folder_id:      currentClient.folder_id,
+        spreadsheet_id: currentClient.spreadsheet_id
+      });
+      const res=await fetch(`${ADVISORS_WEBHOOK}?${params}`);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data=await res.json();
+
+      let names=[];
+      if(Array.isArray(data)){
+        names=data.map(a=>typeof a==='string'?a:(a.name||''));
+      } else if(data.advisors){
+        const arr=Array.isArray(data.advisors)?data.advisors:[data.advisors];
+        names=arr.map(a=>typeof a==='string'?a:(a.name||''));
+      }
+      names=names.filter(Boolean);
+
+      webhookAdvisors=names.map((name,i)=>{
+        const c=PC[i%PC.length];
+        return{name,initials:makeInitials(name),bg:c.bg,color:c.color};
+      });
+
+      render();
+      lock(false);
+    }catch(e){
+      g.innerHTML=`<div class="advisors-loading" style="color:#ff6060;">Error al cargar asesores: ${e.message}</div>`;
+    }
+  }
+
+  // ── Render del grid de asesores ──
   function render(){
     const g=document.getElementById('advisor-grid');
     g.innerHTML='';
-    ga().forEach((a,gi)=>{
-      const ic=gi>=DA.length;
+    if(!currentClient){
+      g.innerHTML='<div class="advisors-empty">Selecciona un cliente para ver sus asesores.</div>';
+      uc(); return;
+    }
+    const list=ga();
+    if(!list.length){
+      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente.</div>';
+      uc(); return;
+    }
+    const baseCount=webhookAdvisors.filter(x=>!ghd().includes(x.name)).length;
+    list.forEach((a,gi)=>{
+      const isCustom=gi>=baseCount;
       const r=document.createElement('label');
       r.className='advisor-check checked';
       r.dataset.name=a.name;
-      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><span class="advisor-name">${a.name}</span><button class="remove-btn" onclick="rm('${a.name.replace(/'/g,"\\'")}',${!ic},event)">×</button>`;
+      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><span class="advisor-name">${a.name}</span><button class="remove-btn" onclick="rm('${a.name.replace(/'/g,"\\'")}',${!isCustom},event)">×</button>`;
       r.addEventListener('click',e=>{if(e.target.closest('.remove-btn'))return;e.preventDefault();ta(r);});
       g.appendChild(r);
     });
@@ -320,6 +421,7 @@
   function uc(){const n=gs().length;document.getElementById('selected-count').textContent=n;document.getElementById('selected-count2').textContent=n;}
 
   function toggleAddForm(){
+    if(!currentClient){alert('Primero selecciona un cliente.');return;}
     const f=document.getElementById('add-form');
     f.classList.toggle('show');
     if(f.classList.contains('show')) document.getElementById('new-name').focus();
@@ -340,10 +442,10 @@
     render();
   }
 
-  function rm(name,isDefault,e){
+  function rm(name,isWebhook,e){
     e.stopPropagation();
     if(!confirm(`¿Eliminar a ${name}?`))return;
-    if(isDefault){
+    if(isWebhook){
       const hd=ghd();
       if(!hd.includes(name)) hd.push(name);
       shd(hd);
@@ -353,17 +455,16 @@
     render();
   }
 
-  function restoreDefaults(){
-    shd([]);
-    render();
-  }
+  function restoreDefaults(){shd([]);render();}
 
-  render();
-
+  // Init
   let busy=false;
   function lock(v){['btn-selected','btn-general'].forEach(id=>document.getElementById(id).disabled=v);}
+  lock(true);
+  render();
+  loadClients();
 
-  // ── Modal helpers ──
+  // ── Modal ──
   let progressInterval=null;
   let elapsedInterval=null;
 
@@ -376,22 +477,12 @@
     const subtitle=document.getElementById('modal-subtitle');
     const modalResult=document.getElementById('modal-result');
     const modalClose=document.getElementById('modal-close');
-
-    // reset
-    bar.style.width='0%';
-    bar.className='progress-bar';
-    pct.textContent='0%';
+    bar.style.width='0%';bar.className='progress-bar';pct.textContent='0%';
     elapsed.textContent='0:00 transcurrido';
-    modalResult.className='modal-result';
-    modalResult.style.display='none';
-    modalResult.innerHTML='';
-    modalClose.className='modal-close';
-    modalClose.style.display='none';
+    modalResult.className='modal-result';modalResult.style.display='none';modalResult.innerHTML='';
+    modalClose.className='modal-close';modalClose.style.display='none';
     subtitle.textContent=steps[0];
-    backdrop.classList.add('show');
-    backdrop.style.display='flex';
-
-    // build step items
+    backdrop.classList.add('show');backdrop.style.display='flex';
     stepsList.innerHTML='';
     steps.forEach((s,i)=>{
       const el=document.createElement('div');
@@ -400,109 +491,63 @@
       el.innerHTML=`<div class="step-icon ${i===0?'active':'pending'}" id="step-icon-${i}">${i===0?'<div class="spin-step"></div>':(i+1)}</div><span class="step-text ${i===0?'active':'pending'}" id="step-text-${i}">${s}</span>`;
       stepsList.appendChild(el);
     });
-
-    // elapsed timer
     let secs=0;
     elapsedInterval=setInterval(()=>{
       secs++;
-      const m=Math.floor(secs/60);
-      const s2=String(secs%60).padStart(2,'0');
-      elapsed.textContent=`${m}:${s2} transcurrido`;
+      elapsed.textContent=`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')} transcurrido`;
     },1000);
-
-    // progress bar — fills to 90% over totalSecs, then holds
     let tick=0;
     progressInterval=setInterval(()=>{
       tick++;
       const p=Math.min(90,Math.round((tick/totalSecs)*90));
-      bar.style.width=p+'%';
-      pct.textContent=p+'%';
-
-      // advance steps at 25% intervals
+      bar.style.width=p+'%';pct.textContent=p+'%';
       const stepIndex=Math.min(steps.length-1,Math.floor((p/90)*(steps.length-1)));
       steps.forEach((_,i)=>{
         const item=document.getElementById('step-'+i);
         const icon=document.getElementById('step-icon-'+i);
         const txt=document.getElementById('step-text-'+i);
         if(!item)return;
-        if(i<stepIndex){
-          item.className='step-item done';
-          icon.className='step-icon done';
-          icon.textContent='✓';
-          txt.className='step-text done';
-        } else if(i===stepIndex){
-          item.className='step-item active';
-          icon.className='step-icon active';
-          icon.innerHTML='<div class="spin-step"></div>';
-          txt.className='step-text active';
-          subtitle.textContent=steps[i];
-        } else {
-          item.className='step-item pending';
-          icon.className='step-icon pending';
-          icon.textContent=i+1;
-          txt.className='step-text pending';
-        }
+        if(i<stepIndex){item.className='step-item done';icon.className='step-icon done';icon.textContent='✓';txt.className='step-text done';}
+        else if(i===stepIndex){item.className='step-item active';icon.className='step-icon active';icon.innerHTML='<div class="spin-step"></div>';txt.className='step-text active';subtitle.textContent=steps[i];}
+        else{item.className='step-item pending';icon.className='step-icon pending';icon.textContent=i+1;txt.className='step-text pending';}
       });
     },1000);
   }
 
-  function finishModal(url,docName,ml){
-    clearInterval(progressInterval);
-    clearInterval(elapsedInterval);
-    const bar=document.getElementById('progress-bar');
-    const pct=document.getElementById('progress-pct');
-    const subtitle=document.getElementById('modal-subtitle');
-    const modalResult=document.getElementById('modal-result');
-    const modalClose=document.getElementById('modal-close');
-    const steps=document.querySelectorAll('.step-item');
-
-    // complete all steps
-    steps.forEach((item,i)=>{
+  function finishModal(url,docName){
+    clearInterval(progressInterval);clearInterval(elapsedInterval);
+    document.querySelectorAll('.step-item').forEach(item=>{
       item.className='step-item done';
-      const icon=item.querySelector('.step-icon');
-      const txt=item.querySelector('.step-text');
-      icon.className='step-icon done';
-      icon.textContent='✓';
-      txt.className='step-text done';
+      item.querySelector('.step-icon').className='step-icon done';
+      item.querySelector('.step-icon').textContent='✓';
+      item.querySelector('.step-text').className='step-text done';
     });
-
-    bar.className='progress-bar done';
-    bar.style.width='100%';
-    pct.textContent='100%';
-    subtitle.textContent='Reporte listo';
-    modalClose.className='modal-close show';
-    modalClose.style.display='flex';
-
-    modalResult.className='modal-result show';
-    modalResult.style.display='block';
-    modalResult.innerHTML=`<a href="${url}" target="_blank" class="result-link" style="margin-top:0;"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
+    const bar=document.getElementById('progress-bar');
+    bar.className='progress-bar done';bar.style.width='100%';
+    document.getElementById('progress-pct').textContent='100%';
+    document.getElementById('modal-subtitle').textContent='Reporte listo';
+    const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
+    const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
+    mr.innerHTML=`<a href="${url}" target="_blank" class="result-link" style="margin-top:0;"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
   }
 
   function errorModal(msg){
-    clearInterval(progressInterval);
-    clearInterval(elapsedInterval);
-    const bar=document.getElementById('progress-bar');
-    const subtitle=document.getElementById('modal-subtitle');
-    const modalResult=document.getElementById('modal-result');
-    const modalClose=document.getElementById('modal-close');
-
-    bar.className='progress-bar error';
-    subtitle.textContent='Error al generar el reporte';
-    modalClose.className='modal-close show';
-    modalClose.style.display='flex';
-    modalResult.className='modal-result show';
-    modalResult.style.display='block';
-    modalResult.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${msg}</div>`;
+    clearInterval(progressInterval);clearInterval(elapsedInterval);
+    document.getElementById('progress-bar').className='progress-bar error';
+    document.getElementById('modal-subtitle').textContent='Error al generar el reporte';
+    const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
+    const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
+    mr.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${msg}</div>`;
   }
 
   function closeModal(){
     const b=document.getElementById('modal-backdrop');
-    b.classList.remove('show');
-    b.style.display='none';
+    b.classList.remove('show');b.style.display='none';
   }
 
+  // ── Generar reporte ──
   async function generateReport(mode){
-    if(busy)return;
+    if(busy||!currentClient)return;
     const advisors=mode==='general'?ga().map(a=>a.name):gs();
     if(!advisors.length){alert('Selecciona al menos un asesor.');return;}
     const month=ms.value;
@@ -510,7 +555,6 @@
     busy=true;lock(true);
     document.getElementById('result-section').classList.remove('show');
     document.getElementById('result-content').innerHTML='';
-
     const n=advisors.length;
     const STEPS=[
       `Analizando llamadas de ${n===1?advisors[0]:n+' asesores'}`,
@@ -518,22 +562,29 @@
       'Sintetizando reporte general del equipo',
       'Finalizando Google Doc'
     ];
-    // estimated max = n*3 min, but cap display at 15 min
-    const totalSecs=Math.min(n*3*60,15*60);
-    openModal(STEPS,totalSecs);
+    openModal(STEPS,Math.min(n*3*60,15*60));
     document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
-
     try{
       const res=await fetch(WEBHOOK_URL,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({advisors,month,type:mode})
+        body:JSON.stringify({
+          advisors,
+          month,
+          type:              mode,
+          client_id:         currentClient.id,
+          client_name:       currentClient.name,
+          folder_id:         currentClient.folder_id,
+          spreadsheet_id:    currentClient.spreadsheet_id,
+          prompt_individual: currentClient.prompt_individual,
+          prompt_general:    currentClient.prompt_general
+        })
       });
       if(!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data=await res.json();
       if(data.url){
-        const docName=data.name||'Pitahaya | Reporte de evaluación de llamadas | '+ml;
-        finishModal(data.url,docName,ml);
+        const docName=data.name||`${currentClient.name} | Reporte de llamadas | ${ml}`;
+        finishModal(data.url,docName);
         document.getElementById('result-section').classList.add('show');
         document.getElementById('result-content').innerHTML=`<a href="${data.url}" target="_blank" class="result-link"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
       } else {

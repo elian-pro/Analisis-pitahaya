@@ -74,7 +74,13 @@
     .btn-sm-green{background:rgba(255,255,255,0.10);color:#f0f0f0;}
     .btn-sm-green:hover{background:rgba(255,255,255,0.18);}
     .btn-sm-cancel{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);}
-    #drive-link:hover{color:var(--text);border-color:var(--border-2);background:var(--surface);}
+    .drive-block{display:flex;align-items:center;justify-content:space-between;text-decoration:none;background:var(--surface);border:1px solid var(--border-2);border-radius:14px;padding:16px 22px;transition:all 0.2s;color:var(--text);}
+    .drive-block:hover{border-color:#aaaaaa;background:var(--surface-2);}
+    .drive-block-left{display:flex;align-items:center;gap:14px;}
+    .drive-block-icon{font-size:22px;line-height:1;}
+    .drive-block-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
+    .drive-block-sub{font-size:11px;color:var(--text-muted);}
+    .drive-block-arrow{font-size:13px;font-weight:600;color:var(--text-muted);white-space:nowrap;}
     .result-section{display:none;margin-top:4px;}
     .result-section.show{display:block;}
     .result-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;}
@@ -161,6 +167,18 @@
       <select id="month-select"></select>
     </div>
   </div>
+  <div id="drive-link-wrap" style="display:none;margin-bottom:16px;">
+    <a id="drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
+      <div class="drive-block-left">
+        <div class="drive-block-icon">📁</div>
+        <div>
+          <div class="drive-block-title">Carpeta de Google Drive</div>
+          <div class="drive-block-sub" id="drive-block-client"></div>
+        </div>
+      </div>
+      <div class="drive-block-arrow">Abrir ↗</div>
+    </a>
+  </div>
   <div class="section-label">Asesores y generación de reporte</div>
   <div class="grid-2">
     <div class="card">
@@ -195,13 +213,6 @@
       </div>
       <div class="advisor-grid" id="advisor-grid"></div>
       <div class="selected-summary"><span id="selected-count">0</span> asesor(es) seleccionado(s) → <span id="selected-count2">0</span> reporte(s) individual(es) + 1 reporte general</div>
-      <div id="drive-link-wrap" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-        <a id="drive-link" href="#" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--text-muted);text-decoration:none;padding:9px 12px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);transition:all 0.2s;">
-          <span style="font-size:14px;">📁</span>
-          <span>Abrir carpeta en Google Drive</span>
-          <span style="margin-left:auto;font-size:11px;opacity:0.5;">↗</span>
-        </a>
-      </div>
     </div>
     <div class="card">
       <div class="card-title">📊 Generar reporte</div>
@@ -362,8 +373,10 @@
 
     const dlw=document.getElementById('drive-link-wrap');
     const dl=document.getElementById('drive-link');
+    const dlsub=document.getElementById('drive-block-client');
     if(currentClient.folder_id){
       dl.href=`https://drive.google.com/drive/folders/${currentClient.folder_id}`;
+      dlsub.textContent=currentClient.name;
       dlw.style.display='block';
     }else{
       dlw.style.display='none';

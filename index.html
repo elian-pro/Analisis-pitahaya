@@ -639,21 +639,33 @@
   let _pendingMode=null;
   function generateReport(mode){
     if(busy||!currentClient)return;
-    const advisors=mode==='general'?ga():gs().map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:(n.trim().split(/\s+/).map(p=>p[0]||'').join('').toUpperCase().slice(0,2))||'?',bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'});
     const names=mode==='general'?ga().map(a=>a.name):gs();
     if(!names.length){alert('Selecciona al menos un asesor.');return;}
-    const ml=ms.options[ms.selectedIndex].text;
+    const ml=ms.options[ms.selectedIndex]?.text||ms.value;
+    // Rellenar datos básicos
     document.getElementById('conf-client').textContent=currentClient.name;
     document.getElementById('conf-period').textContent=ml;
     document.getElementById('conf-count').textContent=names.length;
+    // Construir chips de avatares (en try-catch para no bloquear el modal)
     const ca=document.getElementById('conf-advisors');
     ca.innerHTML='';
-    (mode==='general'?ga():gs().map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:(n.trim().split(/\s+/).map(p=>p[0]||'').join('').toUpperCase().slice(0,2))||'?',bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'})).forEach(a=>{
-      ca.innerHTML+=`<div class="confirm-avatar" style="background:${a.bg};"><div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};border:1px solid rgba(255,255,255,0.15);">${a.initials}</div><span style="color:${a.color};">${a.name}</span></div>`;
-    });
+    try{
+      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'});
+      list.forEach(a=>{
+        const d=document.createElement('div');
+        d.className='confirm-avatar';
+        d.style.background=a.bg;
+        d.innerHTML=`<div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};border:1px solid rgba(255,255,255,0.15);">${a.initials}</div><span style="color:${a.color};">${a.name}</span>`;
+        ca.appendChild(d);
+      });
+    }catch(e){
+      ca.textContent=names.join(', ');
+    }
+    // Mostrar modal
     _pendingMode=mode;
     const cb=document.getElementById('confirm-backdrop');
-    cb.classList.add('show');cb.style.display='flex';
+    cb.style.display='flex';
+    cb.classList.add('show');
   }
   function closeConfirm(){
     const cb=document.getElementById('confirm-backdrop');

@@ -139,6 +139,24 @@
     .step-text.pending{color:#555555;}
     .modal-result{display:none;margin-top:4px;}
     .modal-result.show{display:block;}
+    /* ── Modal de confirmación ── */
+    .confirm-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9998;align-items:center;justify-content:center;padding:16px;}
+    .confirm-backdrop.show{display:flex !important;}
+    .confirm-modal{background:#141414;border:1px solid #3d3d3d;border-radius:20px;width:100%;max-width:460px;padding:28px 26px;box-shadow:0 24px 80px rgba(0,0,0,0.8);}
+    .confirm-title{font-size:17px;font-weight:700;color:#f0f0f0;margin-bottom:4px;}
+    .confirm-subtitle{font-size:11px;color:#888;margin-bottom:22px;}
+    .confirm-row{margin-bottom:16px;}
+    .confirm-label{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#555;margin-bottom:7px;}
+    .confirm-value{font-size:13px;font-weight:600;color:#e0e0e0;}
+    .confirm-advisors{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px;}
+    .confirm-avatar{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid rgba(255,255,255,0.08);}
+    .confirm-avatar-circle{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+    .confirm-warning{display:flex;align-items:flex-start;gap:9px;background:rgba(255,200,100,0.06);border:1px solid rgba(255,200,100,0.15);border-radius:10px;padding:11px 13px;margin:20px 0 22px;font-size:12px;color:#c8a96e;line-height:1.5;}
+    .confirm-actions{display:flex;gap:9px;}
+    .confirm-cancel{flex:1;padding:10px;background:var(--surface-2);border:1.5px solid var(--border-2);color:var(--text-muted);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;}
+    .confirm-cancel:hover{border-color:#666;color:var(--text);}
+    .confirm-ok{flex:2;padding:10px;background:#ffffff;color:#0a0a0a;border:none;border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;}
+    .confirm-ok:hover{background:#e8e8e8;}
     @keyframes spin{to{transform:rotate(360deg);}}
     @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
   </style>
@@ -240,6 +258,34 @@
     </div>
   </div>
 </main>
+
+<!-- Modal de confirmación -->
+<div class="confirm-backdrop" id="confirm-backdrop">
+  <div class="confirm-modal">
+    <div class="confirm-title">Confirmar generación de reporte</div>
+    <div class="confirm-subtitle">Revisa los datos antes de iniciar el proceso</div>
+    <div class="confirm-row">
+      <div class="confirm-label">Cliente</div>
+      <div class="confirm-value" id="conf-client"></div>
+    </div>
+    <div class="confirm-row">
+      <div class="confirm-label">Período</div>
+      <div class="confirm-value" id="conf-period"></div>
+    </div>
+    <div class="confirm-row">
+      <div class="confirm-label">Asesores (<span id="conf-count">0</span>)</div>
+      <div class="confirm-advisors" id="conf-advisors"></div>
+    </div>
+    <div class="confirm-warning">
+      <span>⚠️</span>
+      <span>Una vez iniciado, el proceso no puede cancelarse. Se generará un nuevo documento en Google Drive y puede tardar hasta 15 minutos.</span>
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="closeConfirm()">Cancelar</button>
+      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmAndGenerate()">Confirmar y generar reporte</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal de progreso -->
 <div class="modal-backdrop" id="modal-backdrop">
@@ -589,11 +635,41 @@
     b.classList.remove('show');b.style.display='none';
   }
 
-  // ── Generar reporte ──
-  async function generateReport(mode){
+  // ── Modal de confirmación ──
+  let _pendingMode=null;
+  function generateReport(mode){
+    if(busy||!currentClient)return;
+    const advisors=mode==='general'?ga():gs().map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:(n.trim().split(/\s+/).map(p=>p[0]||'').join('').toUpperCase().slice(0,2))||'?',bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'});
+    const names=mode==='general'?ga().map(a=>a.name):gs();
+    if(!names.length){alert('Selecciona al menos un asesor.');return;}
+    const ml=ms.options[ms.selectedIndex].text;
+    document.getElementById('conf-client').textContent=currentClient.name;
+    document.getElementById('conf-period').textContent=ml;
+    document.getElementById('conf-count').textContent=names.length;
+    const ca=document.getElementById('conf-advisors');
+    ca.innerHTML='';
+    (mode==='general'?ga():gs().map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:(n.trim().split(/\s+/).map(p=>p[0]||'').join('').toUpperCase().slice(0,2))||'?',bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'})).forEach(a=>{
+      ca.innerHTML+=`<div class="confirm-avatar" style="background:${a.bg};"><div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};border:1px solid rgba(255,255,255,0.15);">${a.initials}</div><span style="color:${a.color};">${a.name}</span></div>`;
+    });
+    _pendingMode=mode;
+    const cb=document.getElementById('confirm-backdrop');
+    cb.classList.add('show');cb.style.display='flex';
+  }
+  function closeConfirm(){
+    const cb=document.getElementById('confirm-backdrop');
+    cb.classList.remove('show');cb.style.display='none';
+    _pendingMode=null;
+  }
+  async function confirmAndGenerate(){
+    closeConfirm();
+    await _doGenerateReport(_pendingMode);
+  }
+
+  // ── Generar reporte (lógica real) ──
+  async function _doGenerateReport(mode){
     if(busy||!currentClient)return;
     const advisors=mode==='general'?ga().map(a=>a.name):gs();
-    if(!advisors.length){alert('Selecciona al menos un asesor.');return;}
+    if(!advisors.length)return;
     const month=ms.value;
     const ml=ms.options[ms.selectedIndex].text;
     busy=true;lock(true);

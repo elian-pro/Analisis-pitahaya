@@ -74,6 +74,7 @@
     .btn-sm-green{background:rgba(255,255,255,0.10);color:#f0f0f0;}
     .btn-sm-green:hover{background:rgba(255,255,255,0.18);}
     .btn-sm-cancel{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);}
+    #drive-link:hover{color:var(--text);border-color:var(--border-2);background:var(--surface);}
     .result-section{display:none;margin-top:4px;}
     .result-section.show{display:block;}
     .result-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;}
@@ -194,6 +195,13 @@
       </div>
       <div class="advisor-grid" id="advisor-grid"></div>
       <div class="selected-summary"><span id="selected-count">0</span> asesor(es) seleccionado(s) → <span id="selected-count2">0</span> reporte(s) individual(es) + 1 reporte general</div>
+      <div id="drive-link-wrap" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+        <a id="drive-link" href="#" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--text-muted);text-decoration:none;padding:9px 12px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);transition:all 0.2s;">
+          <span style="font-size:14px;">📁</span>
+          <span>Abrir carpeta en Google Drive</span>
+          <span style="margin-left:auto;font-size:11px;opacity:0.5;">↗</span>
+        </a>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">📊 Generar reporte</div>
@@ -337,6 +345,7 @@
       webhookAdvisors=[];
       render();
       lock(true);
+      document.getElementById('drive-link-wrap').style.display='none';
       return;
     }
 
@@ -350,6 +359,15 @@
 
     currentClient=allClients.find(c=>c.id===clientId)||null;
     if(!currentClient) return;
+
+    const dlw=document.getElementById('drive-link-wrap');
+    const dl=document.getElementById('drive-link');
+    if(currentClient.folder_id){
+      dl.href=`https://drive.google.com/drive/folders/${currentClient.folder_id}`;
+      dlw.style.display='block';
+    }else{
+      dlw.style.display='none';
+    }
 
     const g=document.getElementById('advisor-grid');
     g.innerHTML='<div class="advisors-loading"><div class="spin-xs"></div>Cargando asesores del cliente…</div>';

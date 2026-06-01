@@ -621,7 +621,8 @@
     document.getElementById('modal-subtitle').textContent='Error al generar el reporte';
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
     const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
-    mr.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${msg}</div>`;
+    const safeMsg=typeof msg==='string'&&msg?msg:typeof msg==='object'?JSON.stringify(msg):'Error desconocido';
+    mr.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${safeMsg}</div>`;
   }
 
   function closeModal(){
@@ -759,8 +760,12 @@
         body:JSON.stringify({client_id:currentClient.id,month,type:mode,advisors})
       });
       if(!postRes.ok){
-        const err=await postRes.json().catch(()=>({}));
-        throw new Error(err.error||`HTTP ${postRes.status}`);
+        const body=await postRes.json().catch(()=>({}));
+        const rawErr=body.error;
+        const errMsg=typeof rawErr==='string'&&rawErr?rawErr
+          :typeof rawErr==='object'&&rawErr!==null?JSON.stringify(rawErr)
+          :`HTTP ${postRes.status}`;
+        throw new Error(errMsg);
       }
       const {job_id}=await postRes.json();
       // 2. Parar animación falsa y cambiar a progreso real

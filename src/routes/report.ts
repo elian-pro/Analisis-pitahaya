@@ -16,7 +16,11 @@ const PostBodySchema = z.object({
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const parsed = PostBodySchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
+    const msg = parsed.error.issues
+      .map(i => `${i.path.length ? i.path.join('.') : 'body'}: ${i.message}`)
+      .join('; ');
+    console.error('[report POST] validation error:', msg, '| body:', JSON.stringify(req.body));
+    res.status(400).json({ error: msg });
     return;
   }
 

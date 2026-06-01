@@ -729,8 +729,9 @@
     _pendingMode=null;
   }
   async function confirmAndGenerate(){
+    const mode=_pendingMode;
     closeConfirm();
-    await _doGenerateReport(_pendingMode);
+    await _doGenerateReport(mode);
   }
 
   // ── Generar reporte (lógica real — async con polling) ──

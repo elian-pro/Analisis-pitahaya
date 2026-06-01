@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reporte General — <%= it.mes_label %></title>
+<style>
+  @page {
+    size: A4;
+    margin: 0;
+    @bottom-right {
+      content: "Página " counter(page) " / " counter(pages);
+      font-family: 'Helvetica', sans-serif;
+      font-size: 9pt;
+      color: #999;
+      padding: 0 20mm 10mm 0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; }
+  .membrete { background: #0a0a0a; color: #fafafa; padding: 25mm 20mm 18mm 20mm; margin-bottom: 0; page-break-after: avoid; }
+  .membrete .marca { font-size: 28pt; font-weight: 900; letter-spacing: -1px; margin: 0; }
+  .membrete .marca .dot { color: #d4af37; }
+  .membrete .tagline { font-size: 9pt; color: #b0b0b0; margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
+  .membrete .meta { margin-top: 22pt; border-top: 1px solid #2a2a2a; padding-top: 14pt; display: flex; justify-content: space-between; }
+  .membrete .meta div { font-size: 8.5pt; color: #888; }
+  .membrete .meta b { color: #fafafa; font-weight: 600; }
+  .barra-oro { background: #d4af37; height: 3px; }
+  main { padding: 12mm 20mm 18mm 20mm; }
+  h1 { font-size: 18pt; margin: 18pt 0 4pt 0; font-weight: 800; letter-spacing: -0.3px; }
+  h1 .sub { font-size: 10pt; font-weight: 400; color: #777; display: block; margin-top: 2pt; }
+  h2 { font-size: 12pt; margin: 18pt 0 8pt 0; padding-bottom: 4pt; border-bottom: 2px solid #0a0a0a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; page-break-after: avoid; }
+  h3 { font-size: 10pt; margin: 12pt 0 4pt 0; font-weight: 700; color: #d4af37; }
+  p { margin: 0 0 6pt 0; }
+  .resumen { background: #f6f5f1; border-left: 3px solid #d4af37; padding: 10pt 12pt; margin-top: 8pt; font-size: 10pt; line-height: 1.55; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; margin: 10pt 0 8pt 0; }
+  .kpi { background: #f6f5f1; border: 1px solid #e3e0d6; padding: 8pt 10pt; border-radius: 4px; }
+  .kpi .label { font-size: 7.5pt; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi .value { font-size: 18pt; font-weight: 800; color: #0a0a0a; margin-top: 2pt; }
+  .kpi .footer { font-size: 7.5pt; color: #999; margin-top: 2pt; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 8pt 0; font-size: 9pt; }
+  th { background: #0a0a0a; color: #fff; padding: 5pt 7pt; text-align: left; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px; }
+  td { padding: 5pt 7pt; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
+  tr:nth-child(even) td { background: #faf9f6; }
+  ul { padding-left: 18pt; margin: 4pt 0 8pt 0; }
+  li { margin-bottom: 3pt; }
+  .pill { display: inline-block; padding: 1pt 6pt; border-radius: 8pt; font-size: 8pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .pill.alta  { background: #fde8e8; color: #b51e1e; }
+  .pill.media { background: #fff4d6; color: #8a6b00; }
+  .pill.baja  { background: #e5f3ea; color: #1e6b30; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
+  .grid-2 .col h3 { margin-top: 0; }
+  .nivel-badge { display: inline-block; padding: 2pt 8pt; border-radius: 10pt; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+  .nivel-excelente       { background: #e5f3ea; color: #1e6b30; }
+  .nivel-bueno           { background: #e5efea; color: #2c5f3a; }
+  .nivel-aceptable       { background: #fff4d6; color: #8a6b00; }
+  .nivel-necesita_mejora { background: #ffe6cc; color: #b35a00; }
+  .nivel-critico         { background: #fde8e8; color: #b51e1e; }
+  .tendencia-mejora    { color: #1e6b30; }
+  .tendencia-retroceso { color: #b51e1e; }
+  .tendencia-mixto     { color: #8a6b00; }
+  .tendencia-estable   { color: #444; }
+  .tendencia-primer_mes { color: #444; }
+  .alert { background: #fff4d6; border-left: 3px solid #d4af37; padding: 8pt 12pt; margin: 6pt 0; font-size: 9pt; }
+  .grid-2 { page-break-inside: avoid; }
+  .kpi, .kpis { page-break-inside: avoid; }
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+</style>
+</head>
+<body>
+
+<header class="membrete">
+  <p class="marca">ZEBRA<span class="dot">.</span></p>
+  <p class="tagline">Inteligencia comercial · Análisis de cierres</p>
+  <div class="meta">
+    <div><b>Reporte:</b> Desempeño mensual del equipo — <%= it.cliente %></div>
+    <div><b>Generado:</b> <%= it.generated_date %></div>
+  </div>
+</header>
+<div class="barra-oro"></div>
+
+<main>
+
+<%
+const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '↕ Mixto', retroceso: '↓ Retroceso', primer_mes: 'Primer mes' };
+%>
+
+<h1><%= it.cliente %>
+  <span class="sub"><%= it.mes_label %> · Reporte de equipo</span>
+</h1>
+
+<div class="kpis">
+  <div class="kpi">
+    <div class="label">Promedio del equipo</div>
+    <div class="value"><%= it.avg_score_equipo %><span style="font-size:11pt;color:#777;">/100</span></div>
+    <div class="footer">&nbsp;</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Asesores evaluados</div>
+    <div class="value" style="font-size:22pt;"><%= it.total_asesores %></div>
+    <div class="footer">&nbsp;</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Llamadas analizadas</div>
+    <div class="value" style="font-size:22pt;"><%= it.total_llamadas %></div>
+    <div class="footer">en total</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Tendencia del equipo</div>
+    <div class="value tendencia-<%= it.tendencia_equipo %>" style="font-size:13pt;margin-top:6pt;"><%= TENDENCIA_LABEL[it.tendencia_equipo] %></div>
+    <div class="footer">vs. mes anterior</div>
+  </div>
+</div>
+
+<div class="resumen"><%= it.resumen_ejecutivo %></div>
+
+<!-- === Ranking del equipo === -->
+<div class="seccion">
+<h2>Ranking del equipo</h2>
+<table>
+  <thead>
+    <tr>
+      <th style="width:5%;">#</th>
+      <th>Asesor</th>
+      <th style="text-align:center;width:15%;">Prom. score</th>
+      <th style="text-align:center;width:15%;">Rango</th>
+      <th style="text-align:center;width:12%;">Llamadas</th>
+      <th style="text-align:center;width:18%;">Nivel</th>
+    </tr>
+  </thead>
+  <tbody>
+  <% for (const r of it.ranking) { %>
+    <tr>
+      <td><b><%= r.posicion %></b></td>
+      <td><b><%= r.asesor %></b></td>
+      <td style="text-align:center;"><b><%= r.avg_score %></b>/100</td>
+      <td style="text-align:center;font-size:8.5pt;color:#666;"><%= r.score_min %> – <%= r.score_max %></td>
+      <td style="text-align:center;"><%= r.call_count %></td>
+      <td style="text-align:center;"><span class="nivel-badge nivel-<%= r.nivel %>"><%= r.nivel.replace('_', ' ') %></span></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+</div>
+
+<!-- === Fortalezas + Áreas de oportunidad === -->
+<div class="seccion">
+<div class="grid-2">
+  <div class="col">
+    <h2 style="border:none;font-size:11pt;color:#1e6b30;">✓ Fortalezas del equipo</h2>
+    <ul>
+    <% for (const f of it.fortalezas_equipo) { %>
+      <li><%= f %></li>
+    <% } %>
+    </ul>
+  </div>
+  <div class="col">
+    <h2 style="border:none;font-size:11pt;color:#b51e1e;">✗ Áreas de oportunidad</h2>
+    <ul>
+    <% for (const a of it.areas_oportunidad) { %>
+      <li><%= a %></li>
+    <% } %>
+    </ul>
+  </div>
+</div>
+</div>
+
+<!-- === Mejores prácticas === -->
+<% if (it.mejores_practicas && it.mejores_practicas.length > 0) { %>
+<div class="seccion">
+<h2>Mejores prácticas a compartir</h2>
+<table>
+  <thead><tr><th style="width:18%;">Asesor</th><th style="width:25%;">Práctica</th><th>Descripción</th></tr></thead>
+  <tbody>
+  <% for (const mp of it.mejores_practicas) { %>
+    <tr>
+      <td><b><%= mp.asesor %></b></td>
+      <td><%= mp.practica %></td>
+      <td><%= mp.descripcion %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+</div>
+<% } %>
+
+<!-- === Patrones de objeciones del equipo === -->
+<% if (it.patrones_objeciones && it.patrones_objeciones.length > 0) { %>
+<div class="seccion">
+<h2>Patrones de objeciones del equipo</h2>
+<table>
+  <thead><tr><th style="width:25%;">Categoría</th><th style="width:22%;">Frecuencia</th><th>Recomendación</th></tr></thead>
+  <tbody>
+  <% for (const p of it.patrones_objeciones) { %>
+    <tr>
+      <td><b><%= p.categoria %></b></td>
+      <td><%= p.frecuencia %></td>
+      <td><%= p.recomendacion %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+</div>
+<% } %>
+
+<!-- === Recomendaciones del equipo === -->
+<div class="seccion">
+<h2>Recomendaciones de acción para el equipo</h2>
+<table>
+  <thead><tr><th style="width:9%;">Prioridad</th><th style="width:18%;">Área</th><th>Acción</th><th style="width:22%;">Dirigido a</th></tr></thead>
+  <tbody>
+  <% for (const r of it.recomendaciones) { %>
+    <tr>
+      <td><span class="pill <%= r.prioridad %>"><%= r.prioridad %></span></td>
+      <td><%= r.area %></td>
+      <td><%= r.descripcion %></td>
+      <td style="font-size:9pt;color:#444;"><%= r.dirigido_a %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+</div>
+
+</main>
+</body>
+</html>

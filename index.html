@@ -309,8 +309,8 @@
   </div>
 </div>
 <script>
-  const WEBHOOK_URL      = "https://n8n-n8n.9qd6cz.easypanel.host/webhook/pitahaya-reportes";
-  const ADVISORS_WEBHOOK = "https://n8n-n8n.9qd6cz.easypanel.host/webhook/139282ad-5b74-4501-8034-9242a4b264fd";
+  const REPORT_API    = '/api/report';
+  const ADVISORS_API  = '/api/advisors';
 
   const PC=[
     {bg:"rgba(255,255,255,0.10)",color:"#f0f0f0"},
@@ -433,13 +433,7 @@
     lock(true);
 
     try{
-      const params=new URLSearchParams({
-        client_id:      currentClient.id,
-        folder_id:      currentClient.folder_id,
-        spreadsheet_id: currentClient.spreadsheet_id,
-        sheet_id:       currentClient.sheet_id||''
-      });
-      const res=await fetch(`${ADVISORS_WEBHOOK}?${params}`);
+      const res=await fetch(`${ADVISORS_API}?client_id=${encodeURIComponent(currentClient.id)}`);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data=await res.json();
 
@@ -635,6 +629,53 @@
     b.classList.remove('show');b.style.display='none';
   }
 
+  function finishModalMulti(individual, general){
+    clearInterval(progressInterval);clearInterval(elapsedInterval);
+    document.querySelectorAll('.step-item').forEach(item=>{
+      item.className='step-item done';
+      item.querySelector('.step-icon').className='step-icon done';
+      item.querySelector('.step-icon').textContent='✓';
+      item.querySelector('.step-text').className='step-text done';
+    });
+    const bar=document.getElementById('progress-bar');
+    bar.className='progress-bar done';bar.style.width='100%';
+    document.getElementById('progress-pct').textContent='100%';
+    document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
+    const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
+    const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
+    let html='';
+    individual.forEach(r=>{
+      html+=`<a href="${r.driveUrl}" target="_blank" class="result-link" style="margin-top:4px;"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
+    });
+    if(general){
+      html+=`<a href="${general.driveUrl}" target="_blank" class="result-link" style="margin-top:8px;border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General del Equipo</span><span class="result-arrow">→</span></a>`;
+    }
+    mr.innerHTML=html;
+  }
+
+  async function pollJob(jobId, totalAdvisors, mode){
+    const MAX_MS=15*60*1000;
+    const start=Date.now();
+    while(Date.now()-start<MAX_MS){
+      await new Promise(r=>setTimeout(r,4000));
+      const res=await fetch(`${REPORT_API}/${jobId}`);
+      if(!res.ok) throw new Error(`Polling HTTP ${res.status}`);
+      const job=await res.json();
+      // Update progress bar with real server data
+      if(job.progress && job.progress.total>0){
+        const cap=mode==='general'?80:95;
+        const pct=Math.round((job.progress.completed/job.progress.total)*cap);
+        const bar=document.getElementById('progress-bar');
+        bar.style.width=pct+'%';
+        document.getElementById('progress-pct').textContent=pct+'%';
+        document.getElementById('modal-subtitle').textContent=`Procesando: ${job.progress.completed}/${job.progress.total} asesores`;
+      }
+      if(job.status==='done') return job;
+      if(job.status==='error') throw new Error(job.error||'Error al generar reportes');
+    }
+    throw new Error('Timeout: el proceso tardó más de 15 minutos');
+  }
+
   // ── Modal de confirmación ──
   let _pendingMode=null;
   function generateReport(mode){
@@ -691,7 +732,7 @@
     await _doGenerateReport(_pendingMode);
   }
 
-  // ── Generar reporte (lógica real) ──
+  // ── Generar reporte (lógica real — async con polling) ──
   async function _doGenerateReport(mode){
     if(busy||!currentClient)return;
     const advisors=mode==='general'?ga().map(a=>a.name):gs();
@@ -703,39 +744,45 @@
     document.getElementById('result-content').innerHTML='';
     const n=advisors.length;
     const STEPS=[
-      `Analizando llamadas de ${n===1?advisors[0]:n+' asesores'}`,
-      'Generando reportes individuales con IA',
-      'Sintetizando reporte general del equipo',
-      'Finalizando Google Doc'
+      `Leyendo llamadas de ${n===1?advisors[0]:n+' asesores'}`,
+      'Analizando con IA y generando PDFs',
+      ...(mode==='general'?['Generando reporte ejecutivo del equipo']:[]),
+      'Subiendo a Google Drive'
     ];
     openModal(STEPS,Math.min(n*3*60,15*60));
     document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
     try{
-      const res=await fetch(WEBHOOK_URL,{
+      // 1. Encolar job
+      const postRes=await fetch(REPORT_API,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          advisors,
-          month,
-          type:              mode,
-          client_id:         currentClient.id,
-          client_name:       currentClient.name,
-          folder_id:         currentClient.folder_id,
-          spreadsheet_id:    currentClient.spreadsheet_id,
-          sheet_id:          currentClient.sheet_id||'',
-          prompt_individual: currentClient.prompt_individual,
-          prompt_general:    currentClient.prompt_general
-        })
+        body:JSON.stringify({client_id:currentClient.id,month,type:mode,advisors})
       });
-      if(!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      const data=await res.json();
-      if(data.url){
-        const docName=data.name||`${currentClient.name} | Reporte de llamadas | ${ml}`;
-        finishModal(data.url,docName);
-        document.getElementById('result-section').classList.add('show');
-        document.getElementById('result-content').innerHTML=`<a href="${data.url}" target="_blank" class="result-link"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
-      } else {
-        throw new Error(data.error||'No se recibió URL del documento.');
+      if(!postRes.ok){
+        const err=await postRes.json().catch(()=>({}));
+        throw new Error(err.error||`HTTP ${postRes.status}`);
+      }
+      const {job_id}=await postRes.json();
+      // 2. Parar animación falsa y cambiar a progreso real
+      clearInterval(progressInterval);
+      document.getElementById('modal-subtitle').textContent='En cola — esperando inicio…';
+      // 3. Polling hasta completar
+      const job=await pollJob(job_id,n,mode);
+      // 4. Mostrar resultados
+      const results=job.results||{individual:[]};
+      finishModalMulti(results.individual||[],results.general||null);
+      // Actualizar sección de resultados debajo del modal
+      let rhtml='';
+      (results.individual||[]).forEach(r=>{
+        rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
+      });
+      if(results.general){
+        rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General — ${ml}</span><span class="result-arrow">→</span></a>`;
+      }
+      document.getElementById('result-section').classList.add('show');
+      document.getElementById('result-content').innerHTML=rhtml||'<div class="error-box">⚠️ Sin resultados.</div>';
+      if(job.error){
+        document.getElementById('result-content').innerHTML+=`<div class="error-box" style="margin-top:8px;">⚠️ ${job.error}</div>`;
       }
     }catch(e){
       errorModal(e.message);

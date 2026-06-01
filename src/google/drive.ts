@@ -85,6 +85,27 @@ async function downloadText(fileId: string, mimeType: string): Promise<string> {
 }
 
 /**
+ * Uploads a plain-text sidecar alongside the PDF so the next month's run can
+ * read the previous report summary without extracting text from the PDF.
+ */
+export async function uploadReportSidecar(
+  folderId: string,
+  advisorName: string,
+  month: string,
+  text: string,
+): Promise<void> {
+  const drive = getDrive();
+  const name = `${reportFilename(advisorName, month)}.txt`;
+  await drive.files.create({
+    requestBody: { name, parents: [folderId] },
+    media: {
+      mimeType: MIME_TEXT,
+      body: Readable.from(Buffer.from(text, 'utf-8')),
+    },
+  });
+}
+
+/**
  * Searches the Drive folder for the previous month's report for an advisor.
  * Handles both legacy Google Docs (from n8n) and the new PDF/txt uploads.
  * Returns the text content, or null if nothing found.

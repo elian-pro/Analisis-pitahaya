@@ -16,7 +16,7 @@
     }
   }
   * { box-sizing: border-box; }
-  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; }
+  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; orphans: 3; widows: 3; }
   .membrete { background: #0a0a0a; color: #fafafa; padding: 25mm 20mm 18mm 20mm; margin-bottom: 0; page-break-after: avoid; }
   .membrete .marca { font-size: 28pt; font-weight: 900; letter-spacing: -1px; margin: 0; }
   .membrete .marca .dot { color: #d4af37; }
@@ -61,11 +61,12 @@
   .tendencia-estable   { color: #444; }
   .tendencia-primer_mes { color: #444; }
   .alert { background: #fff4d6; border-left: 3px solid #d4af37; padding: 8pt 12pt; margin: 6pt 0; font-size: 9pt; }
-  .grid-2 { page-break-inside: avoid; }
-  .kpi, .kpis { page-break-inside: avoid; }
+  .grid-2 { page-break-inside: avoid; break-inside: avoid; }
+  .kpi, .kpis { page-break-inside: avoid; break-inside: avoid; }
   table { page-break-inside: auto; }
-  tr { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   thead { display: table-header-group; }
+  li { page-break-inside: avoid; break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -123,10 +124,9 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
     <tr>
       <th style="width:5%;">#</th>
       <th>Asesor</th>
-      <th style="text-align:center;width:15%;">Prom. score</th>
-      <th style="text-align:center;width:15%;">Rango</th>
-      <th style="text-align:center;width:12%;">Llamadas</th>
-      <th style="text-align:center;width:18%;">Nivel</th>
+      <th style="text-align:center;width:18%;">Prom. score</th>
+      <th style="text-align:center;width:14%;">Llamadas</th>
+      <th style="text-align:center;width:20%;">Nivel</th>
     </tr>
   </thead>
   <tbody>
@@ -135,7 +135,6 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
       <td><b><%= r.posicion %></b></td>
       <td><b><%= r.asesor %></b></td>
       <td style="text-align:center;"><b><%= r.avg_score %></b>/100</td>
-      <td style="text-align:center;font-size:8.5pt;color:#666;"><%= r.score_min %> – <%= r.score_max %></td>
       <td style="text-align:center;"><%= r.call_count %></td>
       <td style="text-align:center;"><span class="nivel-badge nivel-<%= r.nivel %>"><%= r.nivel.replace('_', ' ') %></span></td>
     </tr>

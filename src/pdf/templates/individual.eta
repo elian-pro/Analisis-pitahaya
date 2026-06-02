@@ -16,7 +16,7 @@
     }
   }
   * { box-sizing: border-box; }
-  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; }
+  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; orphans: 3; widows: 3; }
   .membrete { background: #0a0a0a; color: #fafafa; padding: 25mm 20mm 18mm 20mm; margin-bottom: 0; page-break-after: avoid; }
   .membrete .marca { font-size: 28pt; font-weight: 900; letter-spacing: -1px; margin: 0; }
   .membrete .marca .dot { color: #d4af37; }
@@ -32,7 +32,7 @@
   h3 { font-size: 10pt; margin: 12pt 0 4pt 0; font-weight: 700; color: #d4af37; }
   p { margin: 0 0 6pt 0; }
   .resumen { background: #f6f5f1; border-left: 3px solid #d4af37; padding: 10pt 12pt; margin-top: 8pt; font-size: 10pt; line-height: 1.55; }
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; margin: 10pt 0 8pt 0; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; margin: 10pt 0 8pt 0; }
   .kpi { background: #f6f5f1; border: 1px solid #e3e0d6; padding: 8pt 10pt; border-radius: 4px; }
   .kpi .label { font-size: 7.5pt; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
   .kpi .value { font-size: 18pt; font-weight: 800; color: #0a0a0a; margin-top: 2pt; }
@@ -67,13 +67,15 @@
   .nivel-necesita_mejora { background: #ffe6cc; color: #b35a00; }
   .nivel-critico         { background: #fde8e8; color: #b51e1e; }
   .alert { background: #fff4d6; border-left: 3px solid #d4af37; padding: 8pt 12pt; margin: 6pt 0; font-size: 9pt; }
-  .grid-2 { page-break-inside: avoid; }
-  .kpi, .kpis { page-break-inside: avoid; }
-  .cita { page-break-inside: avoid; }
-  .bar-row { page-break-inside: avoid; }
+  .kpi, .kpis { page-break-inside: avoid; break-inside: avoid; }
+  .cita { page-break-inside: avoid; break-inside: avoid; }
+  .bar-row { page-break-inside: avoid; break-inside: avoid; }
+  .objecion-bloque { page-break-inside: avoid; break-inside: avoid; margin-bottom: 10pt; }
+  .grid-short { page-break-inside: avoid; break-inside: avoid; }
   table { page-break-inside: auto; }
-  tr { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   thead { display: table-header-group; }
+  li { page-break-inside: avoid; break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -105,11 +107,6 @@ const impactoDisplay = function(v) { return 'impacto ' + (v === 'alta' ? 'alto' 
     <div class="label">Puntaje promedio</div>
     <div class="value"><%= it.avg_score %><span style="font-size:11pt;color:#777;">/100</span></div>
     <div class="footer">σ = <%= it.score_sigma %></div>
-  </div>
-  <div class="kpi">
-    <div class="label">Rango</div>
-    <div class="value" style="font-size:14pt;"><%= it.score_min %> – <%= it.score_max %></div>
-    <div class="footer">mínimo / máximo</div>
   </div>
   <div class="kpi">
     <div class="label">Objeciones / llamada</div>
@@ -190,10 +187,12 @@ const impactoDisplay = function(v) { return 'impacto ' + (v === 'alta' ? 'alto' 
 
 <h3>Ejemplos textuales por categoría</h3>
 <% for (let i = 0; i < it.objeciones.length; i++) { const o = it.objeciones[i]; %>
-  <h3 style="color:#0a0a0a;margin-top:10pt;"><%= i + 1 %>. <%= o.categoria %></h3>
-  <div class="cita"><span class="label">Objeción del lead</span><%= o.ejemplo_objecion %></div>
-  <div class="cita"><span class="label">✓ Respuesta efectiva</span><%= o.ejemplo_respuesta_efectiva %></div>
-  <div class="cita mala"><span class="label">✗ Respuesta no resuelve</span><%= o.ejemplo_respuesta_fallida %></div>
+  <div class="objecion-bloque">
+    <h3 style="color:#0a0a0a;margin-top:8pt;margin-bottom:4pt;"><%= i + 1 %>. <%= o.categoria %></h3>
+    <div class="cita"><span class="label">Objeción del lead</span><%= o.ejemplo_objecion %></div>
+    <div class="cita"><span class="label">✓ Respuesta efectiva</span><%= o.ejemplo_respuesta_efectiva %></div>
+    <div class="cita mala"><span class="label">✗ Respuesta no resuelve</span><%= o.ejemplo_respuesta_fallida %></div>
+  </div>
 <% } %>
 
 <% if (it.categorias_peor_manejadas && it.categorias_peor_manejadas.length > 0) { %>
@@ -231,7 +230,7 @@ const impactoDisplay = function(v) { return 'impacto ' + (v === 'alta' ? 'alto' 
 
 <!-- === Conversación + Cierres === -->
 <div class="seccion">
-<div class="grid-2">
+<div class="grid-2 grid-short">
   <div class="col">
     <h2 style="border:none;font-size:11pt;">Conversación</h2>
     <table>
@@ -284,7 +283,7 @@ const impactoDisplay = function(v) { return 'impacto ' + (v === 'alta' ? 'alto' 
 <!-- === Llamadas destacadas === -->
 <div class="seccion">
 <h2>Videollamadas destacadas</h2>
-<div class="grid-2">
+<div class="grid-2 grid-short">
   <div class="col">
     <h3 style="color:#1e6b30;">★ Mejor llamada — <%= it.mejor_llamada.score %>/100</h3>
     <p style="font-size:9pt;color:#666;"><%= it.mejor_llamada.fecha %> · Lead: <%= it.mejor_llamada.lead %></p>

@@ -73,7 +73,7 @@
 
 <header class="membrete">
   <% if (it._logoB64) { %>
-    <img src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA" style="height:26pt;display:block;margin-bottom:6pt;">
+    <img src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA" style="height:26pt;display:block;margin-bottom:6pt;margin-left:-2pt;">
   <% } else { %>
     <p class="marca">ZEBRA<span class="dot">.</span></p>
   <% } %>

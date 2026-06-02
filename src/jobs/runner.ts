@@ -68,6 +68,15 @@ export async function runJob(job: Job): Promise<void> {
       client.transcripcion_max_chars,
     );
 
+    console.log(`[runner] ${allCalls.length} llamadas encontradas en "${client.data_sheet_name}" para ${job.month}`);
+
+    if (allCalls.length === 0) {
+      throw new Error(
+        `No se encontraron llamadas en la hoja "${client.data_sheet_name}" para el mes ${job.month}. ` +
+        `Verifica que la columna "${client.col_fecha}" tenga fechas legibles y que haya registros para ese período.`,
+      );
+    }
+
     // ── 2. Group calls by advisor ─────────────────────────────────────────────
     const callMap = new Map<string, typeof allCalls>();
     for (const call of allCalls) {
@@ -79,7 +88,16 @@ export async function runJob(job: Job): Promise<void> {
     const advisorsWithData = job.advisors.filter(a => callMap.has(a));
     const skipped = job.advisors.filter(a => !callMap.has(a));
     if (skipped.length > 0) {
-      console.warn(`[runner] No calls found for: ${skipped.join(', ')} — skipping`);
+      console.warn(`[runner] Sin datos para: ${skipped.join(', ')}`);
+    }
+
+    if (advisorsWithData.length === 0) {
+      const foundNames = [...callMap.keys()].slice(0, 15).join(', ');
+      throw new Error(
+        `Los asesores solicitados [${job.advisors.join(', ')}] no tienen llamadas en ${job.month}. ` +
+        `Nombres encontrados en la hoja: [${foundNames || 'ninguno'}]. ` +
+        `Verifica mayúsculas/espacios exactos en la columna "${client.col_asesor}".`,
+      );
     }
 
     updateJob(job.id, { progress: { completed: 0, total: advisorsWithData.length } });
@@ -105,6 +123,15 @@ export async function runJob(job: Job): Promise<void> {
         console.error(`[runner] ${advisorsWithData[i]} failed:`, s.reason);
         failures.push(`${advisorsWithData[i]}: ${(s.reason as Error)?.message ?? s.reason}`);
       }
+    }
+
+    // If every single advisor failed, surface as a hard error instead of silent done
+    if (individualResults.length === 0 && failures.length > 0) {
+      updateJob(job.id, {
+        status: 'error',
+        error: `Todos los asesores fallaron. ${failures.join(' | ')}`,
+      });
+      return;
     }
 
     // ── 4. General report (only for 'general' type) ───────────────────────────

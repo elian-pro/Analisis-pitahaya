@@ -776,10 +776,14 @@
       const job=await pollJob(job_id,n,mode);
       // 4. Mostrar resultados
       const results=job.results||{individual:[]};
-      finishModalMulti(results.individual||[],results.general||null);
+      const indiv=results.individual||[];
+      if(indiv.length===0&&!results.general){
+        throw new Error(job.error||'No se generaron reportes. Verifica que el período seleccionado tenga datos en la hoja de cálculo.');
+      }
+      finishModalMulti(indiv,results.general||null);
       // Actualizar sección de resultados debajo del modal
       let rhtml='';
-      (results.individual||[]).forEach(r=>{
+      indiv.forEach(r=>{
         rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
       });
       if(results.general){

@@ -46,10 +46,12 @@ async function runBatch<T, R>(
 }
 
 export async function runJob(job: Job): Promise<void> {
+  console.log(`[runner] ▶ START job=${job.id} client=${job.client_id} month=${job.month} type=${job.type} advisors=[${job.advisors.join(', ')}]`);
   updateJob(job.id, { status: 'running' });
 
   try {
     const client = loadClient(job.client_id);
+    console.log(`[runner] ✓ Client loaded: ${client.name}`);
 
     // ── 1. Fetch all call data for the month ─────────────────────────────────
     const cols: SheetColumns = {
@@ -60,6 +62,7 @@ export async function runJob(job: Job): Promise<void> {
       transcripcion: client.col_transcripcion,
     };
 
+    console.log(`[runner] ► Step 1: fetching call data from sheet "${client.data_sheet_name}"…`);
     const allCalls = await getCallData(
       client.spreadsheet_id,
       client.data_sheet_name,
@@ -69,7 +72,7 @@ export async function runJob(job: Job): Promise<void> {
       client.transcripcion_max_chars,
     );
 
-    console.log(`[runner] ${allCalls.length} llamadas encontradas en "${client.data_sheet_name}" para ${job.month}`);
+    console.log(`[runner] ✓ Step 1: ${allCalls.length} llamadas encontradas para ${job.month}`);
 
     if (allCalls.length === 0) {
       throw new Error(
@@ -88,8 +91,9 @@ export async function runJob(job: Job): Promise<void> {
     const advisorsWithData = job.advisors.filter(a => callMap.has(a));
     const skipped = job.advisors.filter(a => !callMap.has(a));
     if (skipped.length > 0) {
-      console.warn(`[runner] Sin datos para: ${skipped.join(', ')}`);
+      console.warn(`[runner] ⚠ Sin datos para: ${skipped.join(', ')}`);
     }
+    console.log(`[runner] ✓ Step 2: ${advisorsWithData.length}/${job.advisors.length} asesores con datos`);
 
     if (advisorsWithData.length === 0) {
       const foundNames = [...callMap.keys()].slice(0, 15).join(', ');
@@ -103,14 +107,17 @@ export async function runJob(job: Job): Promise<void> {
     updateJob(job.id, { progress: { completed: 0, total: advisorsWithData.length } });
 
     // ── 3. Analyze advisors — generate PDFs in memory, no upload yet ─────────
+    console.log(`[runner] ► Step 3: analyzing ${advisorsWithData.length} advisors with Claude…`);
     const individualResults: AdvisorResult[] = [];
     const failures: string[] = [];
     let completed = 0;
 
     const settled = await runBatch(advisorsWithData, 5, async (advisorName) => {
+      console.log(`[runner]   → processing advisor: ${advisorName}`);
       const calls      = callMap.get(advisorName)!;
       const prevReport = await findPreviousReport(client.folder_id, advisorName, job.month);
       const result     = await processAdvisor(advisorName, calls, client, job.month, prevReport);
+      console.log(`[runner]   ✓ advisor done: ${advisorName}, pdfBuffer size=${result.pdfBuffer?.length ?? 'undefined'}`);
       updateJob(job.id, { progress: { completed: ++completed, total: advisorsWithData.length } });
       return result;
     });
@@ -120,10 +127,12 @@ export async function runJob(job: Job): Promise<void> {
       if (s.status === 'fulfilled') {
         individualResults.push(s.value);
       } else {
-        console.error(`[runner] ${advisorsWithData[i]} failed:`, s.reason);
+        console.error(`[runner] ✗ ${advisorsWithData[i]} failed:`, s.reason);
         failures.push(`${advisorsWithData[i]}: ${(s.reason as Error)?.message ?? s.reason}`);
       }
     }
+
+    console.log(`[runner] ✓ Step 3: ${individualResults.length} succeeded, ${failures.length} failed`);
 
     if (individualResults.length === 0 && failures.length > 0) {
       updateJob(job.id, {
@@ -133,13 +142,18 @@ export async function runJob(job: Job): Promise<void> {
       return;
     }
 
+    if (individualResults.length === 0) {
+      throw new Error('No se generaron reportes individuales (0 resultados, 0 fallos — estado inesperado).');
+    }
+
     // ── 4. General report PDF (only for 'general' type) ───────────────────────
     let generalPdfBuffer: Buffer | undefined;
 
     if (job.type === 'general' && individualResults.length > 0) {
-      console.log(`[runner] Generating general report for ${individualResults.length} advisors`);
+      console.log(`[runner] ► Step 4: generating general report for ${individualResults.length} advisors…`);
       const gen = await processGeneralReport(individualResults, client, job.month);
       generalPdfBuffer = gen.pdfBuffer;
+      console.log(`[runner] ✓ Step 4: general PDF generated, size=${generalPdfBuffer?.length ?? 'undefined'}`);
     }
 
     // ── 5. Merge: general first, then individual by result order ─────────────
@@ -147,12 +161,14 @@ export async function runJob(job: Job): Promise<void> {
     if (generalPdfBuffer) pdfBuffers.push(generalPdfBuffer);
     individualResults.forEach(r => pdfBuffers.push(r.pdfBuffer));
 
-    console.log(`[runner] Merging ${pdfBuffers.length} PDF(s)…`);
+    console.log(`[runner] ► Step 5: merging ${pdfBuffers.length} PDF(s)…`);
     const mergedBuffer = await mergePdfs(pdfBuffers);
+    console.log(`[runner] ✓ Step 5: merged PDF size=${mergedBuffer.length}`);
 
     // ── 6. Upload single combined PDF ─────────────────────────────────────────
+    console.log(`[runner] ► Step 6: uploading combined PDF to Drive folder ${client.folder_id}…`);
     const combinedUrl = await uploadPdf(client.folder_id, client.name, job.month, mergedBuffer);
-    console.log(`[runner] Combined PDF uploaded: ${combinedUrl}`);
+    console.log(`[runner] ✓ Step 6: Combined PDF uploaded: ${combinedUrl}`);
 
     // ── 7. Upload sidecars for next-month comparison (best-effort) ────────────
     for (const r of individualResults) {
@@ -161,21 +177,24 @@ export async function runJob(job: Job): Promise<void> {
     }
 
     // ── 8. Finalise ───────────────────────────────────────────────────────────
+    const finalResults = {
+      individual: [],
+      combined: {
+        driveUrl: combinedUrl,
+        advisors: individualResults.map(r => r.asesor),
+      },
+    };
+    console.log(`[runner] ► Step 8: finalising job, combined.driveUrl=${combinedUrl}`);
     updateJob(job.id, {
       status: 'done',
-      results: {
-        individual: [],
-        combined: {
-          driveUrl: combinedUrl,
-          advisors: individualResults.map(r => r.asesor),
-        },
-      },
+      results: finalResults,
       ...(failures.length > 0 && { error: `Fallos parciales: ${failures.join('; ')}` }),
     });
+    console.log(`[runner] ✓ Job ${job.id} DONE`);
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[runner] Job ${job.id} fatal error:`, msg);
+    console.error(`[runner] ✗ Job ${job.id} fatal error:`, msg);
     updateJob(job.id, { status: 'error', error: msg });
   }
 }

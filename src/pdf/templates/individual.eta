@@ -81,7 +81,11 @@
 <body>
 
 <header class="membrete">
-  <p class="marca">ZEBRA<span class="dot">.</span></p>
+  <% if (it._logoB64) { %>
+    <img src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA" style="height:26pt;display:block;margin-bottom:6pt;">
+  <% } else { %>
+    <p class="marca">ZEBRA<span class="dot">.</span></p>
+  <% } %>
   <p class="tagline">Inteligencia comercial · Análisis de cierres</p>
   <div class="meta">
     <div><b>Reporte:</b> Desempeño mensual de <%= it.tipo_asesor === 'desconocido' ? 'asesor' : it.tipo_asesor %></div>

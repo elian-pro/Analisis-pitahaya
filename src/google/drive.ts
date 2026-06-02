@@ -16,11 +16,11 @@ export function monthLabel(month: string): string {
 // "2026-04" → "2026-03"
 export function previousMonth(month: string): string {
   const [y, m] = month.split('-').map(Number);
-  const prev = new Date(y, m - 2, 1); // month-2 because months are 0-indexed
+  const prev = new Date(y, m - 2, 1);
   return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// "Reporte Felipe Abril 2026" (used as both PDF name and search key)
+// "Reporte Felipe Abril 2026"
 export function reportFilename(advisorName: string, month: string): string {
   return `Reporte ${advisorName} ${monthLabel(month)}`;
 }
@@ -46,13 +46,21 @@ export async function uploadPdf(
       requestBody: { name, parents: [folderId] },
       media: { mimeType: 'application/pdf', body: Readable.from(pdfBuffer) },
       fields: 'id,webViewLink',
+      supportsAllDrives: true,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('notFound') || msg.includes('File not found') || msg.includes('404')) {
       throw new Error(
-        `La carpeta de Drive (ID: ${folderId}) no es accesible para la cuenta de servicio. ` +
-        `Comparte esa carpeta con el email de la service account como Editor.`,
+        `La carpeta de Drive (ID: ${folderId}) no es accesible. ` +
+        `Verifica que sea una Unidad Compartida y que la service account sea miembro con rol Colaborador o superior.`,
+      );
+    }
+    if (msg.includes('storageQuota') || msg.includes('storage quota')) {
+      throw new Error(
+        `La service account no tiene cuota de almacenamiento. ` +
+        `La carpeta debe estar en una Unidad Compartida (no en Mi Unidad). ` +
+        `Crea una Unidad Compartida, mueve la carpeta ahí y agrega la service account como miembro.`,
       );
     }
     throw err;
@@ -74,7 +82,6 @@ async function downloadText(fileId: string, mimeType: string): Promise<string> {
   const drive = getDrive();
 
   if (mimeType === MIME_GDOC) {
-    // Export Google Doc as plain text
     const res = await drive.files.export(
       { fileId, mimeType: MIME_TEXT },
       { responseType: 'text' },
@@ -82,18 +89,13 @@ async function downloadText(fileId: string, mimeType: string): Promise<string> {
     return String(res.data);
   }
 
-  // Download raw text / PDF text layer (best-effort for text files)
   const res = await drive.files.get(
-    { fileId, alt: 'media' },
+    { fileId, alt: 'media', supportsAllDrives: true },
     { responseType: 'text' },
   );
   return String(res.data);
 }
 
-/**
- * Uploads a plain-text sidecar alongside the PDF so the next month's run can
- * read the previous report summary without extracting text from the PDF.
- */
 export async function uploadReportSidecar(
   folderId: string,
   advisorName: string,
@@ -104,22 +106,15 @@ export async function uploadReportSidecar(
   const name = `${reportFilename(advisorName, month)}.txt`;
   await drive.files.create({
     requestBody: { name, parents: [folderId] },
-    media: {
-      mimeType: MIME_TEXT,
-      body: Readable.from(Buffer.from(text, 'utf-8')),
-    },
+    media: { mimeType: MIME_TEXT, body: Readable.from(Buffer.from(text, 'utf-8')) },
+    supportsAllDrives: true,
   });
 }
 
-/**
- * Searches the Drive folder for the previous month's report for an advisor.
- * Handles both legacy Google Docs (from n8n) and the new PDF/txt uploads.
- * Returns the text content, or null if nothing found.
- */
 export async function findPreviousReport(
   folderId: string,
   advisorName: string,
-  month: string, // current month, will search previous
+  month: string,
 ): Promise<string | null> {
   const drive = getDrive();
   const prevMonth = previousMonth(month);
@@ -133,7 +128,13 @@ export async function findPreviousReport(
 
   let list;
   try {
-    list = await drive.files.list({ q, fields: 'files(id,name,mimeType)', pageSize: 5 });
+    list = await drive.files.list({
+      q,
+      fields: 'files(id,name,mimeType)',
+      pageSize: 5,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
   } catch (err) {
     console.warn(`[drive] Could not list files in folder ${folderId}:`, err instanceof Error ? err.message : err);
     return null;
@@ -142,7 +143,6 @@ export async function findPreviousReport(
   const files = list.data.files ?? [];
   if (files.length === 0) return null;
 
-  // Prefer Google Doc (legacy) → then .txt → skip .pdf (no text extraction)
   const preferred = (
     files.find(f => f.mimeType === MIME_GDOC) ??
     files.find(f => f.mimeType === MIME_TEXT) ??

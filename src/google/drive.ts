@@ -40,17 +40,23 @@ export async function uploadPdf(
   const drive = getDrive();
   const name = `${reportFilename(advisorName, month)}.pdf`;
 
-  const res = await drive.files.create({
-    requestBody: {
-      name,
-      parents: [folderId],
-    },
-    media: {
-      mimeType: 'application/pdf',
-      body: Readable.from(pdfBuffer),
-    },
-    fields: 'id,webViewLink',
-  });
+  let res;
+  try {
+    res = await drive.files.create({
+      requestBody: { name, parents: [folderId] },
+      media: { mimeType: 'application/pdf', body: Readable.from(pdfBuffer) },
+      fields: 'id,webViewLink',
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('notFound') || msg.includes('File not found') || msg.includes('404')) {
+      throw new Error(
+        `La carpeta de Drive (ID: ${folderId}) no es accesible para la cuenta de servicio. ` +
+        `Comparte esa carpeta con el email de la service account como Editor.`,
+      );
+    }
+    throw err;
+  }
 
   if (!res.data.webViewLink) {
     throw new Error(`Drive upload succeeded but returned no webViewLink for ${name}`);
@@ -125,11 +131,13 @@ export async function findPreviousReport(
     `trashed = false`,
   ].join(' and ');
 
-  const list = await drive.files.list({
-    q,
-    fields: 'files(id,name,mimeType)',
-    pageSize: 5,
-  });
+  let list;
+  try {
+    list = await drive.files.list({ q, fields: 'files(id,name,mimeType)', pageSize: 5 });
+  } catch (err) {
+    console.warn(`[drive] Could not list files in folder ${folderId}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
 
   const files = list.data.files ?? [];
   if (files.length === 0) return null;

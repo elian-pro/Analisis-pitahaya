@@ -636,7 +636,7 @@
     b.classList.remove('show');b.style.display='none';
   }
 
-  function finishModalMulti(individual, general){
+  function finishModalMulti(individual, general, combined){
     clearInterval(progressInterval);clearInterval(elapsedInterval);
     document.querySelectorAll('.step-item').forEach(item=>{
       item.className='step-item done';
@@ -647,15 +647,22 @@
     const bar=document.getElementById('progress-bar');
     bar.className='progress-bar done';bar.style.width='100%';
     document.getElementById('progress-pct').textContent='100%';
-    document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
+    const ml=document.getElementById('month-select').options[document.getElementById('month-select').selectedIndex]?.text||'';
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
     const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
     let html='';
-    individual.forEach(r=>{
-      html+=`<a href="${r.driveUrl}" target="_blank" class="result-link" style="margin-top:4px;"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
-    });
-    if(general){
-      html+=`<a href="${general.driveUrl}" target="_blank" class="result-link" style="margin-top:8px;border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General del Equipo</span><span class="result-arrow">→</span></a>`;
+    if(combined){
+      const n=combined.advisors?.length||individual.length;
+      document.getElementById('modal-subtitle').textContent=`${n} asesor(es) analizados — Reporte listo`;
+      html=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="margin-top:0;border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte Completo — ${ml}</span><span class="result-arrow">→</span></a>`;
+    }else{
+      document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
+      individual.forEach(r=>{
+        html+=`<a href="${r.driveUrl}" target="_blank" class="result-link" style="margin-top:4px;"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
+      });
+      if(general){
+        html+=`<a href="${general.driveUrl}" target="_blank" class="result-link" style="margin-top:8px;border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General del Equipo</span><span class="result-arrow">→</span></a>`;
+      }
     }
     mr.innerHTML=html;
   }
@@ -783,17 +790,22 @@
       // 4. Mostrar resultados
       const results=job.results||{individual:[]};
       const indiv=results.individual||[];
-      if(indiv.length===0&&!results.general){
+      const combined=results.combined||null;
+      if(!combined&&indiv.length===0&&!results.general){
         throw new Error(job.error||'No se generaron reportes. Verifica que el período seleccionado tenga datos en la hoja de cálculo.');
       }
-      finishModalMulti(indiv,results.general||null);
+      finishModalMulti(indiv,results.general||null,combined);
       // Actualizar sección de resultados debajo del modal
       let rhtml='';
-      indiv.forEach(r=>{
-        rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
-      });
-      if(results.general){
-        rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General — ${ml}</span><span class="result-arrow">→</span></a>`;
+      if(combined){
+        rhtml+=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte Completo — ${ml}</span><span class="result-arrow">→</span></a>`;
+      }else{
+        indiv.forEach(r=>{
+          rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
+        });
+        if(results.general){
+          rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General — ${ml}</span><span class="result-arrow">→</span></a>`;
+        }
       }
       document.getElementById('result-section').classList.add('show');
       document.getElementById('result-content').innerHTML=rhtml||'<div class="error-box">⚠️ Sin resultados.</div>';

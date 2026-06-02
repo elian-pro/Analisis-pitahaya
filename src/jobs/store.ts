@@ -5,7 +5,8 @@ export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
 export interface JobResult {
   individual: Array<{ asesor: string; driveUrl: string }>;
-  general?: { driveUrl: string };
+  general?:   { driveUrl: string };
+  combined?:  { driveUrl: string; advisors: string[] };
 }
 
 export interface Job {

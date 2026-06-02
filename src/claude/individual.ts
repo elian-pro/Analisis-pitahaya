@@ -7,10 +7,9 @@ import {
 } from '../schemas/individual';
 import type { CallRow } from '../google/sheets';
 import { renderPdf } from '../pdf/renderer';
-import { uploadPdf, uploadReportSidecar, monthLabel } from '../google/drive';
+import { monthLabel } from '../google/drive';
 
 interface ClientForAnalysis {
-  folder_id: string;
   prompt_individual: string;
 }
 
@@ -232,7 +231,7 @@ async function callClaudeWithRetry(
 
 // ── Sidecar text for next-month comparison ────────────────────────────────────
 
-function buildSidecar(d: IndividualReportData): string {
+export function buildSidecar(d: IndividualReportData): string {
   const criterios = d.criterios
     .map(c => `  ${c.nombre}: ${c.puntaje}/${c.max_puntaje} (${c.porcentaje}%)`)
     .join('\n');
@@ -260,7 +259,7 @@ function buildSidecar(d: IndividualReportData): string {
 
 export interface AdvisorResult {
   asesor:     string;
-  driveUrl:   string;
+  pdfBuffer:  Buffer;
   reportData: IndividualReportData;
 }
 
@@ -296,11 +295,6 @@ export async function processAdvisor(
   };
 
   const pdfBuffer = await renderPdf('individual', reportData as unknown as Record<string, unknown>);
-  const driveUrl  = await uploadPdf(client.folder_id, advisorName, month, pdfBuffer);
 
-  // Best-effort sidecar — don't fail the whole job if this upload fails
-  uploadReportSidecar(client.folder_id, advisorName, month, buildSidecar(reportData))
-    .catch(err => console.warn('[claude/individual] sidecar upload failed:', err.message));
-
-  return { asesor: advisorName, driveUrl, reportData };
+  return { asesor: advisorName, pdfBuffer, reportData };
 }

@@ -7,11 +7,10 @@ import {
 } from '../schemas/general';
 import type { AdvisorResult } from './individual';
 import { renderPdf } from '../pdf/renderer';
-import { uploadPdf, monthLabel } from '../google/drive';
+import { monthLabel } from '../google/drive';
 
 interface ClientForGeneral {
   name: string;
-  folder_id: string;
   prompt_general: string;
 }
 
@@ -176,7 +175,7 @@ async function callClaudeWithRetry(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface GeneralResult {
-  driveUrl:   string;
+  pdfBuffer:  Buffer;
   reportData: GeneralReportData;
 }
 
@@ -219,7 +218,6 @@ export async function processGeneralReport(
   };
 
   const pdfBuffer = await renderPdf('general', reportData as unknown as Record<string, unknown>);
-  const driveUrl  = await uploadPdf(client.folder_id, 'General', month, pdfBuffer);
 
-  return { driveUrl, reportData };
+  return { pdfBuffer, reportData };
 }

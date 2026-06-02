@@ -2,9 +2,10 @@ import path from 'path';
 import fs from 'fs';
 import { updateJob, type Job } from './store';
 import { getCallData, type SheetColumns } from '../google/sheets';
-import { findPreviousReport } from '../google/drive';
-import { processAdvisor, type AdvisorResult } from '../claude/individual';
+import { findPreviousReport, uploadPdf, uploadReportSidecar, monthLabel } from '../google/drive';
+import { processAdvisor, buildSidecar, type AdvisorResult } from '../claude/individual';
 import { processGeneralReport } from '../claude/general';
+import { mergePdfs } from '../pdf/merge';
 
 interface ClientConfig {
   id:                     string;
@@ -84,7 +85,6 @@ export async function runJob(job: Job): Promise<void> {
       callMap.get(call.asesor)!.push(call);
     }
 
-    // Keep only requested advisors that have calls
     const advisorsWithData = job.advisors.filter(a => callMap.has(a));
     const skipped = job.advisors.filter(a => !callMap.has(a));
     if (skipped.length > 0) {
@@ -102,8 +102,9 @@ export async function runJob(job: Job): Promise<void> {
 
     updateJob(job.id, { progress: { completed: 0, total: advisorsWithData.length } });
 
-    // ── 3. Process advisors in parallel batches of 5 ─────────────────────────
+    // ── 3. Analyze advisors — generate PDFs in memory, no upload yet ─────────
     const individualResults: AdvisorResult[] = [];
+    const failures: string[] = [];
     let completed = 0;
 
     const settled = await runBatch(advisorsWithData, 5, async (advisorName) => {
@@ -114,7 +115,6 @@ export async function runJob(job: Job): Promise<void> {
       return result;
     });
 
-    const failures: string[] = [];
     for (let i = 0; i < settled.length; i++) {
       const s = settled[i];
       if (s.status === 'fulfilled') {
@@ -125,7 +125,6 @@ export async function runJob(job: Job): Promise<void> {
       }
     }
 
-    // If every single advisor failed, surface as a hard error instead of silent done
     if (individualResults.length === 0 && failures.length > 0) {
       updateJob(job.id, {
         status: 'error',
@@ -134,24 +133,44 @@ export async function runJob(job: Job): Promise<void> {
       return;
     }
 
-    // ── 4. General report (only for 'general' type) ───────────────────────────
-    let generalResult: { driveUrl: string } | undefined;
+    // ── 4. General report PDF (only for 'general' type) ───────────────────────
+    let generalPdfBuffer: Buffer | undefined;
 
     if (job.type === 'general' && individualResults.length > 0) {
       console.log(`[runner] Generating general report for ${individualResults.length} advisors`);
       const gen = await processGeneralReport(individualResults, client, job.month);
-      generalResult = { driveUrl: gen.driveUrl };
+      generalPdfBuffer = gen.pdfBuffer;
     }
 
-    // ── 5. Finalise ───────────────────────────────────────────────────────────
+    // ── 5. Merge: general first, then individual by result order ─────────────
+    const pdfBuffers: Buffer[] = [];
+    if (generalPdfBuffer) pdfBuffers.push(generalPdfBuffer);
+    individualResults.forEach(r => pdfBuffers.push(r.pdfBuffer));
+
+    console.log(`[runner] Merging ${pdfBuffers.length} PDF(s)…`);
+    const mergedBuffer = await mergePdfs(pdfBuffers);
+
+    // ── 6. Upload single combined PDF ─────────────────────────────────────────
+    const combinedUrl = await uploadPdf(client.folder_id, client.name, job.month, mergedBuffer);
+    console.log(`[runner] Combined PDF uploaded: ${combinedUrl}`);
+
+    // ── 7. Upload sidecars for next-month comparison (best-effort) ────────────
+    for (const r of individualResults) {
+      uploadReportSidecar(client.folder_id, r.asesor, job.month, buildSidecar(r.reportData))
+        .catch(err => console.warn(`[runner] sidecar ${r.asesor} failed:`, (err as Error).message));
+    }
+
+    // ── 8. Finalise ───────────────────────────────────────────────────────────
     updateJob(job.id, {
       status: 'done',
       results: {
-        individual: individualResults.map(r => ({ asesor: r.asesor, driveUrl: r.driveUrl })),
-        general: generalResult,
+        individual: [],
+        combined: {
+          driveUrl: combinedUrl,
+          advisors: individualResults.map(r => r.asesor),
+        },
       },
-      // Surface partial failures as a non-blocking warning in the error field
-      ...(failures.length > 0 && { error: `Partial failures: ${failures.join('; ')}` }),
+      ...(failures.length > 0 && { error: `Fallos parciales: ${failures.join('; ')}` }),
     });
 
   } catch (err) {

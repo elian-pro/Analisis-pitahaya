@@ -182,7 +182,7 @@
     </div>
     <div class="field field-grow">
       <div class="field-label">Período a analizar</div>
-      <select id="month-select"></select>
+      <select id="month-select" onchange="onMonthChange()"></select>
     </div>
   </div>
   <div id="drive-link-wrap" style="display:none;margin-bottom:16px;">
@@ -433,7 +433,8 @@
     lock(true);
 
     try{
-      const res=await fetch(`${ADVISORS_API}?client_id=${encodeURIComponent(currentClient.id)}`);
+      const month=document.getElementById('month-select').value;
+      const res=await fetch(`${ADVISORS_API}?client_id=${encodeURIComponent(currentClient.id)}&month=${encodeURIComponent(month)}`);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data=await res.json();
 
@@ -456,6 +457,11 @@
     }catch(e){
       g.innerHTML=`<div class="advisors-loading" style="color:#ff6060;">Error al cargar asesores: ${e.message}</div>`;
     }
+  }
+
+  // Re-fetch advisors when month changes (data source is Analisis sheet for that month)
+  function onMonthChange(){
+    if(currentClient) onClientChange();
   }
 
   // ── Render del grid de asesores ──

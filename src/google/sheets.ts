@@ -81,6 +81,45 @@ async function readSheet(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Returns unique advisor names found in the DATA sheet for a specific month.
+ * This is the preferred source because the names are guaranteed to match
+ * the call data — no cross-sheet name discrepancy is possible.
+ */
+export async function getAdvisorsForMonth(
+  spreadsheetId: string,
+  dataSheetName: string,
+  colFecha: string,
+  colAsesor: string,
+  month: string,
+): Promise<Advisor[]> {
+  const rows = await readSheet(spreadsheetId, dataSheetName);
+  if (rows.length < 2) return [];
+
+  const headers = rows[0].map(String);
+  const fechaIdx  = headerIndex(headers, colFecha);
+  const asesorIdx = headerIndex(headers, colAsesor);
+  if (asesorIdx === -1) return [];
+
+  const seen = new Map<string, number>(); // name → first row_number
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+
+    if (fechaIdx >= 0) {
+      const date = parseSheetDate(row[fechaIdx]);
+      if (!date || !matchesMonth(date, month)) continue;
+    }
+
+    const name = String(row[asesorIdx] ?? '').trim();
+    if (name && !seen.has(name)) seen.set(name, i + 1);
+  }
+
+  return [...seen.entries()]
+    .map(([asesor, row_number]) => ({ asesor, row_number }))
+    .sort((a, b) => a.asesor.localeCompare(b.asesor, 'es'));
+}
+
 export async function getAdvisors(
   spreadsheetId: string,
   sheetName: string,

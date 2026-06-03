@@ -49,14 +49,14 @@ export const ClaudeIndividualOutputSchema = z.object({
   })),
   sesgos_subutilizados: z.array(z.string()),
 
-  talk_ratio:        z.number().min(0).max(100),
+  talk_ratio:         z.number().min(0).max(100),
   preguntas_promedio: z.number().nonnegative(),
 
   cierres: z.object({
-    apartado:          z.number().int().nonnegative(),
-    cita_seguimiento:  z.number().int().nonnegative(),
-    firma:             z.number().int().nonnegative(),
-    fecha_decision:    z.number().int().nonnegative(),
+    apartado:           z.number().int().nonnegative(),
+    cita_seguimiento:   z.number().int().nonnegative(),
+    firma:              z.number().int().nonnegative(),
+    fecha_decision:     z.number().int().nonnegative(),
     sin_siguiente_paso: z.number().int().nonnegative(),
   }),
 
@@ -86,16 +86,20 @@ export const ClaudeIndividualOutputSchema = z.object({
 export type ClaudeIndividualOutput = z.infer<typeof ClaudeIndividualOutputSchema>;
 
 // ── Full data passed to the PDF template ─────────────────────────────────────
-// (Claude output + deterministic metrics computed by the service)
 
 export interface IndividualReportData extends ClaudeIndividualOutput {
-  asesor:         string;
-  mes:            string;  // "YYYY-MM"
-  mes_label:      string;  // "Mayo 2026"
-  call_count:     number;
-  avg_score:      number;
-  score_min:      number;
-  score_max:      number;
-  score_sigma:    number;
-  generated_date: string;  // "DD/MM/YYYY"
+  asesor:                  string;
+  mes:                     string;    // "YYYY-MM"
+  mes_label:               string;    // "Mayo 2026"
+  period_label?:           string;    // "Semana 05/05 al 11/05", undefined for monthly
+  call_count:              number;
+  avg_score:               number;
+  score_min:               number;
+  score_max:               number;
+  score_sigma:             number;
+  generated_date:          string;    // "DD/MM/YYYY"
+  has_previous:            boolean;
+  delta_score?:            number;    // positive = improved vs previous period
+  delta_siguiente_paso?:   number;
+  delta_talk_ratio?:       number;
 }

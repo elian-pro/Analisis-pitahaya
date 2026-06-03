@@ -1,26 +1,30 @@
 import { google } from 'googleapis';
 import { getAuth } from './auth';
 
+export const MIN_CALL_DURATION_SECONDS = 90;
+
 export interface Advisor {
-  asesor: string;
+  asesor:     string;
   row_number: number;
 }
 
 export interface CallRow {
-  fecha: string;
-  asesor: string;
-  calif: string;
-  analisis: string;
-  transcripcion: string;
-  rowNumber: number;
+  fecha:             string;
+  asesor:            string;
+  calif:             string;
+  analisis:          string;
+  transcripcion:     string;
+  rowNumber:         number;
+  duracion_segundos: number;
 }
 
 export interface SheetColumns {
-  fecha: string;
-  asesor: string;
-  calif: string;
-  analisis: string;
+  fecha:         string;
+  asesor:        string;
+  calif:         string;
+  analisis:      string;
   transcripcion: string;
+  duracion?:     string;
 }
 
 // ── Date parsing ──────────────────────────────────────────────────────────────
@@ -28,7 +32,6 @@ export interface SheetColumns {
 function parseSheetDate(raw: unknown): Date | null {
   if (raw === null || raw === undefined || raw === '') return null;
 
-  // Google Sheets serial number (days since 30 Dec 1899)
   if (typeof raw === 'number') {
     return new Date((raw - 25569) * 86400 * 1000);
   }
@@ -36,13 +39,11 @@ function parseSheetDate(raw: unknown): Date | null {
   const s = String(raw).trim();
   if (!s) return null;
 
-  // DD/MM/YYYY or D/M/YYYY (common in Mexico)
   const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (dmy) {
     return new Date(+dmy[3], +dmy[2] - 1, +dmy[1]);
   }
 
-  // YYYY-MM-DD
   const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (ymd) {
     return new Date(+ymd[1], +ymd[2] - 1, +ymd[3]);
@@ -55,6 +56,12 @@ function parseSheetDate(raw: unknown): Date | null {
 function matchesMonth(date: Date, month: string): boolean {
   const [y, m] = month.split('-').map(Number);
   return date.getFullYear() === y && date.getMonth() + 1 === m;
+}
+
+function inDateRange(date: Date, dateFrom: string, dateTo: string): boolean {
+  const from = new Date(dateFrom + 'T00:00:00');
+  const to   = new Date(dateTo   + 'T23:59:59');
+  return date >= from && date <= to;
 }
 
 // ── Sheet helpers ─────────────────────────────────────────────────────────────
@@ -81,11 +88,6 @@ async function readSheet(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/**
- * Returns unique advisor names found in the DATA sheet for a specific month.
- * This is the preferred source because the names are guaranteed to match
- * the call data — no cross-sheet name discrepancy is possible.
- */
 export async function getAdvisorsForMonth(
   spreadsheetId: string,
   dataSheetName: string,
@@ -96,12 +98,12 @@ export async function getAdvisorsForMonth(
   const rows = await readSheet(spreadsheetId, dataSheetName);
   if (rows.length < 2) return [];
 
-  const headers = rows[0].map(String);
-  const fechaIdx  = headerIndex(headers, colFecha);
+  const headers  = rows[0].map(String);
+  const fechaIdx = headerIndex(headers, colFecha);
   const asesorIdx = headerIndex(headers, colAsesor);
   if (asesorIdx === -1) return [];
 
-  const seen = new Map<string, number>(); // name → first row_number
+  const seen = new Map<string, number>();
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
@@ -130,8 +132,6 @@ export async function getAdvisors(
 
   const headers = rows[0].map(String);
   let colIdx = headerIndex(headers, colAsesor);
-
-  // Fall back to first column if named column not found
   if (colIdx === -1) colIdx = 0;
 
   const result: Advisor[] = [];
@@ -146,9 +146,11 @@ export async function getCallData(
   spreadsheetId: string,
   sheetName: string,
   cols: SheetColumns,
-  month: string, // YYYY-MM
+  month: string,
   excludedPhrases: string[],
   maxTranscripcionChars: number,
+  dateFrom?: string,  // YYYY-MM-DD, activates weekly range filter
+  dateTo?: string,    // YYYY-MM-DD
 ): Promise<CallRow[]> {
   const rows = await readSheet(spreadsheetId, sheetName);
   if (rows.length < 2) return [];
@@ -160,22 +162,27 @@ export async function getCallData(
     calif:         headerIndex(headers, cols.calif),
     analisis:      headerIndex(headers, cols.analisis),
     transcripcion: headerIndex(headers, cols.transcripcion),
+    duracion:      cols.duracion ? headerIndex(headers, cols.duracion) : -1,
   };
 
   const result: CallRow[] = [];
+  let discardedByDuration = 0;
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
 
     const rawFecha = idx.fecha >= 0 ? row[idx.fecha] : null;
     const date = parseSheetDate(rawFecha);
-    if (!date || !matchesMonth(date, month)) continue;
+
+    const dateOk = dateFrom && dateTo
+      ? (date !== null && inDateRange(date, dateFrom, dateTo))
+      : (date !== null && matchesMonth(date, month));
+    if (!dateOk) continue;
 
     let transcripcion = idx.transcripcion >= 0
       ? String(row[idx.transcripcion] ?? '').trim()
       : '';
 
-    // Skip rows whose transcription contains excluded phrases
     const lower = transcripcion.toLowerCase();
     if (excludedPhrases.some(p => lower.includes(p.toLowerCase()))) continue;
 
@@ -183,14 +190,31 @@ export async function getCallData(
       transcripcion = transcripcion.slice(0, maxTranscripcionChars);
     }
 
+    const rawDuracion    = idx.duracion >= 0 ? row[idx.duracion] : null;
+    const duracionSeg    = rawDuracion !== null ? Number(rawDuracion) : NaN;
+    const duracionKnown  = idx.duracion >= 0 && !isNaN(duracionSeg);
+
+    if (duracionKnown && duracionSeg < MIN_CALL_DURATION_SECONDS) {
+      discardedByDuration++;
+      continue;
+    }
+
     result.push({
-      fecha:         String(rawFecha ?? ''),
-      asesor:        idx.asesor >= 0 ? String(row[idx.asesor] ?? '').trim() : '',
-      calif:         idx.calif >= 0  ? String(row[idx.calif]  ?? '').trim() : '',
-      analisis:      idx.analisis >= 0 ? String(row[idx.analisis] ?? '').trim() : '',
+      fecha:             String(rawFecha ?? ''),
+      asesor:            idx.asesor >= 0 ? String(row[idx.asesor] ?? '').trim() : '',
+      calif:             idx.calif  >= 0 ? String(row[idx.calif]  ?? '').trim() : '',
+      analisis:          idx.analisis >= 0 ? String(row[idx.analisis] ?? '').trim() : '',
       transcripcion,
-      rowNumber: i + 1,
+      rowNumber:         i + 1,
+      duracion_segundos: duracionKnown ? duracionSeg : 0,
     });
+  }
+
+  if (discardedByDuration > 0) {
+    console.log(
+      `[sheets] ${discardedByDuration} llamada(s) descartadas por duracion < ${MIN_CALL_DURATION_SECONDS}s ` +
+      `(quedan ${result.length} para analisis)`,
+    );
   }
 
   return result;

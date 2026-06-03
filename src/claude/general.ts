@@ -10,12 +10,16 @@ import { renderPdf } from '../pdf/renderer';
 import { monthLabel } from '../google/drive';
 
 interface ClientForGeneral {
-  name: string;
+  name:          string;
   prompt_general: string;
 }
 
 const MAX_RETRIES = 3;
-const MODEL = 'claude-sonnet-4-6';
+const MODEL       = 'claude-sonnet-4-6';
+
+const NO_DASH_INSTRUCTION =
+  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningun texto generado. ' +
+  'Usa dos puntos, comas, parentesis o punto segun corresponda gramaticalmente.';
 
 let _claude: Anthropic | null = null;
 function getClaude(): Anthropic {
@@ -29,13 +33,14 @@ function buildRanking(reports: AdvisorResult[]) {
   return [...reports]
     .sort((a, b) => b.reportData.avg_score - a.reportData.avg_score)
     .map((r, i) => ({
-      posicion:   i + 1,
-      asesor:     r.asesor,
-      avg_score:  r.reportData.avg_score,
-      score_min:  r.reportData.score_min,
-      score_max:  r.reportData.score_max,
-      call_count: r.reportData.call_count,
-      nivel:      r.reportData.nivel,
+      posicion:    i + 1,
+      asesor:      r.asesor,
+      avg_score:   r.reportData.avg_score,
+      score_min:   r.reportData.score_min,
+      score_max:   r.reportData.score_max,
+      call_count:  r.reportData.call_count,
+      nivel:       r.reportData.nivel,
+      delta_score: r.reportData.delta_score,
     }));
 }
 
@@ -53,8 +58,12 @@ function summarizeAdvisor(r: AdvisorResult): string {
     .map(rec => `  [${rec.prioridad}] ${rec.area}: ${rec.accion}`)
     .join('\n');
 
+  const deltaNote = d.has_previous && d.delta_score !== undefined
+    ? ` | Variacion score: ${d.delta_score >= 0 ? '+' : ''}${d.delta_score} pts vs periodo anterior`
+    : ' | Primer periodo de evaluacion';
+
   return [
-    `--- ${d.asesor} | ${d.nivel.toUpperCase()} | ${d.avg_score}/100 | ${d.call_count} llamadas ---`,
+    `--- ${d.asesor} | ${d.nivel.toUpperCase()} | ${d.avg_score}/100 | ${d.call_count} llamadas${deltaNote} ---`,
     `Resumen: ${d.resumen}`,
     `Criterios:\n${criterios}`,
     `Debilidades principales:\n${debilidades}`,
@@ -63,21 +72,24 @@ function summarizeAdvisor(r: AdvisorResult): string {
 }
 
 function buildUserMessage(
-  reports: AdvisorResult[],
-  clientName: string,
-  month: string,
+  reports:        AdvisorResult[],
+  clientName:     string,
+  month:          string,
   avgScoreEquipo: number,
-  totalLlamadas: number,
+  totalLlamadas:  number,
+  periodLabel?:   string,
 ): string {
   const summaries = reports.map(summarizeAdvisor).join('\n\n');
+  const hasPrevious = reports.some(r => r.reportData.has_previous);
 
   return [
     `=== EQUIPO ===`,
     `Cliente: ${clientName}`,
-    `Mes: ${monthLabel(month)}`,
+    `Periodo: ${monthLabel(month)}${periodLabel ? ` (${periodLabel})` : ''}`,
     `Asesores evaluados: ${reports.length}`,
     `Total llamadas: ${totalLlamadas}`,
     `Promedio del equipo: ${avgScoreEquipo}/100`,
+    hasPrevious ? `Nota: incluye comparativos con periodo anterior en los resúmenes por asesor.` : `Nota: primer periodo de evaluacion, sin comparativos.`,
     ``,
     `=== RESUMEN POR ASESOR ===`,
     summaries,
@@ -92,7 +104,7 @@ const TOOL_NAME = 'enviar_reporte_general';
 
 const GENERAL_TOOL: Anthropic.Tool = {
   name: TOOL_NAME,
-  description: 'Envía el reporte ejecutivo del equipo de asesores.',
+  description: 'Envia el reporte ejecutivo del equipo de asesores.',
   input_schema: {
     type: 'object',
     required: [
@@ -120,10 +132,10 @@ const GENERAL_TOOL: Anthropic.Tool = {
         type: 'array', items: {
           type: 'object', required: ['prioridad','area','descripcion','dirigido_a'],
           properties: {
-            prioridad:  { type: 'string', enum: ['alta','media','baja'] },
-            area:       { type: 'string' },
-            descripcion:{ type: 'string' },
-            dirigido_a: { type: 'string' },
+            prioridad:   { type: 'string', enum: ['alta','media','baja'] },
+            area:        { type: 'string' },
+            descripcion: { type: 'string' },
+            dirigido_a:  { type: 'string' },
           },
         },
       },
@@ -135,18 +147,18 @@ const GENERAL_TOOL: Anthropic.Tool = {
 
 async function callClaudeWithRetry(
   systemPrompt: string,
-  userMessage: string,
+  userMessage:  string,
 ): Promise<ClaudeGeneralOutput> {
   let lastError: Error = new Error('No attempts made');
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await getClaude().messages.create({
-        model: MODEL,
+        model:      MODEL,
         max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-        tools: [GENERAL_TOOL],
+        system:     systemPrompt + NO_DASH_INSTRUCTION,
+        messages:   [{ role: 'user', content: userMessage }],
+        tools:      [GENERAL_TOOL],
         tool_choice: { type: 'tool', name: TOOL_NAME },
       });
 
@@ -181,21 +193,22 @@ export interface GeneralResult {
 
 export async function processGeneralReport(
   individualReports: AdvisorResult[],
-  client: ClientForGeneral,
-  month: string,
+  client:            ClientForGeneral,
+  month:             string,
+  periodLabel?:      string,
 ): Promise<GeneralResult> {
   if (individualReports.length === 0) {
     throw new Error('Cannot generate general report with no individual reports');
   }
 
-  const totalLlamadas   = individualReports.reduce((s, r) => s + r.reportData.call_count, 0);
-  const avgScoreEquipo  = Math.round(
+  const totalLlamadas  = individualReports.reduce((s, r) => s + r.reportData.call_count, 0);
+  const avgScoreEquipo = Math.round(
     individualReports.reduce((s, r) => s + r.reportData.avg_score, 0) / individualReports.length,
   );
   const ranking = buildRanking(individualReports);
 
   const userMessage = buildUserMessage(
-    individualReports, client.name, month, avgScoreEquipo, totalLlamadas,
+    individualReports, client.name, month, avgScoreEquipo, totalLlamadas, periodLabel,
   );
   const claudeOut = await callClaudeWithRetry(client.prompt_general, userMessage);
 
@@ -210,6 +223,7 @@ export async function processGeneralReport(
     ...claudeOut,
     cliente:          client.name,
     mes_label:        monthLabel(month),
+    period_label:     periodLabel,
     generated_date,
     total_asesores:   individualReports.length,
     total_llamadas:   totalLlamadas,

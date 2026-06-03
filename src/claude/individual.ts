@@ -13,8 +13,18 @@ interface ClientForAnalysis {
   prompt_individual: string;
 }
 
+export interface PreviousMetrics {
+  avg_score:                number;
+  pct_logra_siguiente_paso: number;
+  talk_ratio:               number;
+}
+
 const MAX_RETRIES = 3;
-const MODEL = 'claude-sonnet-4-6';
+const MODEL       = 'claude-sonnet-4-6';
+
+const NO_DASH_INSTRUCTION =
+  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningun texto generado. ' +
+  'Usa dos puntos, comas, parentesis o punto segun corresponda gramaticalmente.';
 
 let _claude: Anthropic | null = null;
 function getClaude(): Anthropic {
@@ -47,36 +57,70 @@ function computeMetrics(calls: CallRow[]) {
   };
 }
 
+// ── Sidecar parsing ───────────────────────────────────────────────────────────
+
+export function parseSidecarMetrics(text: string): PreviousMetrics | null {
+  const match = text.match(/=== METRICAS_JSON ===\n(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    if (
+      typeof parsed.avg_score === 'number' &&
+      typeof parsed.pct_logra_siguiente_paso === 'number' &&
+      typeof parsed.talk_ratio === 'number'
+    ) {
+      return {
+        avg_score:                parsed.avg_score,
+        pct_logra_siguiente_paso: parsed.pct_logra_siguiente_paso,
+        talk_ratio:               parsed.talk_ratio,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Prompt construction ───────────────────────────────────────────────────────
 
 function formatCalls(calls: CallRow[]): string {
   return calls.map((c, i) => {
-    const parts = [`--- Llamada ${i + 1} | Fecha: ${c.fecha} | Calificación: ${c.calif} ---`];
-    if (c.analisis) parts.push(`ANÁLISIS PREVIO:\n${c.analisis}`);
-    parts.push(`TRANSCRIPCIÓN:\n${c.transcripcion}`);
+    const parts = [`--- Llamada ${i + 1} | Fecha: ${c.fecha} | Calificacion: ${c.calif} ---`];
+    if (c.analisis) parts.push(`ANALISIS PREVIO:\n${c.analisis}`);
+    parts.push(`TRANSCRIPCION:\n${c.transcripcion}`);
     return parts.join('\n');
   }).join('\n\n');
 }
 
 function buildUserMessage(
-  advisorName: string,
-  calls: CallRow[],
-  month: string,
+  advisorName:   string,
+  calls:         CallRow[],
+  month:         string,
   previousReport: string | null,
+  prevMetrics:   PreviousMetrics | null,
 ): string {
+  const deltaNote = prevMetrics
+    ? [
+        ``,
+        `=== COMPARATIVO PERIODO ANTERIOR ===`,
+        `Score anterior: ${prevMetrics.avg_score}/100 | Sig. paso anterior: ${prevMetrics.pct_logra_siguiente_paso}% | Talk ratio anterior: ${prevMetrics.talk_ratio}%`,
+      ].join('\n')
+    : '';
+
   return [
-    `=== DATOS DEL MES ===`,
+    `=== DATOS DEL PERIODO ===`,
     `Asesor: ${advisorName}`,
     `Mes: ${monthLabel(month)}`,
-    `Llamadas en el período: ${calls.length}`,
+    `Llamadas en el periodo: ${calls.length}`,
+    deltaNote,
     ``,
     `=== LLAMADAS ===`,
     formatCalls(calls),
     ``,
-    `=== REPORTE MES ANTERIOR ===`,
-    previousReport ?? 'Sin reporte previo — primer mes de evaluación.',
+    `=== REPORTE PERIODO ANTERIOR ===`,
+    previousReport ?? 'Sin reporte previo: primer periodo de evaluacion.',
     ``,
-    `Analiza el desempeño de ${advisorName} y genera el reporte estructurado usando la herramienta.`,
+    `Analiza el desempeno de ${advisorName} y genera el reporte estructurado usando la herramienta.`,
   ].join('\n');
 }
 
@@ -86,7 +130,7 @@ const TOOL_NAME = 'enviar_reporte_individual';
 
 const REPORT_TOOL: Anthropic.Tool = {
   name: TOOL_NAME,
-  description: 'Envía el reporte de desempeño estructurado del asesor.',
+  description: 'Envia el reporte de desempeno estructurado del asesor.',
   input_schema: {
     type: 'object',
     required: [
@@ -106,13 +150,13 @@ const REPORT_TOOL: Anthropic.Tool = {
       criterios: {
         type: 'array', items: {
           type: 'object', required: ['nombre','puntaje','max_puntaje','porcentaje'],
-          properties: { nombre: {type:'string'}, puntaje: {type:'number'}, max_puntaje: {type:'number'}, porcentaje: {type:'number'} },
+          properties: { nombre:{type:'string'}, puntaje:{type:'number'}, max_puntaje:{type:'number'}, porcentaje:{type:'number'} },
         },
       },
       elementos_producto: {
         type: 'array', items: {
           type: 'object', required: ['elemento','pct_llamadas'],
-          properties: { elemento: {type:'string'}, pct_llamadas: {type:'number'} },
+          properties: { elemento:{type:'string'}, pct_llamadas:{type:'number'} },
         },
       },
       elementos_subutilizados: { type: 'array', items: { type: 'string' } },
@@ -122,23 +166,23 @@ const REPORT_TOOL: Anthropic.Tool = {
           required: ['categoria','veces','pct_llamadas','tasa_resolucion','tecnicas',
                      'ejemplo_objecion','ejemplo_respuesta_efectiva','ejemplo_respuesta_fallida'],
           properties: {
-            categoria: {type:'string'}, veces: {type:'integer'}, pct_llamadas: {type:'number'},
-            tasa_resolucion: {type:'number'}, tecnicas: {type:'string'},
-            ejemplo_objecion: {type:'string'}, ejemplo_respuesta_efectiva: {type:'string'},
-            ejemplo_respuesta_fallida: {type:'string'},
+            categoria:{type:'string'}, veces:{type:'integer'}, pct_llamadas:{type:'number'},
+            tasa_resolucion:{type:'number'}, tecnicas:{type:'string'},
+            ejemplo_objecion:{type:'string'}, ejemplo_respuesta_efectiva:{type:'string'},
+            ejemplo_respuesta_fallida:{type:'string'},
           },
         },
       },
       categorias_peor_manejadas: {
         type: 'array', items: {
           type: 'object', required: ['categoria','consejo'],
-          properties: { categoria: {type:'string'}, consejo: {type:'string'} },
+          properties: { categoria:{type:'string'}, consejo:{type:'string'} },
         },
       },
       sesgos: {
         type: 'array', items: {
           type: 'object', required: ['nombre','promedio_por_llamada','pct_llamadas'],
-          properties: { nombre: {type:'string'}, promedio_por_llamada: {type:'number'}, pct_llamadas: {type:'number'} },
+          properties: { nombre:{type:'string'}, promedio_por_llamada:{type:'number'}, pct_llamadas:{type:'number'} },
         },
       },
       sesgos_subutilizados: { type: 'array', items: { type: 'string' } },
@@ -148,22 +192,22 @@ const REPORT_TOOL: Anthropic.Tool = {
         type: 'object',
         required: ['apartado','cita_seguimiento','firma','fecha_decision','sin_siguiente_paso'],
         properties: {
-          apartado: {type:'integer'}, cita_seguimiento: {type:'integer'},
-          firma: {type:'integer'}, fecha_decision: {type:'integer'}, sin_siguiente_paso: {type:'integer'},
+          apartado:{type:'integer'}, cita_seguimiento:{type:'integer'},
+          firma:{type:'integer'}, fecha_decision:{type:'integer'}, sin_siguiente_paso:{type:'integer'},
         },
       },
       fortalezas: {
         type: 'array', items: {
           type: 'object', required: ['descripcion','pct_llamadas'],
-          properties: { descripcion: {type:'string'}, pct_llamadas: {type:'number'}, cita: {type:'string'} },
+          properties: { descripcion:{type:'string'}, pct_llamadas:{type:'number'}, cita:{type:'string'} },
         },
       },
       debilidades: {
         type: 'array', items: {
           type: 'object', required: ['descripcion','pct_llamadas','impacto'],
           properties: {
-            descripcion: {type:'string'}, pct_llamadas: {type:'number'},
-            impacto: {type:'string', enum: ['alta','media','baja']},
+            descripcion:{type:'string'}, pct_llamadas:{type:'number'},
+            impacto:{type:'string', enum:['alta','media','baja']},
           },
         },
       },
@@ -179,8 +223,8 @@ const REPORT_TOOL: Anthropic.Tool = {
         type: 'array', items: {
           type: 'object', required: ['prioridad','area','accion','metrica'],
           properties: {
-            prioridad: {type:'string', enum: ['alta','media','baja']},
-            area: {type:'string'}, accion: {type:'string'}, metrica: {type:'string'},
+            prioridad:{type:'string', enum:['alta','media','baja']},
+            area:{type:'string'}, accion:{type:'string'}, metrica:{type:'string'},
           },
         },
       },
@@ -192,18 +236,18 @@ const REPORT_TOOL: Anthropic.Tool = {
 
 async function callClaudeWithRetry(
   systemPrompt: string,
-  userMessage: string,
+  userMessage:  string,
 ): Promise<ClaudeIndividualOutput> {
   let lastError: Error = new Error('No attempts made');
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await getClaude().messages.create({
-        model: MODEL,
+        model:      MODEL,
         max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-        tools: [REPORT_TOOL],
+        system:     systemPrompt + NO_DASH_INSTRUCTION,
+        messages:   [{ role: 'user', content: userMessage }],
+        tools:      [REPORT_TOOL],
         tool_choice: { type: 'tool', name: TOOL_NAME },
       });
 
@@ -229,9 +273,9 @@ async function callClaudeWithRetry(
   throw lastError;
 }
 
-// ── Sidecar text for next-month comparison ────────────────────────────────────
+// ── Sidecar text for next-period comparison ───────────────────────────────────
 
-export function buildSidecar(d: IndividualReportData): string {
+export function buildSidecar(d: IndividualReportData, periodKey: string): string {
   const criterios = d.criterios
     .map(c => `  ${c.nombre}: ${c.puntaje}/${c.max_puntaje} (${c.porcentaje}%)`)
     .join('\n');
@@ -240,9 +284,10 @@ export function buildSidecar(d: IndividualReportData): string {
     .join('\n');
 
   return [
-    `REPORTE INDIVIDUAL — ${d.asesor} — ${d.mes_label}`,
-    `Nivel: ${d.nivel} | Score: ${d.avg_score}/100 (${d.score_min}–${d.score_max}, σ=${d.score_sigma})`,
+    `REPORTE INDIVIDUAL: ${d.asesor}: ${d.mes_label}${d.period_label ? ` (${d.period_label})` : ''}`,
+    `Nivel: ${d.nivel} | Score: ${d.avg_score}/100 (${d.score_min} a ${d.score_max}, sigma=${d.score_sigma})`,
     `Llamadas: ${d.call_count} | Talk ratio: ${d.talk_ratio}% | Sig. paso: ${d.pct_logra_siguiente_paso}%`,
+    `Periodo clave: ${periodKey}`,
     ``,
     `RESUMEN:`,
     d.resumen,
@@ -252,6 +297,13 @@ export function buildSidecar(d: IndividualReportData): string {
     ``,
     `RECOMENDACIONES:`,
     recs,
+    ``,
+    `=== METRICAS_JSON ===`,
+    JSON.stringify({
+      avg_score:                d.avg_score,
+      pct_logra_siguiente_paso: d.pct_logra_siguiente_paso,
+      talk_ratio:               d.talk_ratio,
+    }),
   ].join('\n');
 }
 
@@ -264,18 +316,20 @@ export interface AdvisorResult {
 }
 
 export async function processAdvisor(
-  advisorName: string,
-  calls: CallRow[],
-  client: ClientForAnalysis,
-  month: string,
+  advisorName:    string,
+  calls:          CallRow[],
+  client:         ClientForAnalysis,
+  month:          string,
   previousReport: string | null,
+  prevMetrics:    PreviousMetrics | null,
+  periodLabel?:   string,
 ): Promise<AdvisorResult> {
   if (calls.length === 0) {
     throw new Error(`No calls found for advisor '${advisorName}' in ${month}`);
   }
 
   const metrics     = computeMetrics(calls);
-  const userMessage = buildUserMessage(advisorName, calls, month, previousReport);
+  const userMessage = buildUserMessage(advisorName, calls, month, previousReport, prevMetrics);
   const claudeOut   = await callClaudeWithRetry(client.prompt_individual, userMessage);
 
   const now = new Date();
@@ -285,13 +339,23 @@ export async function processAdvisor(
     now.getFullYear(),
   ].join('/');
 
+  const has_previous           = prevMetrics !== null;
+  const delta_score            = prevMetrics ? metrics.avg_score - prevMetrics.avg_score : undefined;
+  const delta_siguiente_paso   = prevMetrics ? claudeOut.pct_logra_siguiente_paso - prevMetrics.pct_logra_siguiente_paso : undefined;
+  const delta_talk_ratio       = prevMetrics ? claudeOut.talk_ratio - prevMetrics.talk_ratio : undefined;
+
   const reportData: IndividualReportData = {
     ...claudeOut,
     asesor: advisorName,
     mes: month,
     mes_label: monthLabel(month),
+    period_label: periodLabel,
     generated_date,
     ...metrics,
+    has_previous,
+    delta_score,
+    delta_siguiente_paso,
+    delta_talk_ratio,
   };
 
   const pdfBuffer = await renderPdf('individual', reportData as unknown as Record<string, unknown>);

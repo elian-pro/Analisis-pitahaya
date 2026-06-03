@@ -10,23 +10,25 @@ export interface JobResult {
 }
 
 export interface Job {
-  id:         string;
-  status:     JobStatus;
-  created_at: string;
-  updated_at: string;
-  client_id:  string;
-  month:      string;
-  type:       'selected' | 'general';
-  advisors:   string[];
-  progress:   { completed: number; total: number };
-  results?:   JobResult;
-  error?:     string;
+  id:          string;
+  status:      JobStatus;
+  created_at:  string;
+  updated_at:  string;
+  client_id:   string;
+  month:       string;
+  type:        'selected' | 'general';
+  advisors:    string[];
+  progress:    { completed: number; total: number };
+  results?:    JobResult;
+  error?:      string;
+  period_type: 'monthly' | 'weekly';
+  date_from?:  string;  // YYYY-MM-DD, required for weekly
+  date_to?:    string;  // YYYY-MM-DD, required for weekly
 }
 
 const JOBS_FILE = process.env.JOBS_FILE ?? '/tmp/jobs.json';
 const store = new Map<string, Job>();
 
-// Restore persisted jobs on startup; interrupt any that were mid-flight
 try {
   const saved: Job[] = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
   for (const job of saved) {
@@ -50,10 +52,13 @@ function persist(): void {
 }
 
 export function createJob(
-  client_id: string,
-  month:     string,
-  type:      'selected' | 'general',
-  advisors:  string[],
+  client_id:   string,
+  month:       string,
+  type:        'selected' | 'general',
+  advisors:    string[],
+  period_type: 'monthly' | 'weekly' = 'monthly',
+  date_from?:  string,
+  date_to?:    string,
 ): Job {
   const job: Job = {
     id:         crypto.randomUUID(),
@@ -65,6 +70,9 @@ export function createJob(
     type,
     advisors,
     progress:   { completed: 0, total: advisors.length },
+    period_type,
+    date_from,
+    date_to,
   };
   store.set(job.id, job);
   persist();

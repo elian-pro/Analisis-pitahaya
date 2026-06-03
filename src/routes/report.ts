@@ -6,11 +6,17 @@ import { runJob } from '../jobs/runner';
 const router = Router();
 
 const PostBodySchema = z.object({
-  client_id: z.string().min(1),
-  month:     z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
-  type:      z.enum(['selected', 'general']),
-  advisors:  z.array(z.string().min(1)).min(1, 'At least one advisor required'),
-});
+  client_id:   z.string().min(1),
+  month:       z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+  type:        z.enum(['selected', 'general']),
+  advisors:    z.array(z.string().min(1)).min(1, 'At least one advisor required'),
+  period_type: z.enum(['monthly', 'weekly']).default('monthly'),
+  date_from:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date_to:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).refine(
+  data => data.period_type !== 'weekly' || (!!data.date_from && !!data.date_to),
+  { message: 'date_from and date_to are required when period_type is weekly' },
+);
 
 // POST /api/report — enqueue job, return { job_id }
 router.post('/', async (req: Request, res: Response): Promise<void> => {
@@ -24,10 +30,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const { client_id, month, type, advisors } = parsed.data;
-  const job = createJob(client_id, month, type, advisors);
+  const { client_id, month, type, advisors, period_type, date_from, date_to } = parsed.data;
+  const job = createJob(client_id, month, type, advisors, period_type, date_from, date_to);
 
-  // Fire and forget — client polls GET /api/report/:jobId for status
   runJob(job).catch(err =>
     console.error('[report route] runJob threw outside handler:', (err as Error).message),
   );

@@ -2,19 +2,20 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Reporte General — <%= it.mes_label %></title>
+<title>Reporte General - <%= it.mes_label %></title>
 <style>
   @page {
     size: A4;
-    margin: 0;
+    margin: 10mm 0 15mm 0;
     @bottom-right {
-      content: "Página " counter(page) " / " counter(pages);
+      content: "Pagina " counter(page) " / " counter(pages);
       font-family: 'Helvetica', sans-serif;
       font-size: 9pt;
       color: #999;
-      padding: 0 20mm 10mm 0;
+      padding: 0 20mm 0 0;
     }
   }
+  @page :first { margin-top: 0; }
   * { box-sizing: border-box; }
   body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; orphans: 3; widows: 3; }
   .membrete { background: #0a0a0a; color: #fafafa; padding: 25mm 20mm 18mm 20mm; margin-bottom: 0; page-break-after: avoid; }
@@ -25,18 +26,21 @@
   .membrete .meta div { font-size: 8.5pt; color: #888; }
   .membrete .meta b { color: #fafafa; font-weight: 600; }
   .barra-oro { background: #d4af37; height: 3px; }
-  main { padding: 12mm 20mm 18mm 20mm; }
+  main { padding: 6mm 20mm 6mm 20mm; }
   h1 { font-size: 18pt; margin: 18pt 0 4pt 0; font-weight: 800; letter-spacing: -0.3px; }
   h1 .sub { font-size: 10pt; font-weight: 400; color: #777; display: block; margin-top: 2pt; }
   h2 { font-size: 12pt; margin: 18pt 0 8pt 0; padding-bottom: 4pt; border-bottom: 2px solid #0a0a0a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; page-break-after: avoid; }
   h3 { font-size: 10pt; margin: 12pt 0 4pt 0; font-weight: 700; color: #d4af37; }
   p { margin: 0 0 6pt 0; }
-  .resumen { background: #f6f5f1; border-left: 3px solid #d4af37; padding: 10pt 12pt; margin-top: 8pt; font-size: 10pt; line-height: 1.55; }
+  .resumen { background: #fff; border: 1px solid #d4af37; padding: 10pt 14pt; margin-top: 8pt; font-size: 10pt; line-height: 1.55; }
+  .resumen::before { content: "RESUMEN EJECUTIVO"; display: block; font-size: 7pt; font-weight: 700; letter-spacing: 1.5px; color: #d4af37; margin-bottom: 5pt; }
   .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; margin: 10pt 0 8pt 0; }
   .kpi { background: #f6f5f1; border: 1px solid #e3e0d6; padding: 8pt 10pt; border-radius: 4px; }
   .kpi .label { font-size: 7.5pt; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
   .kpi .value { font-size: 18pt; font-weight: 800; color: #0a0a0a; margin-top: 2pt; }
   .kpi .footer { font-size: 7.5pt; color: #999; margin-top: 2pt; }
+  .delta-pos { color: #1e6b30; font-weight: 700; }
+  .delta-neg { color: #b51e1e; font-weight: 700; }
   table { width: 100%; border-collapse: collapse; margin: 6pt 0 8pt 0; font-size: 9pt; }
   th { background: #0a0a0a; color: #fff; padding: 5pt 7pt; text-align: left; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px; }
   td { padding: 5pt 7pt; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
@@ -60,7 +64,7 @@
   .tendencia-mixto     { color: #8a6b00; }
   .tendencia-estable   { color: #444; }
   .tendencia-primer_mes { color: #444; }
-  .alert { background: #fff4d6; border-left: 3px solid #d4af37; padding: 8pt 12pt; margin: 6pt 0; font-size: 9pt; }
+  .alert { background: transparent; border-top: 1.5px solid #0a0a0a; padding: 6pt 0 4pt 0; margin: 8pt 0; font-size: 9pt; color: #444; }
   .grid-2 { page-break-inside: avoid; break-inside: avoid; }
   .kpi, .kpis { page-break-inside: avoid; break-inside: avoid; }
   table { page-break-inside: auto; }
@@ -77,9 +81,9 @@
   <% } else { %>
     <p class="marca">ZEBRA<span class="dot">.</span></p>
   <% } %>
-  <p class="tagline">Inteligencia comercial · Análisis de cierres</p>
+  <p class="tagline">Inteligencia Comercial · Analisis de Llamadas</p>
   <div class="meta">
-    <div><b>Reporte:</b> Desempeño mensual del equipo — <%= it.cliente %></div>
+    <div><b>Reporte:</b> Desempeno mensual del equipo: <%= it.cliente %></div>
     <div><b>Generado:</b> <%= it.generated_date %></div>
   </div>
 </header>
@@ -88,11 +92,12 @@
 <main>
 
 <%
-const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '↕ Mixto', retroceso: '↓ Retroceso', primer_mes: 'Primer mes' };
+const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '↕ Mixto', retroceso: '↓ Retroceso', primer_mes: 'Primer periodo' };
+const fmtDelta = function(n) { return (n >= 0 ? '+' : '') + n; };
 %>
 
 <h1><%= it.cliente %>
-  <span class="sub"><%= it.mes_label %> · Reporte de equipo</span>
+  <span class="sub"><%= it.mes_label %><% if (it.period_label) { %> · <%= it.period_label %><% } %> · Reporte de equipo</span>
 </h1>
 
 <div class="kpis">
@@ -114,7 +119,7 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
   <div class="kpi">
     <div class="label">Tendencia del equipo</div>
     <div class="value tendencia-<%= it.tendencia_equipo %>" style="font-size:13pt;margin-top:6pt;"><%= TENDENCIA_LABEL[it.tendencia_equipo] %></div>
-    <div class="footer">vs. mes anterior</div>
+    <div class="footer">vs. periodo anterior</div>
   </div>
 </div>
 
@@ -128,9 +133,10 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
     <tr>
       <th style="width:5%;">#</th>
       <th>Asesor</th>
-      <th style="text-align:center;width:18%;">Prom. score</th>
-      <th style="text-align:center;width:14%;">Llamadas</th>
-      <th style="text-align:center;width:20%;">Nivel</th>
+      <th style="text-align:center;width:16%;">Prom. score</th>
+      <th style="text-align:center;width:13%;">Variacion</th>
+      <th style="text-align:center;width:12%;">Llamadas</th>
+      <th style="text-align:center;width:18%;">Nivel</th>
     </tr>
   </thead>
   <tbody>
@@ -139,6 +145,13 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
       <td><b><%= r.posicion %></b></td>
       <td><b><%= r.asesor %></b></td>
       <td style="text-align:center;"><b><%= r.avg_score %></b>/100</td>
+      <td style="text-align:center;">
+        <% if (r.delta_score !== undefined && r.delta_score !== null) { %>
+          <span class="<%= r.delta_score >= 0 ? 'delta-pos' : 'delta-neg' %>"><%= fmtDelta(r.delta_score) %> pts</span>
+        <% } else { %>
+          <span style="color:#999;font-size:8pt;">Primer per.</span>
+        <% } %>
+      </td>
       <td style="text-align:center;"><%= r.call_count %></td>
       <td style="text-align:center;"><span class="nivel-badge nivel-<%= r.nivel %>"><%= r.nivel.replace('_', ' ') %></span></td>
     </tr>
@@ -147,11 +160,11 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
 </table>
 </div>
 
-<!-- === Fortalezas + Áreas de oportunidad === -->
+<!-- === Fortalezas + Areas de oportunidad === -->
 <div class="seccion">
 <div class="grid-2">
   <div class="col">
-    <h2 style="border:none;font-size:11pt;color:#1e6b30;">✓ Fortalezas del equipo</h2>
+    <h2 style="border:none;font-size:11pt;color:#1e6b30;">Fortalezas del equipo</h2>
     <ul>
     <% for (const f of it.fortalezas_equipo) { %>
       <li><%= f %></li>
@@ -159,7 +172,7 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
     </ul>
   </div>
   <div class="col">
-    <h2 style="border:none;font-size:11pt;color:#b51e1e;">✗ Áreas de oportunidad</h2>
+    <h2 style="border:none;font-size:11pt;color:#b51e1e;">Areas de oportunidad</h2>
     <ul>
     <% for (const a of it.areas_oportunidad) { %>
       <li><%= a %></li>
@@ -169,12 +182,12 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
 </div>
 </div>
 
-<!-- === Mejores prácticas === -->
+<!-- === Mejores practicas === -->
 <% if (it.mejores_practicas && it.mejores_practicas.length > 0) { %>
 <div class="seccion">
-<h2>Mejores prácticas a compartir</h2>
+<h2>Mejores practicas a compartir</h2>
 <table>
-  <thead><tr><th style="width:18%;">Asesor</th><th style="width:25%;">Práctica</th><th>Descripción</th></tr></thead>
+  <thead><tr><th style="width:18%;">Asesor</th><th style="width:25%;">Practica</th><th>Descripcion</th></tr></thead>
   <tbody>
   <% for (const mp of it.mejores_practicas) { %>
     <tr>
@@ -193,7 +206,7 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
 <div class="seccion">
 <h2>Patrones de objeciones del equipo</h2>
 <table>
-  <thead><tr><th style="width:25%;">Categoría</th><th style="width:22%;">Frecuencia</th><th>Recomendación</th></tr></thead>
+  <thead><tr><th style="width:25%;">Categoria</th><th style="width:22%;">Frecuencia</th><th>Recomendacion</th></tr></thead>
   <tbody>
   <% for (const p of it.patrones_objeciones) { %>
     <tr>
@@ -209,9 +222,9 @@ const TENDENCIA_LABEL = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '
 
 <!-- === Recomendaciones del equipo === -->
 <div class="seccion">
-<h2>Recomendaciones de acción para el equipo</h2>
+<h2>Recomendaciones de accion para el equipo</h2>
 <table>
-  <thead><tr><th style="width:9%;">Prioridad</th><th style="width:18%;">Área</th><th>Acción</th><th style="width:22%;">Dirigido a</th></tr></thead>
+  <thead><tr><th style="width:9%;">Prioridad</th><th style="width:18%;">Area</th><th>Accion</th><th style="width:22%;">Dirigido a</th></tr></thead>
   <tbody>
   <% for (const r of it.recomendaciones) { %>
     <tr>

@@ -161,10 +161,11 @@
     .period-btn{flex:1;padding:0 16px;background:none;border:none;color:var(--text-muted);font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
     .period-btn.active{background:var(--surface-2);color:var(--text);font-weight:700;}
     .period-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.03);}
-    /* ── Mini Calendar ── */
-    .week-cal-wrap{display:none;margin-bottom:20px;}
-    .week-cal-wrap.show{display:block;animation:fadeSlideIn 0.18s ease;}
-    .mini-cal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 20px;display:inline-block;}
+    /* ── Mini Calendar popup ── */
+    .week-cal-popup{display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;background:var(--surface-2);border:1px solid var(--border-2);border-radius:14px;padding:16px 20px;box-shadow:0 12px 40px rgba(0,0,0,0.65);}
+    .week-cal-popup::before{content:'';position:absolute;top:-6px;left:18px;border:6px solid transparent;border-top:none;border-bottom-color:var(--border-2);}
+    .week-cal-popup::after{content:'';position:absolute;top:-5px;left:19px;border:5px solid transparent;border-top:none;border-bottom-color:var(--surface-2);}
+    .week-cal-popup.show{display:block;animation:fadeSlideIn 0.18s ease;}
     .mini-cal-title{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;text-align:center;margin-bottom:10px;}
     .cal-rows{display:flex;flex-direction:column;gap:1px;}
     .cal-row{display:grid;grid-template-columns:repeat(7,34px);}
@@ -213,17 +214,17 @@
         <button class="period-btn" id="btn-weekly" onclick="setPeriodType('weekly')">Semanal</button>
       </div>
     </div>
-    <div class="field" id="week-field" style="display:none;">
+    <div class="field" id="week-field" style="display:none;position:relative;">
       <div class="field-label">Semana</div>
-      <div id="week-display" style="font-family:'DM Sans',sans-serif;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--text-muted);min-width:150px;white-space:nowrap;">—</div>
+      <div id="week-display" onclick="toggleCalPopup()" style="font-family:'DM Sans',sans-serif;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--text-muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+        <span id="week-display-text">—</span><span style="font-size:9px;color:var(--text-dim);flex-shrink:0;">▾</span>
+      </div>
+      <select id="week-select" style="display:none;"></select>
+      <div id="week-cal-popup" class="week-cal-popup">
+        <div class="mini-cal-title" id="mini-cal-title"></div>
+        <div class="cal-rows" id="mini-cal-rows"></div>
+      </div>
     </div>
-  </div>
-  <div id="week-cal-wrap" class="week-cal-wrap">
-    <div class="mini-cal">
-      <div class="mini-cal-title" id="mini-cal-title"></div>
-      <div class="cal-rows" id="mini-cal-rows"></div>
-    </div>
-    <select id="week-select" style="display:none;"></select>
   </div>
   <div id="drive-link-wrap" style="display:none;margin-bottom:16px;">
     <a id="drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
@@ -374,15 +375,13 @@
     currentPeriodType = type;
     document.getElementById('btn-monthly').classList.toggle('active', type === 'monthly');
     document.getElementById('btn-weekly').classList.toggle('active', type === 'weekly');
-    const wf  = document.getElementById('week-field');
-    const wcw = document.getElementById('week-cal-wrap');
+    const wf = document.getElementById('week-field');
     if (type === 'weekly') {
       wf.style.display = 'flex';
-      wcw.classList.add('show');
       populateWeekSelect();
     } else {
       wf.style.display = 'none';
-      wcw.classList.remove('show');
+      closeCalPopup();
     }
   }
 
@@ -492,10 +491,11 @@
       row.className = 'cal-row' + (wIdx >= 0 ? ' cal-wk-row' : '') + (isSel ? ' cal-sel' : '');
 
       if (wIdx >= 0) {
-        row.addEventListener('click', () => {
+        row.addEventListener('click', e => {
+          e.stopPropagation();
           document.getElementById('week-select').selectedIndex = wIdx;
           updateWeekDisplay();
-          renderMiniCalendar();
+          closeCalPopup();
         });
       }
 
@@ -520,17 +520,37 @@
 
   function updateWeekDisplay() {
     const wSel = document.getElementById('week-select');
-    const disp = document.getElementById('week-display');
+    const disp = document.getElementById('week-display-text');
     if (!disp) return;
     const opt = wSel.options[wSel.selectedIndex];
+    const wd  = document.getElementById('week-display');
     if (opt) {
       disp.textContent = opt.textContent;
-      disp.style.color = 'var(--text)';
+      if (wd) wd.style.color = 'var(--text)';
     } else {
       disp.textContent = '—';
-      disp.style.color = 'var(--text-muted)';
+      if (wd) wd.style.color = 'var(--text-muted)';
     }
   }
+
+  function toggleCalPopup() {
+    const p = document.getElementById('week-cal-popup');
+    if (p.classList.contains('show')) {
+      p.classList.remove('show');
+    } else {
+      renderMiniCalendar();
+      p.classList.add('show');
+    }
+  }
+
+  function closeCalPopup() {
+    const p = document.getElementById('week-cal-popup');
+    if (p) p.classList.remove('show');
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#week-field')) closeCalPopup();
+  });
 
   // ── Color picker ──
   const cr = document.getElementById('color-row');
@@ -879,12 +899,12 @@
     const MAX_MS=15*60*1000;
     const start=Date.now();
     while(Date.now()-start<MAX_MS){
-      await new Promise(r=>setTimeout(r,4000));
+      await new Promise(r=>setTimeout(r,2000));
       const res=await fetch(`${REPORT_API}/${jobId}`);
       if(!res.ok) throw new Error(`Polling HTTP ${res.status}`);
       const job=await res.json();
-      // Update progress bar with real server data
       if(job.progress && job.progress.total>0){
+        clearInterval(progressInterval); // stop slow creep, switch to real data
         const cap=mode==='general'?80:95;
         const pct=Math.round((job.progress.completed/job.progress.total)*cap);
         const bar=document.getElementById('progress-bar');
@@ -1015,9 +1035,18 @@
         throw new Error(errMsg);
       }
       const {job_id}=await postRes.json();
-      // 2. Parar animación falsa y cambiar a progreso real
+      // Switch to a slow creep while the server fetches sheet data & prepares advisors
       clearInterval(progressInterval);
-      document.getElementById('modal-subtitle').textContent='En cola — esperando inicio…';
+      progressInterval=setInterval(()=>{
+        const bar=document.getElementById('progress-bar');
+        const cur=parseFloat(bar.style.width)||0;
+        if(cur<12){
+          const nxt=Math.min(12,+(cur+0.2).toFixed(2));
+          bar.style.width=nxt+'%';
+          document.getElementById('progress-pct').textContent=Math.round(nxt)+'%';
+        }
+      },1000);
+      document.getElementById('modal-subtitle').textContent='Preparando análisis…';
       // 3. Polling hasta completar
       const job=await pollJob(job_id,n,mode);
       // 4. Mostrar resultados

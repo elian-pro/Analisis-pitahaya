@@ -157,6 +157,10 @@
     .confirm-cancel:hover{border-color:#666;color:var(--text);}
     .confirm-ok{flex:2;padding:10px;background:#ffffff;color:#0a0a0a;border:none;border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;}
     .confirm-ok:hover{background:#e8e8e8;}
+    .period-toggle{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px;}
+    .period-btn{flex:1;padding:0 16px;background:none;border:none;color:var(--text-muted);font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+    .period-btn.active{background:var(--surface-2);color:var(--text);font-weight:700;}
+    .period-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.03);}
     @keyframes spin{to{transform:rotate(360deg);}}
     @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
   </style>
@@ -180,9 +184,20 @@
         <option value="">— Selecciona un cliente —</option>
       </select>
     </div>
-    <div class="field field-grow">
-      <div class="field-label">Período a analizar</div>
-      <select id="month-select" onchange="onMonthChange()"></select>
+    <div class="field">
+      <div class="field-label">Mes</div>
+      <select id="month-select" onchange="onMonthChange()" style="min-width:160px;"></select>
+    </div>
+    <div class="field">
+      <div class="field-label">Tipo de reporte</div>
+      <div class="period-toggle">
+        <button class="period-btn active" id="btn-monthly" onclick="setPeriodType('monthly')">Mensual</button>
+        <button class="period-btn" id="btn-weekly" onclick="setPeriodType('weekly')">Semanal</button>
+      </div>
+    </div>
+    <div class="field field-grow" id="week-field" style="display:none;">
+      <div class="field-label">Semana a analizar</div>
+      <select id="week-select"></select>
     </div>
   </div>
   <div id="drive-link-wrap" style="display:none;margin-bottom:16px;">
@@ -323,10 +338,65 @@
     {bg:"rgba(255,255,255,0.05)",color:"#aaaaaa"}
   ];
 
-  let currentClient   = null;
-  let webhookAdvisors = [];
-  let allClients      = [];
-  let sci             = 0;
+  let currentClient     = null;
+  let webhookAdvisors   = [];
+  let allClients        = [];
+  let sci               = 0;
+  let currentPeriodType = 'monthly';
+
+  // ── Selector de tipo de periodo ──
+  function setPeriodType(type) {
+    currentPeriodType = type;
+    document.getElementById('btn-monthly').classList.toggle('active', type === 'monthly');
+    document.getElementById('btn-weekly').classList.toggle('active', type === 'weekly');
+    const wf = document.getElementById('week-field');
+    if (type === 'weekly') {
+      wf.style.display = 'flex';
+      populateWeekSelect();
+    } else {
+      wf.style.display = 'none';
+    }
+  }
+
+  function getWeeksInMonth(yearMonth) {
+    const [year, month] = yearMonth.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay  = new Date(year, month, 0);
+    const pad      = n => String(n).padStart(2, '0');
+    const fmt      = d => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+    const toISO    = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+    // Monday of week containing the 1st
+    const startM = new Date(firstDay);
+    const dow    = startM.getDay();
+    if (dow !== 1) startM.setDate(startM.getDate() - (dow === 0 ? 6 : dow - 1));
+
+    const weeks  = [];
+    let monday   = new Date(startM);
+    while (monday <= lastDay) {
+      const sunday  = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+      const wStart  = monday < firstDay ? firstDay : monday;
+      const wEnd    = sunday > lastDay  ? lastDay  : sunday;
+      weeks.push({ start: toISO(wStart), end: toISO(wEnd), label: `${fmt(wStart)} al ${fmt(wEnd)}` });
+      monday = new Date(monday); monday.setDate(monday.getDate() + 7);
+    }
+    return weeks;
+  }
+
+  function populateWeekSelect() {
+    const month = document.getElementById('month-select').value;
+    const sel   = document.getElementById('week-select');
+    sel.innerHTML = '';
+    const weeks = getWeeksInMonth(month);
+    weeks.forEach(w => {
+      const o = document.createElement('option');
+      o.value = JSON.stringify({ start: w.start, end: w.end });
+      o.textContent = w.label;
+      sel.appendChild(o);
+    });
+    // Default to most recent week with data (last week of month)
+    if (sel.options.length) sel.selectedIndex = sel.options.length - 1;
+  }
 
   // ── Color picker ──
   const cr = document.getElementById('color-row');
@@ -459,9 +529,9 @@
     }
   }
 
-  // Re-fetch advisors when month changes (data source is Analisis sheet for that month)
   function onMonthChange(){
-    if(currentClient) onClientChange();
+    if (currentPeriodType === 'weekly') populateWeekSelect();
+    if (currentClient) onClientChange();
   }
 
   // ── Render del grid de asesores ──
@@ -648,13 +718,17 @@
     bar.className='progress-bar done';bar.style.width='100%';
     document.getElementById('progress-pct').textContent='100%';
     const ml=document.getElementById('month-select').options[document.getElementById('month-select').selectedIndex]?.text||'';
+    const _wSel=document.getElementById('week-select');
+    const _displayPeriod=currentPeriodType==='weekly'&&_wSel.options[_wSel.selectedIndex]
+      ?`${ml} · Semana ${_wSel.options[_wSel.selectedIndex].textContent}`
+      :ml;
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
     const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
     let html='';
     if(combined){
       const n=combined.advisors?.length||individual.length;
       document.getElementById('modal-subtitle').textContent=`${n} asesor(es) analizados — Reporte listo`;
-      html=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="margin-top:0;border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte Completo — ${ml}</span><span class="result-arrow">→</span></a>`;
+      html=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="margin-top:0;border-color:rgba(212,175,55,0.4);"><span>Reporte Completo — ${_displayPeriod}</span><span class="result-arrow">→</span></a>`;
     }else{
       document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
       individual.forEach(r=>{
@@ -696,9 +770,16 @@
     if(busy||!currentClient)return;
     const names=mode==='general'?ga().map(a=>a.name):gs();
     const ml=ms.options[ms.selectedIndex]?.text||ms.value;
+    // Period display for confirmation
+    let periodDisplay = ml;
+    if (currentPeriodType === 'weekly') {
+      const wSel = document.getElementById('week-select');
+      const wLabel = wSel.options[wSel.selectedIndex]?.textContent || '';
+      periodDisplay = `${ml} · Semana ${wLabel}`;
+    }
     // Datos básicos
     document.getElementById('conf-client').textContent=currentClient.name;
-    document.getElementById('conf-period').textContent=ml;
+    document.getElementById('conf-period').textContent=periodDisplay;
     document.getElementById('conf-count').textContent=names.length;
     // Habilitar/deshabilitar confirmar según si hay asesores
     const okBtn=document.getElementById('confirm-ok-btn');
@@ -754,6 +835,19 @@
     if(!advisors.length)return;
     const month=ms.value;
     const ml=ms.options[ms.selectedIndex].text;
+
+    // Period params
+    let periodType = currentPeriodType;
+    let dateFrom, dateTo, weekLabel = '';
+    if (periodType === 'weekly') {
+      const wSel = document.getElementById('week-select');
+      const wData = JSON.parse(wSel.value || '{}');
+      dateFrom  = wData.start;
+      dateTo    = wData.end;
+      weekLabel = wSel.options[wSel.selectedIndex]?.textContent || '';
+    }
+    const displayPeriod = periodType === 'weekly' ? `${ml} · Semana ${weekLabel}` : ml;
+
     busy=true;lock(true);
     document.getElementById('result-section').classList.remove('show');
     document.getElementById('result-content').innerHTML='';
@@ -768,10 +862,15 @@
     document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
     try{
       // 1. Encolar job
+      const postBody = { client_id: currentClient.id, month, type: mode, advisors, period_type: periodType };
+      if (periodType === 'weekly' && dateFrom && dateTo) {
+        postBody.date_from = dateFrom;
+        postBody.date_to   = dateTo;
+      }
       const postRes=await fetch(REPORT_API,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({client_id:currentClient.id,month,type:mode,advisors})
+        body:JSON.stringify(postBody)
       });
       if(!postRes.ok){
         const body=await postRes.json().catch(()=>({}));
@@ -798,13 +897,13 @@
       // Actualizar sección de resultados debajo del modal
       let rhtml='';
       if(combined){
-        rhtml+=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte Completo — ${ml}</span><span class="result-arrow">→</span></a>`;
+        rhtml+=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>Reporte Completo — ${displayPeriod}</span><span class="result-arrow">→</span></a>`;
       }else{
         indiv.forEach(r=>{
           rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
         });
         if(results.general){
-          rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General — ${ml}</span><span class="result-arrow">→</span></a>`;
+          rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>Reporte General — ${displayPeriod}</span><span class="result-arrow">→</span></a>`;
         }
       }
       document.getElementById('result-section').classList.add('show');

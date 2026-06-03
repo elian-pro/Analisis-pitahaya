@@ -161,6 +161,24 @@
     .period-btn{flex:1;padding:0 16px;background:none;border:none;color:var(--text-muted);font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
     .period-btn.active{background:var(--surface-2);color:var(--text);font-weight:700;}
     .period-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.03);}
+    /* ── Mini Calendar ── */
+    .week-cal-wrap{display:none;margin-bottom:20px;}
+    .week-cal-wrap.show{display:block;animation:fadeSlideIn 0.18s ease;}
+    .mini-cal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 20px;display:inline-block;}
+    .mini-cal-title{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;text-align:center;margin-bottom:10px;}
+    .cal-rows{display:flex;flex-direction:column;gap:1px;}
+    .cal-row{display:grid;grid-template-columns:repeat(7,34px);}
+    .cal-hdr-row{margin-bottom:4px;}
+    .cal-wk-row{border-radius:15px;cursor:pointer;transition:background 0.12s;}
+    .cal-wk-row:not(.cal-sel):hover{background:rgba(255,255,255,0.05);}
+    .cal-wk-row.cal-sel{background:rgba(255,255,255,0.11);}
+    .cal-cell{width:34px;height:30px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:400;color:var(--text);user-select:none;}
+    .cal-hdr-row .cal-cell{height:24px;font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:0.04em;}
+    .cal-cell.out-mo{color:var(--text-dim);}
+    .cal-cell.is-today{font-weight:700;position:relative;}
+    .cal-cell.is-today::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.6);}
+    .cal-wk-row.cal-sel .cal-cell.out-mo{color:var(--text-muted);}
+    @keyframes fadeSlideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
     @keyframes spin{to{transform:rotate(360deg);}}
     @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
   </style>
@@ -195,10 +213,17 @@
         <button class="period-btn" id="btn-weekly" onclick="setPeriodType('weekly')">Semanal</button>
       </div>
     </div>
-    <div class="field field-grow" id="week-field" style="display:none;">
-      <div class="field-label">Semana a analizar</div>
-      <select id="week-select"></select>
+    <div class="field" id="week-field" style="display:none;">
+      <div class="field-label">Semana</div>
+      <div id="week-display" style="font-family:'DM Sans',sans-serif;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--text-muted);min-width:150px;white-space:nowrap;">—</div>
     </div>
+  </div>
+  <div id="week-cal-wrap" class="week-cal-wrap">
+    <div class="mini-cal">
+      <div class="mini-cal-title" id="mini-cal-title"></div>
+      <div class="cal-rows" id="mini-cal-rows"></div>
+    </div>
+    <select id="week-select" style="display:none;"></select>
   </div>
   <div id="drive-link-wrap" style="display:none;margin-bottom:16px;">
     <a id="drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
@@ -349,12 +374,15 @@
     currentPeriodType = type;
     document.getElementById('btn-monthly').classList.toggle('active', type === 'monthly');
     document.getElementById('btn-weekly').classList.toggle('active', type === 'weekly');
-    const wf = document.getElementById('week-field');
+    const wf  = document.getElementById('week-field');
+    const wcw = document.getElementById('week-cal-wrap');
     if (type === 'weekly') {
       wf.style.display = 'flex';
+      wcw.classList.add('show');
       populateWeekSelect();
     } else {
       wf.style.display = 'none';
+      wcw.classList.remove('show');
     }
   }
 
@@ -394,8 +422,114 @@
       o.textContent = w.label;
       sel.appendChild(o);
     });
-    // Default to most recent week with data (last week of month)
     if (sel.options.length) sel.selectedIndex = sel.options.length - 1;
+    renderMiniCalendar();
+  }
+
+  function renderMiniCalendar() {
+    const month = document.getElementById('month-select').value;
+    const [year, mon] = month.split('-').map(Number);
+    const wSel   = document.getElementById('week-select');
+    const selVal = wSel.value ? JSON.parse(wSel.value) : null;
+    const selStart = selVal ? selVal.start : null;
+
+    const pad    = n => String(n).padStart(2, '0');
+    const toISO  = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const todayISO = toISO(new Date());
+
+    const MOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    document.getElementById('mini-cal-title').textContent = `${MOS[mon-1]} ${year}`;
+
+    const firstDay = new Date(year, mon - 1, 1);
+    const lastDay  = new Date(year, mon, 0);
+
+    // Monday of the week that contains firstDay
+    const calStart = new Date(firstDay);
+    const fdow = calStart.getDay();
+    calStart.setDate(calStart.getDate() - (fdow === 0 ? 6 : fdow - 1));
+
+    // Monday ISO of the currently-selected week
+    let selMondayISO = null;
+    if (selStart) {
+      const d = new Date(selStart + 'T00:00:00');
+      const dw = d.getDay();
+      d.setDate(d.getDate() - (dw === 0 ? 6 : dw - 1));
+      selMondayISO = toISO(d);
+    }
+
+    // Monday ISO for each entry in week-select (derived from clamped w.start)
+    const weeks = getWeeksInMonth(month);
+    const weekMondays = weeks.map(w => {
+      const d = new Date(w.start + 'T00:00:00');
+      const dw = d.getDay();
+      d.setDate(d.getDate() - (dw === 0 ? 6 : dw - 1));
+      return toISO(d);
+    });
+
+    const rowsEl = document.getElementById('mini-cal-rows');
+    rowsEl.innerHTML = '';
+
+    // Day-of-week header
+    const hdr = document.createElement('div');
+    hdr.className = 'cal-row cal-hdr-row';
+    ['L','M','M','J','V','S','D'].forEach(h => {
+      const c = document.createElement('div');
+      c.className = 'cal-cell';
+      c.textContent = h;
+      hdr.appendChild(c);
+    });
+    rowsEl.appendChild(hdr);
+
+    // Week rows
+    let monday = new Date(calStart);
+    let rowCount = 0;
+    while (monday <= lastDay && rowCount < 6) {
+      const mISO  = toISO(monday);
+      const wIdx  = weekMondays.indexOf(mISO);
+      const isSel = mISO === selMondayISO;
+
+      const row = document.createElement('div');
+      row.className = 'cal-row' + (wIdx >= 0 ? ' cal-wk-row' : '') + (isSel ? ' cal-sel' : '');
+
+      if (wIdx >= 0) {
+        row.addEventListener('click', () => {
+          document.getElementById('week-select').selectedIndex = wIdx;
+          updateWeekDisplay();
+          renderMiniCalendar();
+        });
+      }
+
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(monday);
+        day.setDate(day.getDate() + d);
+        const inMonth = day.getMonth() + 1 === mon && day.getFullYear() === year;
+        const isToday = toISO(day) === todayISO;
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell' + (!inMonth ? ' out-mo' : '') + (isToday ? ' is-today' : '');
+        cell.textContent = day.getDate();
+        row.appendChild(cell);
+      }
+
+      rowsEl.appendChild(row);
+      monday.setDate(monday.getDate() + 7);
+      rowCount++;
+    }
+
+    updateWeekDisplay();
+  }
+
+  function updateWeekDisplay() {
+    const wSel = document.getElementById('week-select');
+    const disp = document.getElementById('week-display');
+    if (!disp) return;
+    const opt = wSel.options[wSel.selectedIndex];
+    if (opt) {
+      disp.textContent = opt.textContent;
+      disp.style.color = 'var(--text)';
+    } else {
+      disp.textContent = '—';
+      disp.style.color = 'var(--text-muted)';
+    }
   }
 
   // ── Color picker ──

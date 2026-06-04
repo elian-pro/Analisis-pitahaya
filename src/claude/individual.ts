@@ -23,8 +23,10 @@ const MAX_RETRIES = 3;
 const MODEL       = 'claude-sonnet-4-6';
 
 const NO_DASH_INSTRUCTION =
-  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningun texto generado. ' +
-  'Usa dos puntos, comas, parentesis o punto segun corresponda gramaticalmente.';
+  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningún texto generado. ' +
+  'Usa dos puntos, comas, paréntesis o punto según corresponda gramaticalmente. ' +
+  'Escribe siempre en español correcto: incluye todas las tildes (á, é, í, ó, ú, ü), la ñ y demás signos diacríticos. ' +
+  'Nunca omitas acentos ni la ñ.';
 
 let _claude: Anthropic | null = null;
 function getClaude(): Anthropic {

@@ -118,9 +118,8 @@
     .modal-close.show{display:flex;}
     .modal-close:hover{background:#1e1e1e;color:#f0f0f0;}
     .progress-track{height:6px;background:#2a2a2a;border-radius:99px;overflow:hidden;margin-bottom:10px;}
-    .progress-bar{height:100%;width:0%;background:#ffffff;border-radius:99px;transition:width 1s linear;}
-    .progress-bar.done{background:#ffffff;transition:width 0.5s ease;}
-    .progress-bar.error{background:#ff6060;transition:width 0.3s ease;}
+    .progress-bar{height:100%;width:0%;background:#ffffff;border-radius:99px;transition:background 0.3s ease;}
+    .progress-bar.error{background:#ff6060;}
     .progress-meta{display:flex;justify-content:space-between;font-size:11px;color:#555555;margin-bottom:24px;}
     .progress-pct{font-weight:600;color:#888888;}
     .steps-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px;}
@@ -157,6 +156,10 @@
     .confirm-cancel:hover{border-color:#666;color:var(--text);}
     .confirm-ok{flex:2;padding:10px;background:#ffffff;color:#0a0a0a;border:none;border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;}
     .confirm-ok:hover{background:#e8e8e8;}
+    .conf-gen-toggle{display:flex;gap:6px;flex-wrap:wrap;}
+    .conf-gen-btn{padding:5px 13px;background:transparent;border:1.5px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;color:var(--text-muted);cursor:pointer;transition:all 0.15s;}
+    .conf-gen-btn.active{background:rgba(255,255,255,0.07);border-color:#888;color:var(--text);font-weight:600;}
+    .conf-gen-btn:hover:not(.active){border-color:var(--border-2);color:var(--text);}
     .period-toggle{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px;}
     .period-btn{flex:1;padding:0 16px;background:none;border:none;color:var(--text-muted);font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
     .period-btn.active{background:var(--surface-2);color:var(--text);font-weight:700;}
@@ -316,6 +319,13 @@
     <div class="confirm-row">
       <div class="confirm-label">Asesores (<span id="conf-count">0</span>)</div>
       <div class="confirm-advisors" id="conf-advisors"></div>
+    </div>
+    <div class="confirm-row" id="conf-general-row" style="display:none;">
+      <div class="confirm-label">Reporte general del equipo</div>
+      <div class="conf-gen-toggle">
+        <button class="conf-gen-btn active" id="conf-gen-yes" onclick="setIncludeGeneral(true)">Incluir reporte general</button>
+        <button class="conf-gen-btn" id="conf-gen-no" onclick="setIncludeGeneral(false)">Solo reportes individuales</button>
+      </div>
     </div>
     <div class="confirm-warning">
       <span>⚠️</span>
@@ -778,6 +788,35 @@
   render();
   loadClients();
 
+  // ── Smooth progress animation ──
+  let _progCur=0, _progRaf=null;
+
+  function smoothProg(target){
+    if(_progRaf){cancelAnimationFrame(_progRaf);_progRaf=null;}
+    const from=_progCur;
+    const to=Math.max(from,Math.min(100,target));
+    if(to<=from+0.05)return;
+    const dist=to-from;
+    const ms=Math.max(400,Math.min(1400,dist*40));
+    const t0=performance.now();
+    (function frame(now){
+      const prog=Math.min(1,(now-t0)/ms);
+      const eased=1-Math.pow(1-prog,3);
+      _progCur=from+dist*eased;
+      const b=document.getElementById('progress-bar');
+      const p=document.getElementById('progress-pct');
+      if(b)b.style.width=_progCur.toFixed(1)+'%';
+      if(p)p.textContent=Math.round(_progCur)+'%';
+      if(prog<1)_progRaf=requestAnimationFrame(frame);
+      else{_progCur=to;_progRaf=null;}
+    })(t0);
+  }
+
+  function resetProg(){
+    if(_progRaf){cancelAnimationFrame(_progRaf);_progRaf=null;}
+    _progCur=0;
+  }
+
   // ── Modal ──
   let progressInterval=null;
   let elapsedInterval=null;
@@ -791,7 +830,7 @@
     const subtitle=document.getElementById('modal-subtitle');
     const modalResult=document.getElementById('modal-result');
     const modalClose=document.getElementById('modal-close');
-    bar.style.width='0%';bar.className='progress-bar';pct.textContent='0%';
+    resetProg();bar.style.width='0%';bar.className='progress-bar';pct.textContent='0%';
     elapsed.textContent='0:00 transcurrido';
     modalResult.className='modal-result';modalResult.style.display='none';modalResult.innerHTML='';
     modalClose.className='modal-close';modalClose.style.display='none';
@@ -814,7 +853,7 @@
     progressInterval=setInterval(()=>{
       tick++;
       const p=Math.min(90,Math.round((tick/totalSecs)*90));
-      bar.style.width=p+'%';pct.textContent=p+'%';
+      smoothProg(p);
       const stepIndex=Math.min(steps.length-1,Math.floor((p/90)*(steps.length-1)));
       steps.forEach((_,i)=>{
         const item=document.getElementById('step-'+i);
@@ -836,9 +875,8 @@
       item.querySelector('.step-icon').textContent='✓';
       item.querySelector('.step-text').className='step-text done';
     });
-    const bar=document.getElementById('progress-bar');
-    bar.className='progress-bar done';bar.style.width='100%';
-    document.getElementById('progress-pct').textContent='100%';
+    document.getElementById('progress-bar').className='progress-bar';
+    smoothProg(100);
     document.getElementById('modal-subtitle').textContent='Reporte listo';
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
     const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
@@ -868,9 +906,8 @@
       item.querySelector('.step-icon').textContent='✓';
       item.querySelector('.step-text').className='step-text done';
     });
-    const bar=document.getElementById('progress-bar');
-    bar.className='progress-bar done';bar.style.width='100%';
-    document.getElementById('progress-pct').textContent='100%';
+    document.getElementById('progress-bar').className='progress-bar';
+    smoothProg(100);
     const ml=document.getElementById('month-select').options[document.getElementById('month-select').selectedIndex]?.text||'';
     const _wSel=document.getElementById('week-select');
     const _displayPeriod=currentPeriodType==='weekly'&&_wSel.options[_wSel.selectedIndex]
@@ -904,12 +941,10 @@
       if(!res.ok) throw new Error(`Polling HTTP ${res.status}`);
       const job=await res.json();
       if(job.progress && job.progress.total>0){
-        clearInterval(progressInterval); // stop slow creep, switch to real data
+        clearInterval(progressInterval);
         const cap=mode==='general'?80:95;
         const pct=Math.round((job.progress.completed/job.progress.total)*cap);
-        const bar=document.getElementById('progress-bar');
-        bar.style.width=pct+'%';
-        document.getElementById('progress-pct').textContent=pct+'%';
+        smoothProg(pct);
         document.getElementById('modal-subtitle').textContent=`Procesando: ${job.progress.completed}/${job.progress.total} asesores`;
       }
       if(job.status==='done') return job;
@@ -920,6 +955,14 @@
 
   // ── Modal de confirmación ──
   let _pendingMode=null;
+  let _includeGeneral=true;
+
+  function setIncludeGeneral(v){
+    _includeGeneral=v;
+    document.getElementById('conf-gen-yes').classList.toggle('active',v);
+    document.getElementById('conf-gen-no').classList.toggle('active',!v);
+  }
+
   function generateReport(mode){
     if(busy||!currentClient)return;
     const names=mode==='general'?ga().map(a=>a.name):gs();
@@ -965,7 +1008,16 @@
     }catch(e){
       ca.textContent=names.length?names.join(', '):'Ninguno';
     }
-    // Mostrar modal
+    // General report toggle: show only for 'selected' mode
+    const genRow=document.getElementById('conf-general-row');
+    if(mode==='selected'){
+      genRow.style.display='block';
+      _includeGeneral=true;
+      document.getElementById('conf-gen-yes').classList.add('active');
+      document.getElementById('conf-gen-no').classList.remove('active');
+    }else{
+      genRow.style.display='none';
+    }
     _pendingMode=mode;
     const cb=document.getElementById('confirm-backdrop');
     cb.style.display='flex';
@@ -977,13 +1029,14 @@
     _pendingMode=null;
   }
   async function confirmAndGenerate(){
-    const mode=_pendingMode;
+    const advisorMode=_pendingMode;
+    const reportType=advisorMode==='general'?'general':(_includeGeneral?'general':'selected');
     closeConfirm();
-    await _doGenerateReport(mode);
+    await _doGenerateReport(advisorMode,reportType);
   }
 
   // ── Generar reporte (lógica real — async con polling) ──
-  async function _doGenerateReport(mode){
+  async function _doGenerateReport(mode,reportType){
     if(busy||!currentClient)return;
     const advisors=mode==='general'?ga().map(a=>a.name):gs();
     if(!advisors.length)return;
@@ -1009,14 +1062,14 @@
     const STEPS=[
       `Leyendo llamadas de ${n===1?advisors[0]:n+' asesores'}`,
       'Analizando con IA y generando PDFs',
-      ...(mode==='general'?['Generando reporte ejecutivo del equipo']:[]),
+      ...(reportType==='general'?['Generando reporte ejecutivo del equipo']:[]),
       'Subiendo a Google Drive'
     ];
     openModal(STEPS,Math.min(n*3*60,15*60));
     document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
     try{
       // 1. Encolar job
-      const postBody = { client_id: currentClient.id, month, type: mode, advisors, period_type: periodType };
+      const postBody = { client_id: currentClient.id, month, type: reportType, advisors, period_type: periodType };
       if (periodType === 'weekly' && dateFrom && dateTo) {
         postBody.date_from = dateFrom;
         postBody.date_to   = dateTo;
@@ -1038,17 +1091,11 @@
       // Switch to a slow creep while the server fetches sheet data & prepares advisors
       clearInterval(progressInterval);
       progressInterval=setInterval(()=>{
-        const bar=document.getElementById('progress-bar');
-        const cur=parseFloat(bar.style.width)||0;
-        if(cur<12){
-          const nxt=Math.min(12,+(cur+0.2).toFixed(2));
-          bar.style.width=nxt+'%';
-          document.getElementById('progress-pct').textContent=Math.round(nxt)+'%';
-        }
+        if(_progCur<12) smoothProg(Math.min(12,_progCur+0.25));
       },1000);
       document.getElementById('modal-subtitle').textContent='Preparando análisis…';
       // 3. Polling hasta completar
-      const job=await pollJob(job_id,n,mode);
+      const job=await pollJob(job_id,n,reportType);
       // 4. Mostrar resultados
       const results=job.results||{individual:[]};
       const indiv=results.individual||[];

@@ -1,6 +1,10 @@
 import path from 'path';
 import fs from 'fs';
-import { updateJob, type Job } from './store';
+import { getJob, updateJob, type Job } from './store';
+
+class CancelledError extends Error {
+  constructor() { super('cancelled'); this.name = 'CancelledError'; }
+}
 import { getCallData, type SheetColumns } from '../google/sheets';
 import {
   findPreviousReport,
@@ -45,12 +49,14 @@ function fmtDateShort(d: string): string {
 }
 
 async function runBatch<T, R>(
-  items:       T[],
-  concurrency: number,
-  fn:          (item: T) => Promise<R>,
+  items:        T[],
+  concurrency:  number,
+  fn:           (item: T) => Promise<R>,
+  isCancelled?: () => boolean,
 ): Promise<PromiseSettledResult<R>[]> {
   const results: PromiseSettledResult<R>[] = [];
   for (let i = 0; i < items.length; i += concurrency) {
+    if (isCancelled?.()) throw new CancelledError();
     const chunk = items.slice(i, i + concurrency);
     results.push(...await Promise.allSettled(chunk.map(fn)));
   }
@@ -64,6 +70,8 @@ export async function runJob(job: Job): Promise<void> {
     `type=${job.type} advisors=[${job.advisors.join(', ')}]`,
   );
   updateJob(job.id, { status: 'running' });
+
+  const isCancelled = (): boolean => getJob(job.id)?.status === 'cancelled';
 
   try {
     const client = loadClient(job.client_id);
@@ -102,6 +110,7 @@ export async function runJob(job: Job): Promise<void> {
     );
 
     console.log(`[runner] Step 1 done: ${allCalls.length} llamadas encontradas para el periodo`);
+    if (isCancelled()) throw new CancelledError();
 
     if (allCalls.length === 0) {
       throw new Error(
@@ -139,6 +148,7 @@ export async function runJob(job: Job): Promise<void> {
     const sidecarFolderId = client.sidecar_folder_id
       ?? await ensureSidecarFolder(client.folder_id);
     console.log(`[runner] Step 3: sidecar folder = ${sidecarFolderId}`);
+    if (isCancelled()) throw new CancelledError();
 
     // ── 4. Analyze advisors — generate PDFs in memory ────────────────────────
     console.log(`[runner] Step 4: analyzing ${advisorsWithData.length} advisors with Claude...`);
@@ -162,7 +172,7 @@ export async function runJob(job: Job): Promise<void> {
       );
       updateJob(job.id, { progress: { completed: ++completed, total: advisorsWithData.length } });
       return result;
-    });
+    }, isCancelled);
 
     for (let i = 0; i < settled.length; i++) {
       const s = settled[i];
@@ -189,6 +199,7 @@ export async function runJob(job: Job): Promise<void> {
     }
 
     // ── 5. General report PDF ────────────────────────────────────────────────
+    if (isCancelled()) throw new CancelledError();
     let generalPdfBuffer: Buffer | undefined;
 
     if (job.type === 'general' && individualResults.length > 0) {
@@ -246,6 +257,11 @@ export async function runJob(job: Job): Promise<void> {
     console.log(`[runner] Job ${job.id} DONE`);
 
   } catch (err) {
+    if (err instanceof CancelledError) {
+      console.log(`[runner] Job ${job.id} cancelled — stopping cleanly`);
+      // Status is already 'cancelled' (set by the route handler); no further update needed
+      return;
+    }
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[runner] Job ${job.id} fatal error:`, msg);
     updateJob(job.id, { status: 'error', error: msg });

@@ -117,6 +117,9 @@
     .modal-close{width:30px;height:30px;border-radius:50%;border:1px solid #3d3d3d;background:none;color:#888888;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
     .modal-close.show{display:flex;}
     .modal-close:hover{background:#1e1e1e;color:#f0f0f0;}
+    .modal-cancel-wrap{text-align:center;margin:-8px 0 16px;}
+    .modal-cancel-link{background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;padding:2px 6px;text-decoration:underline;transition:color 0.15s;}
+    .modal-cancel-link:hover{color:#ff6060;}
     .progress-track{height:6px;background:#2a2a2a;border-radius:99px;overflow:hidden;margin-bottom:10px;}
     .progress-bar{height:100%;width:0%;background:#ffffff;border-radius:99px;transition:background 0.3s ease;}
     .progress-bar.error{background:#ff6060;}
@@ -356,6 +359,9 @@
       <span class="progress-pct" id="progress-pct">0%</span>
     </div>
     <div class="steps-list" id="steps-list"></div>
+    <div class="modal-cancel-wrap" id="modal-cancel-wrap">
+      <button class="modal-cancel-link" id="modal-cancel-btn" onclick="cancelJob()">Cancelar proceso</button>
+    </div>
     <div class="modal-result" id="modal-result"></div>
   </div>
 </div>
@@ -788,6 +794,8 @@
   render();
   loadClients();
 
+  let currentJobId=null;
+
   // ── Smooth progress animation ──
   let _progCur=0, _progRaf=null;
 
@@ -834,6 +842,10 @@
     elapsed.textContent='0:00 transcurrido';
     modalResult.className='modal-result';modalResult.style.display='none';modalResult.innerHTML='';
     modalClose.className='modal-close';modalClose.style.display='none';
+    const cancelWrap=document.getElementById('modal-cancel-wrap');
+    const cancelBtn=document.getElementById('modal-cancel-btn');
+    if(cancelWrap) cancelWrap.style.display='block';
+    if(cancelBtn){cancelBtn.textContent='Cancelar proceso';cancelBtn.disabled=false;}
     subtitle.textContent=steps[0];
     backdrop.classList.add('show');backdrop.style.display='flex';
     stepsList.innerHTML='';
@@ -867,8 +879,14 @@
     },1000);
   }
 
+  function _hideCancel(){
+    const w=document.getElementById('modal-cancel-wrap');
+    if(w) w.style.display='none';
+  }
+
   function finishModal(url,docName){
     clearInterval(progressInterval);clearInterval(elapsedInterval);
+    _hideCancel();
     document.querySelectorAll('.step-item').forEach(item=>{
       item.className='step-item done';
       item.querySelector('.step-icon').className='step-icon done';
@@ -885,6 +903,7 @@
 
   function errorModal(msg){
     clearInterval(progressInterval);clearInterval(elapsedInterval);
+    _hideCancel();
     document.getElementById('progress-bar').className='progress-bar error';
     document.getElementById('modal-subtitle').textContent='Error al generar el reporte';
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
@@ -900,6 +919,7 @@
 
   function finishModalMulti(individual, general, combined){
     clearInterval(progressInterval);clearInterval(elapsedInterval);
+    _hideCancel();
     document.querySelectorAll('.step-item').forEach(item=>{
       item.className='step-item done';
       item.querySelector('.step-icon').className='step-icon done';
@@ -949,8 +969,21 @@
       }
       if(job.status==='done') return job;
       if(job.status==='error') throw new Error(job.error||'Error al generar reportes');
+      if(job.status==='cancelled'){const e=new Error('__cancelled__');e.name='cancelled';throw e;}
     }
     throw new Error('Timeout: el proceso tardó más de 15 minutos');
+  }
+
+  async function cancelJob(){
+    if(!currentJobId) return;
+    const btn=document.getElementById('modal-cancel-btn');
+    if(btn){btn.textContent='Cancelando…';btn.disabled=true;}
+    document.getElementById('modal-subtitle').textContent='Cancelando — esperando que finalice el lote actual…';
+    try{
+      await fetch(`${REPORT_API}/${currentJobId}/cancel`,{method:'POST'});
+    }catch(e){
+      console.warn('[cancelJob] request failed:',e);
+    }
   }
 
   // ── Modal de confirmación ──
@@ -1088,6 +1121,7 @@
         throw new Error(errMsg);
       }
       const {job_id}=await postRes.json();
+      currentJobId=job_id;
       // Switch to a slow creep while the server fetches sheet data & prepares advisors
       clearInterval(progressInterval);
       progressInterval=setInterval(()=>{
@@ -1122,11 +1156,22 @@
         document.getElementById('result-content').innerHTML+=`<div class="error-box" style="margin-top:8px;">⚠️ ${job.error}</div>`;
       }
     }catch(e){
-      errorModal(e.message);
-      document.getElementById('result-section').classList.add('show');
-      document.getElementById('result-content').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
+      if(e.name==='cancelled'){
+        clearInterval(progressInterval);clearInterval(elapsedInterval);
+        _hideCancel();
+        document.getElementById('progress-bar').className='progress-bar';
+        document.getElementById('modal-subtitle').textContent='Proceso cancelado';
+        const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
+        const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
+        mr.innerHTML='<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">El reporte fue cancelado. No se generó ningún archivo.</div>';
+        document.getElementById('result-section').classList.remove('show');
+      }else{
+        errorModal(e.message);
+        document.getElementById('result-section').classList.add('show');
+        document.getElementById('result-content').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
+      }
     }
-    busy=false;lock(false);
+    busy=false;lock(false);currentJobId=null;
   }
 </script>
 </body>

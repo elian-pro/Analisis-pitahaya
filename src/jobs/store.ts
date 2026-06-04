@@ -1,7 +1,7 @@
 import fs from 'fs';
 import crypto from 'crypto';
 
-export type JobStatus = 'pending' | 'running' | 'done' | 'error';
+export type JobStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 
 export interface JobResult {
   individual: Array<{ asesor: string; driveUrl: string }>;

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { createJob, getJob } from '../jobs/store';
+import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 
 const router = Router();
@@ -38,6 +38,22 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   );
 
   res.status(202).json({ job_id: job.id });
+});
+
+// POST /api/report/:jobId/cancel — request cancellation of a running job
+router.post('/:jobId/cancel', (req: Request, res: Response): void => {
+  const job = getJob(req.params.jobId);
+  if (!job) {
+    res.status(404).json({ error: `Job '${req.params.jobId}' not found` });
+    return;
+  }
+  if (job.status !== 'running' && job.status !== 'pending') {
+    res.status(409).json({ error: `Job cannot be cancelled (status: ${job.status})` });
+    return;
+  }
+  updateJob(job.id, { status: 'cancelled' });
+  console.log(`[report route] Job ${job.id} cancelled by user`);
+  res.json({ ok: true });
 });
 
 // GET /api/report/:jobId — poll job status

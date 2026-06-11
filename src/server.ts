@@ -5,6 +5,7 @@ import { env } from './config/env';
 import healthRouter from './routes/health';
 import advisorsRouter from './routes/advisors';
 import reportRouter from './routes/report';
+import statsRouter from './routes/stats';
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/health', healthRouter);
 app.use('/api/advisors', advisorsRouter);
 app.use('/api/report', reportRouter);
+app.use('/api/stats', statsRouter);
 
 // Static frontend
 const staticDir = path.join(__dirname, '..', );

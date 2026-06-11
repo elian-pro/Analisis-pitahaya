@@ -3,10 +3,18 @@ import crypto from 'crypto';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 
+export interface TokenSummary {
+  input:    number;
+  output:   number;
+  total:    number;
+  cost_usd: number;
+}
+
 export interface JobResult {
   individual: Array<{ asesor: string; driveUrl: string }>;
   general?:   { driveUrl: string };
   combined?:  { driveUrl: string; advisors: string[] };
+  tokens?:    TokenSummary;
 }
 
 export interface Job {

@@ -147,11 +147,19 @@ const GENERAL_TOOL: Anthropic.Tool = {
 
 // ── Claude call with retries ──────────────────────────────────────────────────
 
+interface GeneralCallResult {
+  data:          ClaudeGeneralOutput;
+  input_tokens:  number;
+  output_tokens: number;
+}
+
 async function callClaudeWithRetry(
   systemPrompt: string,
   userMessage:  string,
-): Promise<ClaudeGeneralOutput> {
+): Promise<GeneralCallResult> {
   let lastError: Error = new Error('No attempts made');
+  let totalInput  = 0;
+  let totalOutput = 0;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -164,6 +172,9 @@ async function callClaudeWithRetry(
         tool_choice: { type: 'tool', name: TOOL_NAME },
       });
 
+      totalInput  += res.usage.input_tokens;
+      totalOutput += res.usage.output_tokens;
+
       const toolBlock = res.content.find(b => b.type === 'tool_use');
       if (!toolBlock || toolBlock.type !== 'tool_use') {
         throw new Error('Claude response contained no tool_use block');
@@ -174,7 +185,7 @@ async function callClaudeWithRetry(
         throw new Error(`Zod validation failed (attempt ${attempt}): ${parsed.error.message}`);
       }
 
-      return parsed.data;
+      return { data: parsed.data, input_tokens: totalInput, output_tokens: totalOutput };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < MAX_RETRIES) {
@@ -189,8 +200,10 @@ async function callClaudeWithRetry(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface GeneralResult {
-  pdfBuffer:  Buffer;
-  reportData: GeneralReportData;
+  pdfBuffer:     Buffer;
+  reportData:    GeneralReportData;
+  input_tokens:  number;
+  output_tokens: number;
 }
 
 export async function processGeneralReport(
@@ -212,7 +225,7 @@ export async function processGeneralReport(
   const userMessage = buildUserMessage(
     individualReports, client.name, month, avgScoreEquipo, totalLlamadas, periodLabel,
   );
-  const claudeOut = await callClaudeWithRetry(client.prompt_general, userMessage);
+  const { data: claudeOut, input_tokens, output_tokens } = await callClaudeWithRetry(client.prompt_general, userMessage);
 
   const now = new Date();
   const generated_date = [
@@ -235,5 +248,5 @@ export async function processGeneralReport(
 
   const pdfBuffer = await renderPdf('general', reportData as unknown as Record<string, unknown>);
 
-  return { pdfBuffer, reportData };
+  return { pdfBuffer, reportData, input_tokens, output_tokens };
 }

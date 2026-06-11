@@ -15,6 +15,7 @@ import {
 import { processAdvisor, buildSidecar, parseSidecarMetrics, type AdvisorResult } from '../claude/individual';
 import { processGeneralReport } from '../claude/general';
 import { mergePdfs } from '../pdf/merge';
+import { recordTokens } from '../tokens/store';
 
 interface ClientConfig {
   id:                      string;
@@ -201,11 +202,15 @@ export async function runJob(job: Job): Promise<void> {
     // ── 5. General report PDF ────────────────────────────────────────────────
     if (isCancelled()) throw new CancelledError();
     let generalPdfBuffer: Buffer | undefined;
+    let generalInput  = 0;
+    let generalOutput = 0;
 
     if (job.type === 'general' && individualResults.length > 0) {
       console.log(`[runner] Step 5: generating general report for ${individualResults.length} advisors...`);
       const gen        = await processGeneralReport(individualResults, client, job.month, periodLabel);
       generalPdfBuffer = gen.pdfBuffer;
+      generalInput     = gen.input_tokens;
+      generalOutput    = gen.output_tokens;
       console.log(`[runner] Step 5 done: general PDF size=${generalPdfBuffer?.length ?? 'undefined'}`);
     }
 
@@ -241,12 +246,25 @@ export async function runJob(job: Job): Promise<void> {
     }
 
     // ── 9. Finalise ──────────────────────────────────────────────────────────
+    const totalInput  = individualResults.reduce((s, r) => s + r.input_tokens,  0) + generalInput;
+    const totalOutput = individualResults.reduce((s, r) => s + r.output_tokens, 0) + generalOutput;
+    const tokenSummary = {
+      input:    totalInput,
+      output:   totalOutput,
+      total:    totalInput + totalOutput,
+      cost_usd: (totalInput / 1e6) * 3.0 + (totalOutput / 1e6) * 15.0,
+    };
+    console.log(`[runner] Tokens: input=${totalInput} output=${totalOutput} cost=$${tokenSummary.cost_usd.toFixed(4)}`);
+
+    recordTokens(job.id, job.client_id, totalInput, totalOutput, individualResults.length);
+
     const finalResults = {
       individual: [],
       combined: {
         driveUrl: combinedUrl,
         advisors: individualResults.map(r => r.asesor),
       },
+      tokens: tokenSummary,
     };
     console.log(`[runner] Step 9: finalising job, combined.driveUrl=${combinedUrl}`);
     updateJob(job.id, {

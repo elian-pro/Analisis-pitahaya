@@ -236,11 +236,19 @@ const REPORT_TOOL: Anthropic.Tool = {
 
 // ── Claude call with retries ──────────────────────────────────────────────────
 
+interface IndividualCallResult {
+  data:          ClaudeIndividualOutput;
+  input_tokens:  number;
+  output_tokens: number;
+}
+
 async function callClaudeWithRetry(
   systemPrompt: string,
   userMessage:  string,
-): Promise<ClaudeIndividualOutput> {
+): Promise<IndividualCallResult> {
   let lastError: Error = new Error('No attempts made');
+  let totalInput  = 0;
+  let totalOutput = 0;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -253,6 +261,9 @@ async function callClaudeWithRetry(
         tool_choice: { type: 'tool', name: TOOL_NAME },
       });
 
+      totalInput  += res.usage.input_tokens;
+      totalOutput += res.usage.output_tokens;
+
       const toolBlock = res.content.find(b => b.type === 'tool_use');
       if (!toolBlock || toolBlock.type !== 'tool_use') {
         throw new Error('Claude response contained no tool_use block');
@@ -263,7 +274,7 @@ async function callClaudeWithRetry(
         throw new Error(`Zod validation failed (attempt ${attempt}): ${parsed.error.message}`);
       }
 
-      return parsed.data;
+      return { data: parsed.data, input_tokens: totalInput, output_tokens: totalOutput };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < MAX_RETRIES) {
@@ -312,9 +323,11 @@ export function buildSidecar(d: IndividualReportData, periodKey: string): string
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface AdvisorResult {
-  asesor:     string;
-  pdfBuffer:  Buffer;
-  reportData: IndividualReportData;
+  asesor:        string;
+  pdfBuffer:     Buffer;
+  reportData:    IndividualReportData;
+  input_tokens:  number;
+  output_tokens: number;
 }
 
 export async function processAdvisor(
@@ -332,7 +345,7 @@ export async function processAdvisor(
 
   const metrics     = computeMetrics(calls);
   const userMessage = buildUserMessage(advisorName, calls, month, previousReport, prevMetrics);
-  const claudeOut   = await callClaudeWithRetry(client.prompt_individual, userMessage);
+  const { data: claudeOut, input_tokens, output_tokens } = await callClaudeWithRetry(client.prompt_individual, userMessage);
 
   const now = new Date();
   const generated_date = [
@@ -362,5 +375,5 @@ export async function processAdvisor(
 
   const pdfBuffer = await renderPdf('individual', reportData as unknown as Record<string, unknown>);
 
-  return { asesor: advisorName, pdfBuffer, reportData };
+  return { asesor: advisorName, pdfBuffer, reportData, input_tokens, output_tokens };
 }

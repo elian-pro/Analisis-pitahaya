@@ -175,6 +175,33 @@
     @keyframes fadeSlideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
     @keyframes spin{to{transform:rotate(360deg);}}
     @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
+    /* ── Token counter ── */
+    .token-card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:22px 24px;}
+    .token-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;}
+    .token-tab{padding:6px 14px;border-radius:100px;border:0.5px solid var(--border);background:transparent;font-family:'Inter',sans-serif;font-size:10px;font-weight:400;letter-spacing:0.14em;color:var(--muted);cursor:pointer;transition:all .15s;}
+    .token-tab:hover{border-color:var(--border2);color:var(--fg);}
+    .token-tab.active{background:var(--accent);border-color:var(--accent);color:#0A0A0A;font-weight:500;}
+    .token-range-row{display:flex;gap:8px;align-items:center;margin-bottom:18px;flex-wrap:wrap;}
+    .token-date-input{font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--fg);cursor:pointer;}
+    .token-date-input:focus{outline:none;border-color:var(--accent);}
+    .token-range-sep{font-size:12px;color:var(--faint);}
+    .token-apply-btn{padding:7px 14px;border-radius:100px;border:0.5px solid var(--accent);background:transparent;color:var(--accent);font-family:'Inter',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.12em;cursor:pointer;transition:all .15s;}
+    .token-apply-btn:hover{background:var(--accent);color:#0A0A0A;}
+    .token-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+    .token-kpi{background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;}
+    .token-kpi-label{font-size:9px;font-weight:500;letter-spacing:0.18em;color:var(--faint);text-transform:uppercase;margin-bottom:6px;}
+    .token-kpi-value{font-size:17px;font-weight:500;letter-spacing:-0.01em;color:var(--fg);}
+    .token-kpi-value.accent{color:var(--accent);}
+    .token-kpi-sub{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:0.04em;}
+    .token-bar-section{margin-bottom:10px;}
+    .token-bar-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+    .token-bar-title{font-size:10px;font-weight:500;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;}
+    .token-bar-pct{font-size:13px;font-weight:500;color:var(--accent);}
+    .token-bar-track{height:4px;background:var(--surface2);border-radius:99px;overflow:hidden;}
+    .token-bar-fill{height:100%;background:linear-gradient(90deg,#B8980A,var(--accent));border-radius:99px;transition:width .6s cubic-bezier(.25,.46,.45,.94);}
+    .token-bar-footer{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:var(--faint);letter-spacing:0.08em;}
+    .token-empty{text-align:center;padding:24px 0;font-size:12px;color:var(--faint);}
+    @media(max-width:720px){.token-kpis{grid-template-columns:repeat(2,1fr);}}
   </style>
 </head>
 <body data-theme="dark">
@@ -292,6 +319,25 @@
     <div class="section-label">Reporte generado</div>
     <div class="result-card">
       <div id="result-content"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;">
+    <div class="section-label">Consumo de tokens · IA</div>
+    <div class="token-card">
+      <div class="token-tabs">
+        <button class="token-tab active" id="ttab-last"  onclick="setTokenPeriod('last')">Último análisis</button>
+        <button class="token-tab"        id="ttab-week"  onclick="setTokenPeriod('week')">Esta semana</button>
+        <button class="token-tab"        id="ttab-month" onclick="setTokenPeriod('month')">Este mes</button>
+        <button class="token-tab"        id="ttab-range" onclick="setTokenPeriod('range')">Rango personalizado</button>
+      </div>
+      <div class="token-range-row" id="token-range-row" style="display:none;">
+        <input type="date" class="token-date-input" id="range-from">
+        <span class="token-range-sep">—</span>
+        <input type="date" class="token-date-input" id="range-to">
+        <button class="token-apply-btn" onclick="loadTokenStats()">APLICAR</button>
+      </div>
+      <div id="token-body"></div>
     </div>
   </div>
 </main>
@@ -1135,6 +1181,7 @@
       if(!combined&&indiv.length===0&&!results.general){
         throw new Error(job.error||'No se generaron reportes. Verifica que el período seleccionado tenga datos en la hoja de cálculo.');
       }
+      if(results.tokens) _lastJobTokens=results.tokens;
       finishModalMulti(indiv,results.general||null,combined);
       // Actualizar sección de resultados debajo del modal
       let rhtml='';
@@ -1170,7 +1217,161 @@
       }
     }
     busy=false;lock(false);currentJobId=null;
+  // Refresh token stats after every completed analysis
+  loadTokenStats();
   }
+
+  // ── Token counter ──────────────────────────────────────────────────────────
+  const STATS_API = '/api/stats';
+  let _tokenPeriod = 'last';
+  let _lastJobTokens = null;
+
+  function setTokenPeriod(p) {
+    _tokenPeriod = p;
+    ['last','week','month','range'].forEach(t => {
+      document.getElementById('ttab-'+t).classList.toggle('active', t === p);
+    });
+    const rr = document.getElementById('token-range-row');
+    rr.style.display = p === 'range' ? 'flex' : 'none';
+    if (p !== 'range') loadTokenStats();
+  }
+
+  function _isoToday() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function _isoWeekStart() {
+    const d = new Date();
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function _isoMonthStart() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+  }
+
+  function _fmtNum(n) {
+    if (n >= 1_000_000) return (n/1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000)     return (n/1_000).toFixed(1) + 'k';
+    return String(n);
+  }
+
+  function _fmtCost(usd) {
+    if (usd < 0.01) return '< $0.01';
+    return '$' + usd.toFixed(usd < 1 ? 2 : 2) + ' USD';
+  }
+
+  function _renderTokens(stats, label) {
+    const body = document.getElementById('token-body');
+    if (!stats || stats.total === 0) {
+      body.innerHTML = `<div class="token-empty">Sin datos para el período seleccionado.</div>`;
+      return;
+    }
+    const REF = 1_000_000;
+    const pct = Math.min(100, (stats.total / REF) * 100);
+    const inputPct  = stats.total > 0 ? Math.round((stats.input  / stats.total) * 100) : 0;
+    const outputPct = stats.total > 0 ? Math.round((stats.output / stats.total) * 100) : 0;
+    const jobsLabel = stats.jobs !== undefined
+      ? `${stats.jobs} análisis · ${stats.advisors} asesores`
+      : '';
+
+    body.innerHTML = `
+      <div class="token-kpis">
+        <div class="token-kpi">
+          <div class="token-kpi-label">Total tokens</div>
+          <div class="token-kpi-value accent">${_fmtNum(stats.total)}</div>
+          <div class="token-kpi-sub">${label}</div>
+        </div>
+        <div class="token-kpi">
+          <div class="token-kpi-label">Input</div>
+          <div class="token-kpi-value">${_fmtNum(stats.input)}</div>
+          <div class="token-kpi-sub">${inputPct}% del total</div>
+        </div>
+        <div class="token-kpi">
+          <div class="token-kpi-label">Output</div>
+          <div class="token-kpi-value">${_fmtNum(stats.output)}</div>
+          <div class="token-kpi-sub">${outputPct}% del total</div>
+        </div>
+        <div class="token-kpi">
+          <div class="token-kpi-label">Costo estimado</div>
+          <div class="token-kpi-value">${_fmtCost(stats.cost_usd)}</div>
+          <div class="token-kpi-sub">Sonnet 4.6</div>
+        </div>
+      </div>
+      <div class="token-bar-section">
+        <div class="token-bar-header">
+          <span class="token-bar-title">${jobsLabel}</span>
+          <span class="token-bar-pct">${pct.toFixed(1)}% de 1M ref.</span>
+        </div>
+        <div class="token-bar-track">
+          <div class="token-bar-fill" id="tok-bar" style="width:0%"></div>
+        </div>
+        <div class="token-bar-footer">
+          <span>${_fmtNum(stats.total)} tokens consumidos</span>
+          <span>Referencia: 1 000 000 tokens</span>
+        </div>
+      </div>`;
+    // Animate bar after render
+    requestAnimationFrame(() => {
+      const bar = document.getElementById('tok-bar');
+      if (bar) bar.style.width = pct.toFixed(2) + '%';
+    });
+  }
+
+  async function loadTokenStats() {
+    const body = document.getElementById('token-body');
+    const today = _isoToday();
+
+    if (_tokenPeriod === 'last') {
+      if (_lastJobTokens) {
+        _renderTokens({
+          input:    _lastJobTokens.input,
+          output:   _lastJobTokens.output,
+          total:    _lastJobTokens.total,
+          cost_usd: _lastJobTokens.cost_usd,
+          jobs:     undefined,
+          advisors: undefined,
+        }, 'último análisis');
+      } else {
+        body.innerHTML = `<div class="token-empty">Aún no se ha generado ningún análisis en esta sesión.</div>`;
+      }
+      return;
+    }
+
+    let from, to, label;
+    if (_tokenPeriod === 'week')  { from = _isoWeekStart();  to = today; label = 'esta semana'; }
+    if (_tokenPeriod === 'month') { from = _isoMonthStart(); to = today; label = 'este mes'; }
+    if (_tokenPeriod === 'range') {
+      from  = document.getElementById('range-from').value;
+      to    = document.getElementById('range-to').value;
+      label = from && to ? `${from} — ${to}` : 'rango seleccionado';
+      if (!from || !to) { body.innerHTML = `<div class="token-empty">Selecciona las fechas del rango.</div>`; return; }
+    }
+
+    body.innerHTML = `<div class="token-empty" style="padding:12px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>`;
+    try {
+      const clientParam = currentClient ? `&client_id=${encodeURIComponent(currentClient.id)}` : '';
+      const res = await fetch(`${STATS_API}?from=${from}&to=${to}${clientParam}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const stats = await res.json();
+      _renderTokens(stats, label);
+    } catch(e) {
+      body.innerHTML = `<div class="token-empty" style="color:var(--danger);">Error cargando estadísticas: ${e.message}</div>`;
+    }
+  }
+
+  // Init token section and pre-populate range inputs
+  (function initTokenSection() {
+    const today = _isoToday();
+    const rf = document.getElementById('range-from');
+    const rt = document.getElementById('range-to');
+    if (rf) rf.value = _isoMonthStart();
+    if (rt) rt.value = today;
+    loadTokenStats();
+  })();
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ import reportRouter from './routes/report';
 import statsRouter from './routes/stats';
 import clientsRouter from './routes/clients';
 import schedulesRouter from './routes/schedules';
+import chatRouter from './routes/chat';
 import { startScheduler } from './schedules/runner';
 
 const app = express();
@@ -22,6 +23,7 @@ app.use('/api/report', reportRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/schedules', schedulesRouter);
+app.use('/api/chat', chatRouter);
 
 // Static frontend
 const staticDir = path.join(__dirname, '..');

@@ -21,3 +21,20 @@ export function getAuth(): JWT {
   }
   return _client;
 }
+
+let _chatClient: JWT | null = null;
+
+export function getChatAuth(): JWT {
+  if (!_chatClient) {
+    const sa = getGoogleServiceAccount() as {
+      client_email: string;
+      private_key: string;
+    };
+    _chatClient = new google.auth.JWT({
+      email: sa.client_email,
+      key: sa.private_key,
+      scopes: ['https://www.googleapis.com/auth/chat.bot'],
+    });
+  }
+  return _chatClient;
+}

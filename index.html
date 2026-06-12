@@ -538,12 +538,14 @@
     <div class="form-modal-header">
       <div>
         <div class="modal-title" id="schedule-modal-title">Nueva automatización</div>
-        <div class="modal-subtitle">Programa la generación automática de reportes</div>
+        <div class="modal-subtitle">Programa la generación automática de reportes o mensajes</div>
       </div>
       <button class="modal-close show" onclick="closeScheduleModal()">✕</button>
     </div>
     <div class="form-modal-body">
       <input type="hidden" id="sf-id">
+
+      <!-- Configuración básica -->
       <div class="form-section">
         <div class="form-section-title">Configuración básica</div>
         <div class="form-group">
@@ -555,16 +557,32 @@
           <select class="form-control" id="sf-client-id"></select>
         </div>
       </div>
+
+      <!-- Modo -->
+      <div class="form-section">
+        <div class="form-section-title">Modo</div>
+        <div class="form-group">
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-mode-report" onclick="setScheduleMode('report')">Generar reporte</button>
+            <button class="form-toggle-btn" id="sf-mode-notify" onclick="setScheduleMode('notify_only')">Solo mensaje</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-mode-hint">Genera el análisis con IA y sube el reporte a Drive.</div>
+        </div>
+      </div>
+
+      <!-- Frecuencia -->
       <div class="form-section">
         <div class="form-section-title">Frecuencia</div>
         <div class="form-group">
-          <label class="form-label">Tipo de repetición</label>
+          <label class="form-label">Tipo</label>
           <div class="form-toggle-row">
-            <button class="form-toggle-btn active" id="sf-freq-weekly" onclick="setScheduleFreq('weekly')">Semanal</button>
-            <button class="form-toggle-btn" id="sf-freq-monthly" onclick="setScheduleFreq('monthly')">Mensual</button>
+            <button class="form-toggle-btn active" id="sf-freq-weekly"  onclick="setScheduleFreq('weekly')">Semanal</button>
+            <button class="form-toggle-btn"        id="sf-freq-monthly" onclick="setScheduleFreq('monthly')">Mensual</button>
+            <button class="form-toggle-btn"        id="sf-freq-once"    onclick="setScheduleFreq('once')">Una sola vez</button>
           </div>
-          <div class="form-hint" style="margin-top:6px;">Semanal: analiza la semana anterior (lun–dom). Mensual: analiza el mes anterior completo.</div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-freq-hint">Analiza la semana anterior (lun–dom) en el día y hora indicados.</div>
         </div>
+        <!-- Semanal -->
         <div id="sf-weekly-group" class="form-group">
           <label class="form-label">Día de la semana</label>
           <select class="form-control" id="sf-day-of-week">
@@ -577,10 +595,18 @@
             <option value="0">Domingo</option>
           </select>
         </div>
+        <!-- Mensual -->
         <div id="sf-monthly-group" class="form-group" style="display:none;">
           <label class="form-label">Día del mes (1–28)</label>
           <input class="form-control" id="sf-day-of-month" type="number" min="1" max="28" value="1">
         </div>
+        <!-- Una sola vez -->
+        <div id="sf-once-group" class="form-group" style="display:none;">
+          <label class="form-label">Fecha de ejecución *</label>
+          <input class="form-control" id="sf-run-date" type="date">
+          <div class="form-hint">La automatización se ejecutará una vez y luego se desactivará automáticamente.</div>
+        </div>
+        <!-- Hora (siempre visible) -->
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Hora (0–23) *</label>
@@ -597,30 +623,60 @@
           <div class="form-hint">Ej. America/Mexico_City, America/New_York, Europe/Madrid</div>
         </div>
       </div>
-      <div class="form-section">
+
+      <!-- Tipo de reporte (oculto en modo Solo mensaje) -->
+      <div class="form-section" id="sf-report-section">
         <div class="form-section-title">Tipo de reporte</div>
         <div class="form-group">
           <label class="form-label">Asesores a incluir</label>
           <div class="form-toggle-row">
             <button class="form-toggle-btn active" id="sf-advisors-all" onclick="setScheduleAdvisors('all')">Todos los asesores</button>
-            <button class="form-toggle-btn" id="sf-advisors-sel" onclick="setScheduleAdvisors('selected')">Solo activos del período</button>
+            <button class="form-toggle-btn"        id="sf-advisors-sel" onclick="setScheduleAdvisors('selected')">Solo activos del período</button>
           </div>
-          <div class="form-hint" style="margin-top:6px;">"Todos" toma los asesores que aparecen en la hoja durante el período analizado.</div>
+          <div class="form-hint" style="margin-top:6px;">"Todos" usa los asesores con llamadas en el período analizado.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Reporte ejecutivo del equipo</label>
           <div class="form-toggle-row">
             <button class="form-toggle-btn active" id="sf-gen-yes" onclick="setScheduleGeneral(true)">Incluir reporte general</button>
-            <button class="form-toggle-btn" id="sf-gen-no" onclick="setScheduleGeneral(false)">Solo reportes individuales</button>
+            <button class="form-toggle-btn"        id="sf-gen-no"  onclick="setScheduleGeneral(false)">Solo reportes individuales</button>
           </div>
         </div>
       </div>
+
+      <!-- Notificación Google Chat -->
+      <div class="form-section">
+        <div class="form-section-title">Notificación por Google Chat</div>
+        <div class="form-group">
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-chat-no"  onclick="setScheduleChat(false)">Sin notificación</button>
+            <button class="form-toggle-btn"        id="sf-chat-yes" onclick="setScheduleChat(true)">Enviar a Google Chat</button>
+          </div>
+        </div>
+        <div id="sf-chat-fields" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Espacio (canal) *</label>
+            <select class="form-control" id="sf-chat-space">
+              <option value="">Cargando espacios…</option>
+            </select>
+            <div class="form-hint">Solo aparecen los espacios donde la app de la service account es miembro.</div>
+          </div>
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Mensaje</label>
+            <textarea class="form-textarea" id="sf-chat-message" rows="4"
+              placeholder="📊 *Reporte listo*: {{nombre_cliente}} | {{periodo}}&#10;🔗 {{link}}"></textarea>
+            <div class="form-hint">Variables disponibles: <code>{{nombre_cliente}}</code>, <code>{{periodo}}</code>, <code>{{link}}</code>, <code>{{nombre}}</code>. Deja vacío para usar el mensaje predeterminado.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estado -->
       <div class="form-section">
         <div class="form-section-title">Estado</div>
         <div class="form-group">
           <div class="form-toggle-row">
             <button class="form-toggle-btn active" id="sf-enabled-yes" onclick="setScheduleEnabled(true)">Activa</button>
-            <button class="form-toggle-btn" id="sf-enabled-no" onclick="setScheduleEnabled(false)">Pausada</button>
+            <button class="form-toggle-btn"        id="sf-enabled-no"  onclick="setScheduleEnabled(false)">Pausada</button>
           </div>
         </div>
       </div>
@@ -1843,13 +1899,15 @@
   const _DOW = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
   function _describeSchedule(s) {
-    const freq = s.frequency === 'weekly'
-      ? `Cada ${_DOW[s.day_of_week ?? 1]}`
-      : `Día ${s.day_of_month ?? 1} de cada mes`;
+    const freq = s.frequency === 'weekly'  ? `Cada ${_DOW[s.day_of_week ?? 1]}`
+               : s.frequency === 'once'    ? `Una vez el ${s.run_date || '—'}`
+               :                             `Día ${s.day_of_month ?? 1} de cada mes`;
     const h = String(s.hour).padStart(2,'0');
     const m = String(s.minute ?? 0).padStart(2,'0');
-    const last = s.last_run ? `Último: ${s.last_run.slice(0,10)}` : 'Nunca ejecutado';
-    return `${freq} a las ${h}:${m} · ${s.timezone || 'America/Mexico_City'} · ${last}`;
+    const last  = s.last_run ? `Último: ${s.last_run.slice(0,10)}` : 'Nunca ejecutado';
+    const mode  = s.notify_only ? ' · 💬 Solo mensaje' : '';
+    const chat  = s.chat_space_id ? ' · Chat ✓' : '';
+    return `${freq} a las ${h}:${m} · ${last}${mode}${chat}`;
   }
 
   async function renderScheduleList() {
@@ -1896,13 +1954,34 @@
   let _scheduleAdvisors  = 'all';
   let _scheduleGeneral   = true;
   let _scheduleEnabled   = true;
+  let _scheduleMode      = 'report';   // 'report' | 'notify_only'
+  let _scheduleChat      = false;
+
+  const _SF_FREQ_HINTS = {
+    weekly:  'Analiza la semana anterior (lun–dom) en el día y hora indicados.',
+    monthly: 'Analiza el mes anterior completo en el día y hora indicados.',
+    once:    'Se ejecutará una sola vez y luego se desactivará automáticamente.',
+  };
 
   function setScheduleFreq(f) {
     _scheduleFreq = f;
-    document.getElementById('sf-freq-weekly').classList.toggle('active',  f === 'weekly');
-    document.getElementById('sf-freq-monthly').classList.toggle('active', f === 'monthly');
+    ['weekly','monthly','once'].forEach(k =>
+      document.getElementById('sf-freq-'+k).classList.toggle('active', k === f));
     document.getElementById('sf-weekly-group').style.display  = f === 'weekly'  ? '' : 'none';
     document.getElementById('sf-monthly-group').style.display = f === 'monthly' ? '' : 'none';
+    document.getElementById('sf-once-group').style.display    = f === 'once'    ? '' : 'none';
+    document.getElementById('sf-freq-hint').textContent = _SF_FREQ_HINTS[f] || '';
+  }
+
+  function setScheduleMode(m) {
+    _scheduleMode = m;
+    document.getElementById('sf-mode-report').classList.toggle('active', m === 'report');
+    document.getElementById('sf-mode-notify').classList.toggle('active', m === 'notify_only');
+    document.getElementById('sf-report-section').style.display = m === 'report' ? '' : 'none';
+    document.getElementById('sf-mode-hint').textContent = m === 'report'
+      ? 'Genera el análisis con IA y sube el reporte a Drive.'
+      : 'Solo envía un mensaje a Google Chat sin generar ningún reporte.';
+    // Chat section is always visible regardless of mode
   }
 
   function setScheduleAdvisors(v) {
@@ -1923,8 +2002,44 @@
     document.getElementById('sf-enabled-no').classList.toggle('active',  !v);
   }
 
+  async function setScheduleChat(enabled) {
+    _scheduleChat = enabled;
+    document.getElementById('sf-chat-no').classList.toggle('active',  !enabled);
+    document.getElementById('sf-chat-yes').classList.toggle('active',  enabled);
+    const fields = document.getElementById('sf-chat-fields');
+    fields.style.display = enabled ? '' : 'none';
+    if (enabled) await _loadChatSpaces();
+  }
+
+  let _chatSpacesLoaded = false;
+  async function _loadChatSpaces(currentSpaceId) {
+    if (_chatSpacesLoaded && !currentSpaceId) return;
+    const sel = document.getElementById('sf-chat-space');
+    sel.innerHTML = '<option value="">Cargando espacios…</option>';
+    try {
+      const spaces = await fetch('/api/chat/spaces').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      });
+      _chatSpacesLoaded = true;
+      sel.innerHTML = '<option value="">— Selecciona un espacio —</option>';
+      spaces.forEach(sp => {
+        const o = document.createElement('option');
+        o.value = sp.id; o.textContent = sp.name;
+        if (sp.id === currentSpaceId) o.selected = true;
+        sel.appendChild(o);
+      });
+      if (!spaces.length) {
+        sel.innerHTML = '<option value="">Sin espacios disponibles — agrega la app al canal</option>';
+      }
+    } catch(e) {
+      sel.innerHTML = `<option value="">Error: ${_esc(e.message)}</option>`;
+    }
+  }
+
   async function openScheduleForm(id) {
     _editingScheduleId = id || null;
+    _chatSpacesLoaded  = false;
     document.getElementById('schedule-modal-title').textContent = id ? 'Editar automatización' : 'Nueva automatización';
 
     const clientSel = document.getElementById('sf-client-id');
@@ -1946,11 +2061,20 @@
     document.getElementById('sf-timezone').value = 'America/Mexico_City';
     document.getElementById('sf-day-of-week').value  = '1';
     document.getElementById('sf-day-of-month').value = '1';
+    document.getElementById('sf-run-date').value      = '';
+    document.getElementById('sf-chat-message').value  = '';
+    document.getElementById('sf-chat-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
     clientSel.value = '';
     setScheduleFreq('weekly');
+    setScheduleMode('report');
     setScheduleAdvisors('all');
     setScheduleGeneral(true);
     setScheduleEnabled(true);
+    // Reset chat toggle without loading spaces
+    _scheduleChat = false;
+    document.getElementById('sf-chat-no').classList.add('active');
+    document.getElementById('sf-chat-yes').classList.remove('active');
+    document.getElementById('sf-chat-fields').style.display = 'none';
 
     if (id) {
       try {
@@ -1964,11 +2088,18 @@
         document.getElementById('sf-timezone').value = s.timezone || 'America/Mexico_City';
         document.getElementById('sf-day-of-week').value  = s.day_of_week  ?? 1;
         document.getElementById('sf-day-of-month').value = s.day_of_month ?? 1;
+        document.getElementById('sf-run-date').value      = s.run_date   || '';
+        document.getElementById('sf-chat-message').value  = s.chat_message || '';
         clientSel.value = s.client_id;
         setScheduleFreq(s.frequency || 'weekly');
+        setScheduleMode(s.notify_only ? 'notify_only' : 'report');
         setScheduleAdvisors(s.advisors === 'all' || !Array.isArray(s.advisors) ? 'all' : 'selected');
         setScheduleGeneral(s.include_general !== false);
         setScheduleEnabled(s.enabled !== false);
+        if (s.chat_space_id) {
+          await setScheduleChat(true);
+          await _loadChatSpaces(s.chat_space_id);
+        }
       } catch(e) {
         alert('Error cargando datos: ' + e.message);
         return;
@@ -1992,6 +2123,12 @@
     if (!clientId) { alert('Selecciona un cliente.'); return; }
     const hour = parseInt(document.getElementById('sf-hour').value);
     if (isNaN(hour) || hour < 0 || hour > 23) { alert('La hora debe estar entre 0 y 23.'); return; }
+    if (_scheduleFreq === 'once' && !document.getElementById('sf-run-date').value) {
+      alert('Selecciona la fecha de ejecución.'); return;
+    }
+    if (_scheduleChat && !document.getElementById('sf-chat-space').value) {
+      alert('Selecciona un espacio de Google Chat o desactiva la notificación.'); return;
+    }
 
     const payload = {
       name,
@@ -2004,12 +2141,13 @@
       report_type:     'selected',
       include_general: _scheduleGeneral,
       advisors:        _scheduleAdvisors === 'all' ? 'all' : [],
+      notify_only:     _scheduleMode === 'notify_only',
+      chat_space_id:   _scheduleChat ? document.getElementById('sf-chat-space').value : undefined,
+      chat_message:    _scheduleChat ? document.getElementById('sf-chat-message').value.trim() || undefined : undefined,
     };
-    if (_scheduleFreq === 'weekly') {
-      payload.day_of_week = parseInt(document.getElementById('sf-day-of-week').value);
-    } else {
-      payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;
-    }
+    if (_scheduleFreq === 'weekly')  payload.day_of_week  = parseInt(document.getElementById('sf-day-of-week').value);
+    if (_scheduleFreq === 'monthly') payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;
+    if (_scheduleFreq === 'once')    payload.run_date     = document.getElementById('sf-run-date').value;
 
     try {
       const r = _editingScheduleId

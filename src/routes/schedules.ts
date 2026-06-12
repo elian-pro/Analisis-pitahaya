@@ -8,15 +8,19 @@ const ScheduleBaseSchema = z.object({
   name:            z.string().min(1),
   client_id:       z.string().min(1),
   enabled:         z.boolean().default(true),
-  frequency:       z.enum(['weekly', 'monthly']),
+  frequency:       z.enum(['weekly', 'monthly', 'once']),
   day_of_week:     z.number().int().min(0).max(6).optional(),
   day_of_month:    z.number().int().min(1).max(28).optional(),
+  run_date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   hour:            z.number().int().min(0).max(23),
   minute:          z.number().int().min(0).max(59).default(0),
   timezone:        z.string().default('America/Mexico_City'),
   report_type:     z.enum(['selected', 'general']),
   include_general: z.boolean().default(true),
   advisors:        z.union([z.literal('all'), z.array(z.string().min(1))]).default('all'),
+  notify_only:     z.boolean().default(false),
+  chat_space_id:   z.string().optional(),
+  chat_message:    z.string().optional(),
 });
 
 const ScheduleBodySchema = ScheduleBaseSchema.refine(
@@ -25,6 +29,9 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
 ).refine(
   d => d.frequency !== 'monthly' || d.day_of_month !== undefined,
   { message: 'day_of_month required for monthly frequency' },
+).refine(
+  d => d.frequency !== 'once'    || d.run_date     !== undefined,
+  { message: 'run_date required for once frequency' },
 );
 
 const SchedulePatchSchema = ScheduleBaseSchema.partial();

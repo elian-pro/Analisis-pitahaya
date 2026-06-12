@@ -1,8 +1,9 @@
-import { listSchedules, markRan, type Schedule } from './store';
+import { listSchedules, markRan, updateSchedule, type Schedule } from './store';
 import { loadClients } from '../clients/manager';
 import { getCallData } from '../google/sheets';
-import { createJob } from '../jobs/store';
+import { createJob, getJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
+import { sendChatMessage } from '../google/chat';
 
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
@@ -15,8 +16,8 @@ interface TzNow {
 
 function getNowInTz(tz: string): TzNow {
   const now     = new Date();
-  const dateStr = now.toLocaleDateString('sv-SE',   { timeZone: tz });           // "2026-06-12"
-  const timeStr = now.toLocaleTimeString('sv-SE',   { timeZone: tz, hour12: false }); // "14:30:00"
+  const dateStr = now.toLocaleDateString('sv-SE',   { timeZone: tz });
+  const timeStr = now.toLocaleTimeString('sv-SE',   { timeZone: tz, hour12: false });
   const wdStr   = new Intl.DateTimeFormat('en-US',  { timeZone: tz, weekday: 'short' }).format(now);
 
   const [hour, minute] = timeStr.split(':').map(Number);
@@ -32,9 +33,8 @@ function lastWeekRange(tz: string): { dateFrom: string; dateTo: string; month: s
   const { dateStr, day } = getNowInTz(tz);
   const [y, m, d] = dateStr.split('-').map(Number);
 
-  // Days back to reach THIS week's Monday (day=0 → Sunday needs 6 back)
   const daysToMonday = day === 0 ? 6 : day - 1;
-  const base = new Date(Date.UTC(y, m - 1, d, 12)); // noon UTC to avoid DST edge cases
+  const base = new Date(Date.UTC(y, m - 1, d, 12));
 
   const thisMon  = new Date(base); thisMon.setUTCDate(base.getUTCDate() - daysToMonday);
   const lastMon  = new Date(thisMon); lastMon.setUTCDate(thisMon.getUTCDate() - 7);
@@ -53,8 +53,46 @@ function lastWeekRange(tz: string): { dateFrom: string; dateTo: string; month: s
 function lastMonthKey(tz: string): string {
   const { dateStr } = getNowInTz(tz);
   const [y, m] = dateStr.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 2, 1)); // first day of previous month
+  const d = new Date(Date.UTC(y, m - 2, 1));
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}`;
+}
+
+// ── Chat notification ─────────────────────────────────────────────────────────
+
+function buildChatMessage(
+  template: string,
+  vars: { nombre_cliente: string; periodo: string; link: string; nombre: string },
+): string {
+  return template
+    .replace(/\{\{nombre_cliente\}\}/g, vars.nombre_cliente)
+    .replace(/\{\{periodo\}\}/g,        vars.periodo)
+    .replace(/\{\{link\}\}/g,           vars.link)
+    .replace(/\{\{nombre\}\}/g,         vars.nombre);
+}
+
+async function notifyChat(
+  schedule: Schedule,
+  clientName: string,
+  periodo: string,
+  reportUrl: string,
+): Promise<void> {
+  if (!schedule.chat_space_id) return;
+
+  const defaultTpl = '📊 *Reporte listo*: {{nombre_cliente}} | {{periodo}}\n🔗 {{link}}';
+  const tpl = schedule.chat_message?.trim() || defaultTpl;
+  const text = buildChatMessage(tpl, {
+    nombre_cliente: clientName,
+    periodo,
+    link:  reportUrl,
+    nombre: schedule.name,
+  });
+
+  try {
+    await sendChatMessage(schedule.chat_space_id, text);
+    console.log(`[scheduler] Chat notification sent for '${schedule.name}'`);
+  } catch (e) {
+    console.error(`[scheduler] Chat notification failed for '${schedule.name}':`, (e as Error).message);
+  }
 }
 
 // ── Due-check ─────────────────────────────────────────────────────────────────
@@ -70,6 +108,7 @@ function isDue(schedule: Schedule): boolean {
 
   if (schedule.frequency === 'weekly'  && now.day  !== (schedule.day_of_week  ?? 1)) return false;
   if (schedule.frequency === 'monthly' && parseInt(now.dateStr.slice(8)) !== (schedule.day_of_month ?? 1)) return false;
+  if (schedule.frequency === 'once'    && now.dateStr !== (schedule.run_date ?? '')) return false;
 
   // Not already run today
   if (schedule.last_run && schedule.last_run.slice(0, 10) === now.dateStr) return false;
@@ -89,19 +128,37 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
   }
 
   const tz = schedule.timezone || 'America/Mexico_City';
+
+  // ── Notify-only mode: just send a Chat message ────────────────────────────
+  if (schedule.notify_only) {
+    markRan(schedule.id);
+    if (schedule.frequency === 'once') updateSchedule(schedule.id, { enabled: false });
+    await notifyChat(schedule, client.name, getNowInTz(tz).dateStr, '');
+    return;
+  }
+
+  // ── Determine period ──────────────────────────────────────────────────────
   let month:      string;
   let periodType: 'monthly' | 'weekly';
   let dateFrom:   string | undefined;
   let dateTo:     string | undefined;
+  let periodLabel: string;
 
   if (schedule.frequency === 'weekly') {
     const range = lastWeekRange(tz);
     month = range.month; periodType = 'weekly'; dateFrom = range.dateFrom; dateTo = range.dateTo;
+    periodLabel = `${dateFrom} — ${dateTo}`;
+  } else if (schedule.frequency === 'once') {
+    // For a one-time run, analyse the current month up to today
+    const now2 = getNowInTz(tz);
+    month = now2.dateStr.slice(0, 7); periodType = 'monthly';
+    periodLabel = month;
   } else {
     month = lastMonthKey(tz); periodType = 'monthly';
+    periodLabel = month;
   }
 
-  // Resolve advisor list
+  // ── Resolve advisor list ──────────────────────────────────────────────────
   let advisors: string[];
   if (schedule.advisors === 'all') {
     try {
@@ -134,11 +191,22 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
 
   const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo);
   markRan(schedule.id);
+  if (schedule.frequency === 'once') updateSchedule(schedule.id, { enabled: false });
 
   console.log(`[scheduler] Job ${job.id} created for '${schedule.name}'`);
-  runJob(job).catch(err =>
-    console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message),
-  );
+
+  runJob(job)
+    .then(async () => {
+      if (!schedule.chat_space_id) return;
+      const done = getJob(job.id);
+      const url = done?.results?.combined?.driveUrl
+        ?? done?.results?.individual?.[0]?.driveUrl
+        ?? '';
+      await notifyChat(schedule, client.name, periodLabel, url);
+    })
+    .catch(err =>
+      console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message),
+    );
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

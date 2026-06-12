@@ -6,6 +6,9 @@ import healthRouter from './routes/health';
 import advisorsRouter from './routes/advisors';
 import reportRouter from './routes/report';
 import statsRouter from './routes/stats';
+import clientsRouter from './routes/clients';
+import schedulesRouter from './routes/schedules';
+import { startScheduler } from './schedules/runner';
 
 const app = express();
 
@@ -17,9 +20,11 @@ app.use('/api/health', healthRouter);
 app.use('/api/advisors', advisorsRouter);
 app.use('/api/report', reportRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/clients', clientsRouter);
+app.use('/api/schedules', schedulesRouter);
 
 // Static frontend
-const staticDir = path.join(__dirname, '..', );
+const staticDir = path.join(__dirname, '..');
 app.use(express.static(staticDir, { index: 'index.html' }));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(staticDir, 'index.html'));
@@ -27,4 +32,5 @@ app.get('*', (_req, res) => {
 
 app.listen(env.PORT, () => {
   console.log(`✅ Zebra Reports listening on port ${env.PORT}`);
+  startScheduler();
 });

@@ -202,6 +202,61 @@
     .token-bar-footer{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:var(--faint);letter-spacing:0.08em;}
     .token-empty{text-align:center;padding:24px 0;font-size:12px;color:var(--faint);}
     @media(max-width:720px){.token-kpis{grid-template-columns:repeat(2,1fr);}}
+    /* ── App navigation tabs ── */
+    .app-nav{display:flex;gap:0;border-bottom:0.5px solid var(--border);margin-bottom:32px;overflow-x:auto;}
+    .app-tab{background:none;border:none;color:var(--muted);font-family:'Inter',sans-serif;font-size:11px;font-weight:400;letter-spacing:0.18em;padding:14px 22px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:8px;transition:color .15s;white-space:nowrap;flex-shrink:0;}
+    .app-tab:hover{color:var(--fg);}
+    .app-tab i{font-size:14px;color:var(--faint);}
+    .app-tab.active{color:var(--fg);border-bottom-color:var(--accent);}
+    .app-tab.active i{color:var(--accent);}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
+    /* ── Client / schedule rows ── */
+    .client-row{display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;margin-bottom:8px;transition:border-color .15s;}
+    .client-row:hover{border-color:var(--border2);}
+    .client-row-name{font-size:14px;font-weight:500;}
+    .client-row-meta{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:0.04em;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+    .client-row-actions{display:flex;gap:6px;flex-shrink:0;}
+    .icon-btn{padding:7px;background:transparent;border:0.5px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;transition:all .15s;display:flex;align-items:center;}
+    .icon-btn:hover{border-color:var(--border2);color:var(--fg);}
+    .icon-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+    .schedule-card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:border-color .15s;}
+    .schedule-card:hover{border-color:var(--border2);}
+    .schedule-card.disabled{opacity:0.5;}
+    .sched-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+    .sched-dot.off{background:var(--faint);}
+    .sched-name{font-size:14px;font-weight:500;}
+    .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}
+    .sched-badge{padding:3px 10px;border-radius:100px;font-size:10px;font-weight:500;letter-spacing:0.12em;background:rgba(255,214,2,0.1);color:var(--accent);border:0.5px solid rgba(255,214,2,0.2);white-space:nowrap;}
+    .sched-badge.off{background:var(--surface2);color:var(--faint);border-color:var(--border);}
+    /* ── Large form modal ── */
+    .form-modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9997;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;}
+    .form-modal-backdrop.show{display:flex !important;}
+    .form-modal{background:var(--surface);border:0.5px solid var(--border2);border-radius:20px;width:100%;max-width:680px;box-shadow:0 24px 80px rgba(0,0,0,0.85);margin:auto;}
+    .form-modal-header{padding:24px 28px 20px;border-bottom:0.5px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+    .form-modal-body{padding:24px 28px;max-height:72vh;overflow-y:auto;}
+    .form-modal-footer{padding:16px 28px;border-top:0.5px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+    .form-section{margin-bottom:24px;}
+    .form-section-title{font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;padding-bottom:8px;border-bottom:0.5px solid var(--border);}
+    .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+    .form-group:last-child{margin-bottom:0;}
+    .form-label{font-size:10px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint);}
+    .form-control{font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--fg);width:100%;}
+    .form-control:focus{outline:none;border-color:var(--accent);}
+    .form-control-sm{font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--fg);width:100%;}
+    .form-control-sm:focus{outline:none;border-color:var(--accent);}
+    .form-textarea{font-family:'Inter',monospace,sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--fg);width:100%;resize:vertical;line-height:1.55;}
+    .form-textarea:focus{outline:none;border-color:var(--accent);}
+    .form-hint{font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:0.04em;line-height:1.5;}
+    .form-note{padding:9px 12px;background:rgba(255,214,2,0.05);border:0.5px solid rgba(255,214,2,0.15);border-radius:7px;font-size:11px;color:var(--muted);line-height:1.5;}
+    .form-toggle-row{display:flex;border:0.5px solid var(--border2);border-radius:100px;overflow:hidden;height:34px;width:fit-content;}
+    .form-toggle-btn{padding:0 18px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:400;letter-spacing:0.12em;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap;}
+    .form-toggle-btn.active{background:var(--accent);color:#0A0A0A;font-weight:500;}
+    .panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+    .panel-title{font-size:14px;font-weight:500;color:var(--fg);}
+    .panel-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+    @media(max-width:720px){.form-grid-2{grid-template-columns:1fr;}.form-modal-body{max-height:60vh;}}
   </style>
 </head>
 <body data-theme="dark">
@@ -219,6 +274,12 @@
   </button>
 </header>
 <main class="main">
+  <nav class="app-nav">
+    <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')"><i class="ti ti-chart-bar"></i>REPORTES</button>
+    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
+    <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
+  </nav>
+  <div id="tab-reports" class="tab-panel active">
   <div class="config-row">
     <div class="field field-wide">
       <div class="field-label">Cliente</div>
@@ -340,7 +401,236 @@
       <div id="token-body"></div>
     </div>
   </div>
+  </div><!-- /tab-reports -->
+
+  <!-- ── Settings panel ── -->
+  <div id="tab-settings" class="tab-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Clientes</div>
+        <div class="panel-sub">Configura clientes, fuentes de datos y carpetas de Drive</div>
+      </div>
+      <button class="btn-sm btn-sm-green" onclick="openClientForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo cliente</button>
+    </div>
+    <div id="client-list"></div>
+  </div>
+
+  <!-- ── Automation panel ── -->
+  <div id="tab-automation" class="tab-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Automatizaciones</div>
+        <div class="panel-sub">Programa la generación automática de reportes</div>
+      </div>
+      <button class="btn-sm btn-sm-green" onclick="openScheduleForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nueva automatización</button>
+    </div>
+    <div id="schedule-list"></div>
+  </div>
 </main>
+
+<!-- Client form modal -->
+<div class="form-modal-backdrop" id="client-modal-backdrop">
+  <div class="form-modal">
+    <div class="form-modal-header">
+      <div>
+        <div class="modal-title" id="client-modal-title">Nuevo cliente</div>
+        <div class="modal-subtitle">Configura las fuentes de datos y prompts del cliente</div>
+      </div>
+      <button class="modal-close show" onclick="closeClientModal()">✕</button>
+    </div>
+    <div class="form-modal-body">
+      <input type="hidden" id="cf-id">
+      <div class="form-section">
+        <div class="form-section-title">Información básica</div>
+        <div class="form-group">
+          <label class="form-label">Nombre del cliente *</label>
+          <input class="form-control" id="cf-name" placeholder="Ej. Empresa XYZ">
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Carpeta de reportes (Drive ID) *</label>
+            <input class="form-control" id="cf-folder-id" placeholder="ID de la carpeta en Google Drive">
+            <div class="form-hint">Carpeta donde se guardan los reportes generados</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Carpeta de PDFs (Drive ID)</label>
+            <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional">
+            <div class="form-hint">Carpeta alternativa para los PDFs</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Google Sheets</div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">ID del spreadsheet *</label>
+            <input class="form-control" id="cf-spreadsheet-id" placeholder="ID de Google Sheets">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre de la pestaña *</label>
+            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas">
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Columnas de la hoja</div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Columna de fecha *</label>
+            <input class="form-control-sm" id="cf-col-fecha" placeholder="Ej. A">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Columna de asesor *</label>
+            <input class="form-control-sm" id="cf-col-asesor" placeholder="Ej. B">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Columna de calificación *</label>
+            <input class="form-control-sm" id="cf-col-calif" placeholder="Ej. C">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Columna de análisis *</label>
+            <input class="form-control-sm" id="cf-col-analisis" placeholder="Ej. D">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Columna de transcripción *</label>
+            <input class="form-control-sm" id="cf-col-transcripcion" placeholder="Ej. E">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Columna de duración</label>
+            <input class="form-control-sm" id="cf-col-duracion" placeholder="Ej. F (opcional)">
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Filtros y límites</div>
+        <div class="form-group">
+          <label class="form-label">Frases excluidas</label>
+          <input class="form-control" id="cf-excluded-phrases" placeholder="frase1, frase2, frase3">
+          <div class="form-hint">Separadas por comas. Llamadas que contengan estas frases serán ignoradas.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Máx. caracteres de transcripción</label>
+          <input class="form-control" id="cf-max-chars" type="number" placeholder="80000" min="1000" max="200000">
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Prompts de IA</div>
+        <div class="form-group">
+          <label class="form-label">Prompt individual</label>
+          <textarea class="form-textarea" id="cf-prompt-individual" rows="8" placeholder="Prompt para el análisis individual de cada asesor…"></textarea>
+        </div>
+        <div class="form-group" style="margin-top:12px;">
+          <label class="form-label">Prompt general</label>
+          <textarea class="form-textarea" id="cf-prompt-general" rows="8" placeholder="Prompt para el reporte ejecutivo del equipo…"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="form-modal-footer">
+      <button class="btn-sm btn-sm-cancel" onclick="closeClientModal()">Cancelar</button>
+      <button class="btn-sm btn-sm-green" onclick="saveClient()">Guardar cliente</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule form modal -->
+<div class="form-modal-backdrop" id="schedule-modal-backdrop">
+  <div class="form-modal">
+    <div class="form-modal-header">
+      <div>
+        <div class="modal-title" id="schedule-modal-title">Nueva automatización</div>
+        <div class="modal-subtitle">Programa la generación automática de reportes</div>
+      </div>
+      <button class="modal-close show" onclick="closeScheduleModal()">✕</button>
+    </div>
+    <div class="form-modal-body">
+      <input type="hidden" id="sf-id">
+      <div class="form-section">
+        <div class="form-section-title">Configuración básica</div>
+        <div class="form-group">
+          <label class="form-label">Nombre de la automatización *</label>
+          <input class="form-control" id="sf-name" placeholder="Ej. Reporte semanal Empresa XYZ">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-control" id="sf-client-id"></select>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Frecuencia</div>
+        <div class="form-group">
+          <label class="form-label">Tipo de repetición</label>
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-freq-weekly" onclick="setScheduleFreq('weekly')">Semanal</button>
+            <button class="form-toggle-btn" id="sf-freq-monthly" onclick="setScheduleFreq('monthly')">Mensual</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;">Semanal: analiza la semana anterior (lun–dom). Mensual: analiza el mes anterior completo.</div>
+        </div>
+        <div id="sf-weekly-group" class="form-group">
+          <label class="form-label">Día de la semana</label>
+          <select class="form-control" id="sf-day-of-week">
+            <option value="1">Lunes</option>
+            <option value="2">Martes</option>
+            <option value="3">Miércoles</option>
+            <option value="4">Jueves</option>
+            <option value="5">Viernes</option>
+            <option value="6">Sábado</option>
+            <option value="0">Domingo</option>
+          </select>
+        </div>
+        <div id="sf-monthly-group" class="form-group" style="display:none;">
+          <label class="form-label">Día del mes (1–28)</label>
+          <input class="form-control" id="sf-day-of-month" type="number" min="1" max="28" value="1">
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Hora (0–23) *</label>
+            <input class="form-control" id="sf-hour" type="number" min="0" max="23" placeholder="8">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Minuto (0–59)</label>
+            <input class="form-control" id="sf-minute" type="number" min="0" max="59" value="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Zona horaria</label>
+          <input class="form-control" id="sf-timezone" value="America/Mexico_City">
+          <div class="form-hint">Ej. America/Mexico_City, America/New_York, Europe/Madrid</div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Tipo de reporte</div>
+        <div class="form-group">
+          <label class="form-label">Asesores a incluir</label>
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-advisors-all" onclick="setScheduleAdvisors('all')">Todos los asesores</button>
+            <button class="form-toggle-btn" id="sf-advisors-sel" onclick="setScheduleAdvisors('selected')">Solo activos del período</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;">"Todos" toma los asesores que aparecen en la hoja durante el período analizado.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reporte ejecutivo del equipo</label>
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-gen-yes" onclick="setScheduleGeneral(true)">Incluir reporte general</button>
+            <button class="form-toggle-btn" id="sf-gen-no" onclick="setScheduleGeneral(false)">Solo reportes individuales</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Estado</div>
+        <div class="form-group">
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-enabled-yes" onclick="setScheduleEnabled(true)">Activa</button>
+            <button class="form-toggle-btn" id="sf-enabled-no" onclick="setScheduleEnabled(false)">Pausada</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-modal-footer">
+      <button class="btn-sm btn-sm-cancel" onclick="closeScheduleModal()">Cancelar</button>
+      <button class="btn-sm btn-sm-green" onclick="saveSchedule()">Guardar automatización</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal de confirmación -->
 <div class="confirm-backdrop" id="confirm-backdrop">
@@ -659,11 +949,11 @@
     return((parts[0]?.[0]||'')+(parts[1]?.[0]||'')).toUpperCase()||'?';
   }
 
-  // ── Carga clients.json ──
+  // ── Carga clientes desde la API ──
   async function loadClients(){
     try{
-      const res=await fetch('./clients.json?v=' + Date.now(),{cache:'no-store'});
-      if(!res.ok) throw new Error('No se pudo cargar clients.json');
+      const res=await fetch('/api/clients');
+      if(!res.ok) throw new Error('No se pudo cargar clientes');
       allClients=await res.json();
       const sel=document.getElementById('client-select');
       allClients.forEach(c=>{
@@ -690,12 +980,12 @@
       return;
     }
 
-    // Re-fetch clients.json fresh en cada cambio para asegurar datos actuales
+    // Re-fetch clientes para asegurar datos actuales
     try{
-      const r=await fetch('./clients.json?v='+Date.now(),{cache:'no-store'});
+      const r=await fetch('/api/clients');
       if(r.ok) allClients=await r.json();
     }catch(e){
-      console.error('No se pudo refrescar clients.json',e);
+      console.error('No se pudo refrescar clientes',e);
     }
 
     currentClient=allClients.find(c=>c.id===clientId)||null;
@@ -1372,6 +1662,388 @@
     if (rt) rt.value = today;
     loadTokenStats();
   })();
+
+  // ── HTML escape helper ─────────────────────────────────────────────────────
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Tab navigation ─────────────────────────────────────────────────────────
+  const _APP_TABS = ['reports','settings','automation'];
+  function setTab(tab) {
+    _APP_TABS.forEach(t => {
+      document.getElementById('tab-btn-'+t).classList.toggle('active', t === tab);
+      document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+    });
+    if (tab === 'settings')   renderClientList();
+    if (tab === 'automation') renderScheduleList();
+  }
+
+  // ── Clients CRUD ───────────────────────────────────────────────────────────
+  const CLIENTS_API = '/api/clients';
+
+  async function renderClientList() {
+    const el = document.getElementById('client-list');
+    el.innerHTML = '<div class="token-empty" style="padding:16px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>';
+    try {
+      const clients = await fetch(CLIENTS_API).then(r => { if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+      if (!clients.length) {
+        el.innerHTML = '<div class="token-empty">No hay clientes configurados. Crea el primero con el botón de arriba.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      clients.forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'client-row';
+        row.innerHTML =
+          `<div style="flex:1;min-width:0;">` +
+            `<div class="client-row-name">${_esc(c.name)}</div>` +
+            `<div class="client-row-meta">` +
+              `<span>Hoja: ${_esc(c.spreadsheet_id || '—')}</span>` +
+              (c.folder_id ? `<span>·</span><span>Drive: ${_esc(c.folder_id)}</span>` : '') +
+            `</div>` +
+          `</div>` +
+          `<div class="client-row-actions">` +
+            `<button class="icon-btn" title="Editar" onclick="openClientForm('${_esc(c.id)}')"><i class="ti ti-pencil"></i></button>` +
+            `<button class="icon-btn danger" title="Eliminar" onclick="deleteClientRow('${_esc(c.id)}','${_esc(c.name)}')"><i class="ti ti-trash"></i></button>` +
+          `</div>`;
+        el.appendChild(row);
+      });
+    } catch(e) {
+      el.innerHTML = `<div class="token-empty" style="color:var(--danger);">Error cargando clientes: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  let _editingClientId = null;
+
+  async function openClientForm(id) {
+    _editingClientId = id || null;
+    document.getElementById('client-modal-title').textContent = id ? 'Editar cliente' : 'Nuevo cliente';
+
+    const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
+      'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
+      'cf-col-transcripcion','cf-col-duracion','cf-excluded-phrases','cf-max-chars',
+      'cf-prompt-individual','cf-prompt-general'];
+    fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
+    document.getElementById('cf-max-chars').value = '80000';
+
+    if (id) {
+      try {
+        const r = await fetch(`${CLIENTS_API}/${id}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const c = await r.json();
+        document.getElementById('cf-id').value               = c.id || '';
+        document.getElementById('cf-name').value             = c.name || '';
+        document.getElementById('cf-folder-id').value        = c.folder_id || '';
+        document.getElementById('cf-sidecar-folder-id').value= c.sidecar_folder_id || '';
+        document.getElementById('cf-spreadsheet-id').value   = c.spreadsheet_id || '';
+        document.getElementById('cf-sheet-name').value       = c.data_sheet_name || '';
+        document.getElementById('cf-col-fecha').value        = c.col_fecha || '';
+        document.getElementById('cf-col-asesor').value       = c.col_asesor || '';
+        document.getElementById('cf-col-calif').value        = c.col_calif || '';
+        document.getElementById('cf-col-analisis').value     = c.col_analisis || '';
+        document.getElementById('cf-col-transcripcion').value= c.col_transcripcion || '';
+        document.getElementById('cf-col-duracion').value     = c.col_duracion || '';
+        document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
+        document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 80000;
+        document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
+        document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
+      } catch(e) {
+        alert('Error cargando datos del cliente: ' + e.message);
+        return;
+      }
+    }
+    const b = document.getElementById('client-modal-backdrop');
+    b.style.display = 'flex'; b.classList.add('show');
+  }
+
+  function closeClientModal() {
+    const b = document.getElementById('client-modal-backdrop');
+    b.classList.remove('show'); b.style.display = 'none';
+    _editingClientId = null;
+  }
+
+  async function saveClient() {
+    const name = document.getElementById('cf-name').value.trim();
+    if (!name) { alert('El nombre del cliente es obligatorio.'); return; }
+    const folderId = document.getElementById('cf-folder-id').value.trim();
+    if (!folderId) { alert('La carpeta de Drive es obligatoria.'); return; }
+    const spreadsheetId = document.getElementById('cf-spreadsheet-id').value.trim();
+    if (!spreadsheetId) { alert('El ID del spreadsheet es obligatorio.'); return; }
+    const sheetName = document.getElementById('cf-sheet-name').value.trim();
+    if (!sheetName) { alert('El nombre de la pestaña es obligatorio.'); return; }
+
+    const rawPhrases = document.getElementById('cf-excluded-phrases').value;
+    const payload = {
+      name,
+      folder_id:               folderId,
+      sidecar_folder_id:       document.getElementById('cf-sidecar-folder-id').value.trim() || undefined,
+      spreadsheet_id:          spreadsheetId,
+      data_sheet_name:         sheetName,
+      col_fecha:               document.getElementById('cf-col-fecha').value.trim(),
+      col_asesor:              document.getElementById('cf-col-asesor').value.trim(),
+      col_calif:               document.getElementById('cf-col-calif').value.trim(),
+      col_analisis:            document.getElementById('cf-col-analisis').value.trim(),
+      col_transcripcion:       document.getElementById('cf-col-transcripcion').value.trim(),
+      col_duracion:            document.getElementById('cf-col-duracion').value.trim() || undefined,
+      excluded_phrases:        rawPhrases.split(',').map(s => s.trim()).filter(Boolean),
+      transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 80000,
+      prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
+      prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
+    };
+
+    try {
+      const r = _editingClientId
+        ? await fetch(`${CLIENTS_API}/${_editingClientId}`, { method:'PUT',  headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+        : await fetch(CLIENTS_API,                           { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
+      closeClientModal();
+      renderClientList();
+      _refreshClientSelector();
+    } catch(e) {
+      alert('Error guardando cliente: ' + e.message);
+    }
+  }
+
+  async function deleteClientRow(id, name) {
+    if (!confirm(`¿Eliminar al cliente "${name}"?\nEsta acción no se puede deshacer.`)) return;
+    try {
+      const r = await fetch(`${CLIENTS_API}/${id}`, { method:'DELETE' });
+      if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.error || `HTTP ${r.status}`); }
+      renderClientList();
+      _refreshClientSelector();
+    } catch(e) {
+      alert('Error eliminando cliente: ' + e.message);
+    }
+  }
+
+  async function _refreshClientSelector() {
+    try {
+      const clients = await fetch(CLIENTS_API).then(r => r.json());
+      allClients = clients;
+      const sel = document.getElementById('client-select');
+      const prev = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      clients.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        sel.appendChild(o);
+      });
+      if (prev) sel.value = prev;
+    } catch(e) { console.warn('Could not refresh client selector:', e); }
+  }
+
+  // ── Schedules CRUD ─────────────────────────────────────────────────────────
+  const SCHEDULES_API = '/api/schedules';
+  const _DOW = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+  function _describeSchedule(s) {
+    const freq = s.frequency === 'weekly'
+      ? `Cada ${_DOW[s.day_of_week ?? 1]}`
+      : `Día ${s.day_of_month ?? 1} de cada mes`;
+    const h = String(s.hour).padStart(2,'0');
+    const m = String(s.minute ?? 0).padStart(2,'0');
+    const last = s.last_run ? `Último: ${s.last_run.slice(0,10)}` : 'Nunca ejecutado';
+    return `${freq} a las ${h}:${m} · ${s.timezone || 'America/Mexico_City'} · ${last}`;
+  }
+
+  async function renderScheduleList() {
+    const el = document.getElementById('schedule-list');
+    el.innerHTML = '<div class="token-empty" style="padding:16px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>';
+    try {
+      const [schedules, clients] = await Promise.all([
+        fetch(SCHEDULES_API).then(r => r.json()),
+        fetch(CLIENTS_API).then(r => r.json()).catch(() => []),
+      ]);
+      const cMap = {};
+      clients.forEach(c => { cMap[c.id] = c.name; });
+
+      if (!schedules.length) {
+        el.innerHTML = '<div class="token-empty">No hay automatizaciones. Crea la primera con el botón de arriba.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      schedules.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'schedule-card' + (s.enabled ? '' : ' disabled');
+        const clientName = cMap[s.client_id] || s.client_id;
+        card.innerHTML =
+          `<div class="sched-dot${s.enabled ? '' : ' off'}"></div>` +
+          `<div style="flex:1;min-width:0;">` +
+            `<div class="sched-name">${_esc(s.name)}</div>` +
+            `<div class="sched-desc">${_esc(clientName)} · ${_esc(_describeSchedule(s))}</div>` +
+          `</div>` +
+          `<span class="sched-badge${s.enabled ? '' : ' off'}">${s.enabled ? 'ACTIVA' : 'PAUSADA'}</span>` +
+          `<div class="client-row-actions">` +
+            `<button class="icon-btn" title="${s.enabled ? 'Pausar' : 'Activar'}" onclick="toggleSchedule('${s.id}',${!s.enabled})"><i class="ti ti-${s.enabled ? 'player-pause' : 'player-play'}"></i></button>` +
+            `<button class="icon-btn" title="Editar" onclick="openScheduleForm('${s.id}')"><i class="ti ti-pencil"></i></button>` +
+            `<button class="icon-btn danger" title="Eliminar" onclick="deleteScheduleRow('${s.id}','${_esc(s.name)}')"><i class="ti ti-trash"></i></button>` +
+          `</div>`;
+        el.appendChild(card);
+      });
+    } catch(e) {
+      el.innerHTML = `<div class="token-empty" style="color:var(--danger);">Error: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  let _editingScheduleId = null;
+  let _scheduleFreq      = 'weekly';
+  let _scheduleAdvisors  = 'all';
+  let _scheduleGeneral   = true;
+  let _scheduleEnabled   = true;
+
+  function setScheduleFreq(f) {
+    _scheduleFreq = f;
+    document.getElementById('sf-freq-weekly').classList.toggle('active',  f === 'weekly');
+    document.getElementById('sf-freq-monthly').classList.toggle('active', f === 'monthly');
+    document.getElementById('sf-weekly-group').style.display  = f === 'weekly'  ? '' : 'none';
+    document.getElementById('sf-monthly-group').style.display = f === 'monthly' ? '' : 'none';
+  }
+
+  function setScheduleAdvisors(v) {
+    _scheduleAdvisors = v;
+    document.getElementById('sf-advisors-all').classList.toggle('active', v === 'all');
+    document.getElementById('sf-advisors-sel').classList.toggle('active', v === 'selected');
+  }
+
+  function setScheduleGeneral(v) {
+    _scheduleGeneral = v;
+    document.getElementById('sf-gen-yes').classList.toggle('active',  v);
+    document.getElementById('sf-gen-no').classList.toggle('active',  !v);
+  }
+
+  function setScheduleEnabled(v) {
+    _scheduleEnabled = v;
+    document.getElementById('sf-enabled-yes').classList.toggle('active',  v);
+    document.getElementById('sf-enabled-no').classList.toggle('active',  !v);
+  }
+
+  async function openScheduleForm(id) {
+    _editingScheduleId = id || null;
+    document.getElementById('schedule-modal-title').textContent = id ? 'Editar automatización' : 'Nueva automatización';
+
+    const clientSel = document.getElementById('sf-client-id');
+    clientSel.innerHTML = '<option value="">— Selecciona un cliente —</option>';
+    try {
+      const clients = await fetch(CLIENTS_API).then(r => r.json());
+      clients.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        clientSel.appendChild(o);
+      });
+    } catch{}
+
+    // Reset to defaults
+    document.getElementById('sf-id').value       = '';
+    document.getElementById('sf-name').value     = '';
+    document.getElementById('sf-hour').value     = '8';
+    document.getElementById('sf-minute').value   = '0';
+    document.getElementById('sf-timezone').value = 'America/Mexico_City';
+    document.getElementById('sf-day-of-week').value  = '1';
+    document.getElementById('sf-day-of-month').value = '1';
+    clientSel.value = '';
+    setScheduleFreq('weekly');
+    setScheduleAdvisors('all');
+    setScheduleGeneral(true);
+    setScheduleEnabled(true);
+
+    if (id) {
+      try {
+        const schedules = await fetch(SCHEDULES_API).then(r => r.json());
+        const s = schedules.find(x => x.id === id);
+        if (!s) throw new Error('Automatización no encontrada');
+        document.getElementById('sf-id').value       = s.id;
+        document.getElementById('sf-name').value     = s.name;
+        document.getElementById('sf-hour').value     = s.hour;
+        document.getElementById('sf-minute').value   = s.minute ?? 0;
+        document.getElementById('sf-timezone').value = s.timezone || 'America/Mexico_City';
+        document.getElementById('sf-day-of-week').value  = s.day_of_week  ?? 1;
+        document.getElementById('sf-day-of-month').value = s.day_of_month ?? 1;
+        clientSel.value = s.client_id;
+        setScheduleFreq(s.frequency || 'weekly');
+        setScheduleAdvisors(s.advisors === 'all' || !Array.isArray(s.advisors) ? 'all' : 'selected');
+        setScheduleGeneral(s.include_general !== false);
+        setScheduleEnabled(s.enabled !== false);
+      } catch(e) {
+        alert('Error cargando datos: ' + e.message);
+        return;
+      }
+    }
+
+    const b = document.getElementById('schedule-modal-backdrop');
+    b.style.display = 'flex'; b.classList.add('show');
+  }
+
+  function closeScheduleModal() {
+    const b = document.getElementById('schedule-modal-backdrop');
+    b.classList.remove('show'); b.style.display = 'none';
+    _editingScheduleId = null;
+  }
+
+  async function saveSchedule() {
+    const name = document.getElementById('sf-name').value.trim();
+    if (!name) { alert('El nombre es obligatorio.'); return; }
+    const clientId = document.getElementById('sf-client-id').value;
+    if (!clientId) { alert('Selecciona un cliente.'); return; }
+    const hour = parseInt(document.getElementById('sf-hour').value);
+    if (isNaN(hour) || hour < 0 || hour > 23) { alert('La hora debe estar entre 0 y 23.'); return; }
+
+    const payload = {
+      name,
+      client_id:       clientId,
+      enabled:         _scheduleEnabled,
+      frequency:       _scheduleFreq,
+      hour,
+      minute:          parseInt(document.getElementById('sf-minute').value) || 0,
+      timezone:        document.getElementById('sf-timezone').value.trim() || 'America/Mexico_City',
+      report_type:     'selected',
+      include_general: _scheduleGeneral,
+      advisors:        _scheduleAdvisors === 'all' ? 'all' : [],
+    };
+    if (_scheduleFreq === 'weekly') {
+      payload.day_of_week = parseInt(document.getElementById('sf-day-of-week').value);
+    } else {
+      payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;
+    }
+
+    try {
+      const r = _editingScheduleId
+        ? await fetch(`${SCHEDULES_API}/${_editingScheduleId}`, { method:'PUT',  headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+        : await fetch(SCHEDULES_API,                             { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
+      closeScheduleModal();
+      renderScheduleList();
+    } catch(e) {
+      alert('Error guardando automatización: ' + e.message);
+    }
+  }
+
+  async function toggleSchedule(id, enabled) {
+    try {
+      const r = await fetch(`${SCHEDULES_API}/${id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ enabled })
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      renderScheduleList();
+    } catch(e) { alert('Error actualizando estado: ' + e.message); }
+  }
+
+  async function deleteScheduleRow(id, name) {
+    if (!confirm(`¿Eliminar la automatización "${name}"?`)) return;
+    try {
+      const r = await fetch(`${SCHEDULES_API}/${id}`, { method:'DELETE' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      renderScheduleList();
+    } catch(e) { alert('Error eliminando: ' + e.message); }
+  }
 </script>
 </body>
 </html>

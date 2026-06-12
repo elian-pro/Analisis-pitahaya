@@ -1,0 +1,67 @@
+import fs from 'fs';
+import crypto from 'crypto';
+
+export interface Schedule {
+  id:            string;
+  name:          string;
+  client_id:     string;
+  enabled:       boolean;
+  frequency:     'weekly' | 'monthly';
+  day_of_week?:  number;   // 0=Sun 1=Mon … 6=Sat  (weekly)
+  day_of_month?: number;   // 1-28                  (monthly)
+  hour:          number;   // 0-23
+  minute:        number;   // 0-59
+  timezone:      string;
+  report_type:   'selected' | 'general';
+  include_general: boolean;
+  advisors:      'all' | string[];
+  created_at:    string;
+  last_run?:     string;
+}
+
+const SCHEDULES_FILE = process.env.SCHEDULES_FILE ?? '/tmp/schedules.json';
+
+function load(): Schedule[] {
+  try { return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8')); }
+  catch { return []; }
+}
+
+function persist(schedules: Schedule[]): void {
+  try { fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules), 'utf-8'); }
+  catch (e) { console.warn('[schedules] persist failed:', (e as Error).message); }
+}
+
+export function listSchedules(): Schedule[] { return load(); }
+
+export function getSchedule(id: string): Schedule | undefined {
+  return load().find(s => s.id === id);
+}
+
+export function createSchedule(data: Omit<Schedule, 'id' | 'created_at'>): Schedule {
+  const schedules = load();
+  const schedule: Schedule = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+  schedules.push(schedule);
+  persist(schedules);
+  return schedule;
+}
+
+export function updateSchedule(id: string, patch: Partial<Omit<Schedule, 'id' | 'created_at'>>): Schedule {
+  const schedules = load();
+  const idx = schedules.findIndex(s => s.id === id);
+  if (idx === -1) throw new Error(`Schedule '${id}' not found`);
+  schedules[idx] = { ...schedules[idx], ...patch };
+  persist(schedules);
+  return schedules[idx];
+}
+
+export function deleteSchedule(id: string): void {
+  const schedules = load();
+  const idx = schedules.findIndex(s => s.id === id);
+  if (idx === -1) throw new Error(`Schedule '${id}' not found`);
+  schedules.splice(idx, 1);
+  persist(schedules);
+}
+
+export function markRan(id: string): void {
+  updateSchedule(id, { last_run: new Date().toISOString() });
+}

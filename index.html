@@ -257,6 +257,15 @@
     .panel-title{font-size:14px;font-weight:500;color:var(--fg);}
     .panel-sub{font-size:11px;color:var(--muted);margin-top:2px;}
     @media(max-width:720px){.form-grid-2{grid-template-columns:1fr;}.form-modal-body{max-height:60vh;}}
+    /* ── Inline date calendar (run-date picker) ── */
+    .inline-cal{margin-top:8px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:14px;padding:14px 16px;width:fit-content;}
+    .inline-cal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:8px;}
+    .cal-nav-btn{background:none;border:0.5px solid var(--border2);border-radius:8px;color:var(--muted);width:26px;height:26px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+    .cal-nav-btn:hover{color:var(--fg);border-color:var(--fg);}
+    .cal-day-cell{cursor:pointer;border-radius:8px;transition:background .12s;}
+    .cal-day-cell:not(.disabled):hover{background:var(--surface);}
+    .cal-day-cell.cal-day-sel{background:var(--accent);color:#0A0A0A !important;font-weight:600;}
+    .cal-day-cell.disabled{opacity:0.22;cursor:default;pointer-events:none;}
   </style>
 </head>
 <body data-theme="dark">
@@ -601,9 +610,21 @@
           <input class="form-control" id="sf-day-of-month" type="number" min="1" max="28" value="1">
         </div>
         <!-- Una sola vez -->
-        <div id="sf-once-group" class="form-group" style="display:none;">
+        <div id="sf-once-group" class="form-group" style="display:none;position:relative;">
           <label class="form-label">Fecha de ejecución *</label>
-          <input class="form-control" id="sf-run-date" type="date">
+          <input type="hidden" id="sf-run-date">
+          <div id="sf-date-display" onclick="toggleRunDateCal(event)" class="form-control" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+            <span id="sf-date-display-text" style="color:var(--muted);">Selecciona una fecha</span>
+            <span style="font-size:9px;flex-shrink:0;color:var(--muted);">▾</span>
+          </div>
+          <div id="sf-date-cal" class="inline-cal" style="display:none;">
+            <div class="inline-cal-head">
+              <button type="button" class="cal-nav-btn" onclick="runDateCalNav(-1,event)">‹</button>
+              <div class="mini-cal-title" id="sf-date-cal-title" style="margin-bottom:0;"></div>
+              <button type="button" class="cal-nav-btn" onclick="runDateCalNav(1,event)">›</button>
+            </div>
+            <div class="cal-rows" id="sf-date-cal-rows"></div>
+          </div>
           <div class="form-hint">La automatización se ejecutará una vez y luego se desactivará automáticamente.</div>
         </div>
         <!-- Hora (siempre visible) -->
@@ -1973,6 +1994,118 @@
     document.getElementById('sf-freq-hint').textContent = _SF_FREQ_HINTS[f] || '';
   }
 
+  // ── Run-date inline calendar ───────────────────────────────────────────────
+  let _runDateCalYear  = null;
+  let _runDateCalMonth = null;
+  const _RD_MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  function _rdISO(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function toggleRunDateCal(e) {
+    if (e) e.stopPropagation();
+    const cal = document.getElementById('sf-date-cal');
+    const isOpen = cal.style.display !== 'none' && cal.style.display !== '';
+    if (isOpen) { cal.style.display = 'none'; return; }
+    const cur = document.getElementById('sf-run-date').value;
+    if (cur) {
+      const [y, m] = cur.split('-').map(Number);
+      _runDateCalYear = y; _runDateCalMonth = m;
+    } else {
+      const now = new Date();
+      _runDateCalYear = now.getFullYear(); _runDateCalMonth = now.getMonth() + 1;
+    }
+    renderRunDateCal();
+    cal.style.display = 'block';
+  }
+
+  function runDateCalNav(delta, e) {
+    if (e) e.stopPropagation();
+    _runDateCalMonth += delta;
+    if (_runDateCalMonth < 1)  { _runDateCalMonth = 12; _runDateCalYear--; }
+    if (_runDateCalMonth > 12) { _runDateCalMonth = 1;  _runDateCalYear++; }
+    renderRunDateCal();
+  }
+
+  function renderRunDateCal() {
+    const year = _runDateCalYear, mon = _runDateCalMonth;
+    const todayISO = _rdISO(new Date());
+    const selISO   = document.getElementById('sf-run-date').value;
+    document.getElementById('sf-date-cal-title').textContent = `${_RD_MONTHS[mon-1]} ${year}`;
+
+    const firstDay = new Date(year, mon - 1, 1);
+    const lastDay  = new Date(year, mon, 0);
+    const calStart = new Date(firstDay);
+    const fdow = calStart.getDay();
+    calStart.setDate(calStart.getDate() - (fdow === 0 ? 6 : fdow - 1));
+
+    const rowsEl = document.getElementById('sf-date-cal-rows');
+    rowsEl.innerHTML = '';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'cal-row cal-hdr-row';
+    ['L','M','M','J','V','S','D'].forEach(h => {
+      const c = document.createElement('div'); c.className = 'cal-cell'; c.textContent = h; hdr.appendChild(c);
+    });
+    rowsEl.appendChild(hdr);
+
+    const day = new Date(calStart);
+    let rowCount = 0;
+    while (day <= lastDay && rowCount < 6) {
+      const row = document.createElement('div');
+      row.className = 'cal-row';
+      for (let d = 0; d < 7; d++) {
+        const cellDate = new Date(day);
+        const iso     = _rdISO(cellDate);
+        const inMonth = cellDate.getMonth() + 1 === mon && cellDate.getFullYear() === year;
+        const isToday = iso === todayISO;
+        const isSel   = iso === selISO;
+        const isPast  = iso < todayISO;
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell cal-day-cell'
+          + (!inMonth ? ' out-mo' : '')
+          + (isToday ? ' is-today' : '')
+          + (isSel ? ' cal-day-sel' : '')
+          + (isPast ? ' disabled' : '');
+        cell.textContent = cellDate.getDate();
+        if (!isPast) {
+          cell.addEventListener('click', ev => {
+            ev.stopPropagation();
+            document.getElementById('sf-run-date').value = iso;
+            _updateRunDateDisplay();
+            document.getElementById('sf-date-cal').style.display = 'none';
+          });
+        }
+        row.appendChild(cell);
+        day.setDate(day.getDate() + 1);
+      }
+      rowsEl.appendChild(row);
+      rowCount++;
+    }
+  }
+
+  function _updateRunDateDisplay() {
+    const iso  = document.getElementById('sf-run-date').value;
+    const disp = document.getElementById('sf-date-display-text');
+    if (iso) {
+      const [y, m, d] = iso.split('-').map(Number);
+      disp.textContent = `${d} de ${_RD_MONTHS[m-1].toLowerCase()} de ${y}`;
+      disp.style.color = 'var(--fg)';
+    } else {
+      disp.textContent = 'Selecciona una fecha';
+      disp.style.color = 'var(--muted)';
+    }
+  }
+
+  // Close run-date calendar when clicking outside its group
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#sf-once-group')) {
+      const cal = document.getElementById('sf-date-cal');
+      if (cal) cal.style.display = 'none';
+    }
+  });
+
   function setScheduleMode(m) {
     _scheduleMode = m;
     document.getElementById('sf-mode-report').classList.toggle('active', m === 'report');
@@ -2062,6 +2195,8 @@
     document.getElementById('sf-day-of-week').value  = '1';
     document.getElementById('sf-day-of-month').value = '1';
     document.getElementById('sf-run-date').value      = '';
+    document.getElementById('sf-date-cal').style.display = 'none';
+    _updateRunDateDisplay();
     document.getElementById('sf-chat-message').value  = '';
     document.getElementById('sf-chat-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
     clientSel.value = '';
@@ -2089,6 +2224,7 @@
         document.getElementById('sf-day-of-week').value  = s.day_of_week  ?? 1;
         document.getElementById('sf-day-of-month').value = s.day_of_month ?? 1;
         document.getElementById('sf-run-date').value      = s.run_date   || '';
+        _updateRunDateDisplay();
         document.getElementById('sf-chat-message').value  = s.chat_message || '';
         clientSel.value = s.client_id;
         setScheduleFreq(s.frequency || 'weekly');

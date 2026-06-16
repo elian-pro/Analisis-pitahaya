@@ -1,5 +1,6 @@
 import fs from 'fs';
 import crypto from 'crypto';
+import { JOBS_FILE } from '../config/paths';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 
@@ -34,7 +35,6 @@ export interface Job {
   date_to?:    string;  // YYYY-MM-DD, required for weekly
 }
 
-const JOBS_FILE = process.env.JOBS_FILE ?? '/tmp/jobs.json';
 const store = new Map<string, Job>();
 
 try {

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import crypto from 'crypto';
+import { SCHEDULES_FILE } from '../config/paths';
 
 export interface Schedule {
   id:            string;
@@ -23,7 +24,6 @@ export interface Schedule {
   last_run?:     string;
 }
 
-const SCHEDULES_FILE = process.env.SCHEDULES_FILE ?? '/tmp/schedules.json';
 
 function load(): Schedule[] {
   try { return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8')); }

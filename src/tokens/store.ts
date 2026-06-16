@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { TOKEN_FILE } from '../config/paths';
 
 interface TokenEntry {
   ts:        string;   // ISO timestamp
@@ -8,8 +9,6 @@ interface TokenEntry {
   output:    number;
   advisors:  number;
 }
-
-const TOKEN_FILE = process.env.TOKEN_LOG_FILE ?? '/tmp/token_log.json';
 
 function load(): TokenEntry[] {
   try { return JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf-8')); }

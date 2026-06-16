@@ -1,6 +1,6 @@
-import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { CLIENTS_FILE } from '../config/paths';
 
 export interface ClientConfig {
   id:                      string;
@@ -21,7 +21,6 @@ export interface ClientConfig {
   prompt_general:          string;
 }
 
-const CLIENTS_FILE = path.join(__dirname, '..', '..', 'clients.json');
 
 export function loadClients(): ClientConfig[] {
   try { return JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8')); }

@@ -14,3 +14,4 @@ catch (e) { console.error('[paths] Could not create DATA_DIR:', (e as Error).mes
 export const SCHEDULES_FILE = process.env.SCHEDULES_FILE ?? path.join(DATA_DIR, 'schedules.json');
 export const JOBS_FILE      = process.env.JOBS_FILE      ?? path.join(DATA_DIR, 'jobs.json');
 export const TOKEN_FILE     = process.env.TOKEN_LOG_FILE ?? path.join(DATA_DIR, 'token_log.json');
+export const CLIENTS_FILE   = process.env.CLIENTS_FILE   ?? path.join(DATA_DIR, 'clients.json');

@@ -15,3 +15,22 @@ export const SCHEDULES_FILE = process.env.SCHEDULES_FILE ?? path.join(DATA_DIR, 
 export const JOBS_FILE      = process.env.JOBS_FILE      ?? path.join(DATA_DIR, 'jobs.json');
 export const TOKEN_FILE     = process.env.TOKEN_LOG_FILE ?? path.join(DATA_DIR, 'token_log.json');
 export const CLIENTS_FILE   = process.env.CLIENTS_FILE   ?? path.join(DATA_DIR, 'clients.json');
+
+// Initialize empty JSON files on first run so stores never see a missing file
+const defaultFiles: Record<string, unknown[]> = {
+  [CLIENTS_FILE]:   [],
+  [SCHEDULES_FILE]: [],
+  [JOBS_FILE]:      [],
+  [TOKEN_FILE]:     [],
+};
+
+for (const [filePath, defaultValue] of Object.entries(defaultFiles)) {
+  if (!fs.existsSync(filePath)) {
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8');
+      console.log(`[paths] Inicializado: ${filePath}`);
+    } catch (e) {
+      console.error(`[paths] Could not initialize ${filePath}:`, (e as Error).message);
+    }
+  }
+}

@@ -257,6 +257,27 @@
     .panel-title{font-size:14px;font-weight:500;color:var(--fg);}
     .panel-sub{font-size:11px;color:var(--muted);margin-top:2px;}
     @media(max-width:720px){.form-grid-2{grid-template-columns:1fr;}.form-modal-body{max-height:60vh;}}
+    /* ── Client form validation ── */
+    .form-control.field-error,.form-control-sm.field-error,.form-textarea.field-error{border-color:var(--danger) !important;background:rgba(226,75,74,0.04);}
+    .form-label.field-error{color:var(--danger) !important;}
+    /* ── Draft modal ── */
+    .draft-modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;padding:16px;}
+    .draft-modal-backdrop.show{display:flex !important;}
+    .draft-modal{background:var(--surface);border:0.5px solid var(--border2);border-radius:20px;width:100%;max-width:420px;padding:28px 26px;box-shadow:0 24px 80px rgba(0,0,0,0.85);}
+    .draft-modal-icon{width:42px;height:42px;background:rgba(226,75,74,0.1);border:0.5px solid rgba(226,75,74,0.25);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px;}
+    .draft-modal-title{font-size:15px;font-weight:500;color:var(--fg);margin-bottom:5px;letter-spacing:-0.01em;}
+    .draft-modal-sub{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;}
+    .draft-missing-list{margin-bottom:20px;display:flex;flex-direction:column;gap:5px;}
+    .draft-missing-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg);}
+    .draft-missing-dot{width:6px;height:6px;border-radius:50%;background:var(--danger);flex-shrink:0;}
+    .draft-modal-actions{display:flex;gap:8px;}
+    /* ── Draft restore banner ── */
+    .draft-banner{display:flex;align-items:center;gap:12px;padding:11px 14px;background:rgba(255,214,2,0.06);border:0.5px solid rgba(255,214,2,0.2);border-radius:10px;margin-bottom:20px;}
+    .draft-banner-text{font-size:12px;color:var(--muted);flex:1;line-height:1.45;}
+    .draft-banner-actions{display:flex;gap:6px;flex-shrink:0;}
+    .draft-banner-btn{font-family:'Inter',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.1em;padding:5px 11px;border-radius:100px;cursor:pointer;border:0.5px solid var(--border2);background:transparent;color:var(--muted);transition:all .15s;}
+    .draft-banner-btn:hover{border-color:var(--fg);color:var(--fg);}
+    .draft-banner-btn.accent{background:var(--accent);border-color:var(--accent);color:#0A0A0A;}
     /* ── Inline date calendar (run-date picker) ── */
     .inline-cal{margin-top:8px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:14px;padding:14px 16px;width:fit-content;}
     .inline-cal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:8px;}
@@ -449,6 +470,15 @@
     </div>
     <div class="form-modal-body">
       <input type="hidden" id="cf-id">
+      <!-- Draft restore banner (shown when a draft exists for a new client) -->
+      <div id="draft-banner" class="draft-banner" style="display:none;">
+        <span style="font-size:18px;">📝</span>
+        <div class="draft-banner-text">Tienes un borrador guardado.<br>¿Quieres restaurarlo?</div>
+        <div class="draft-banner-actions">
+          <button class="draft-banner-btn" onclick="discardDraft()">Descartar</button>
+          <button class="draft-banner-btn accent" onclick="restoreDraft()">Restaurar</button>
+        </div>
+      </div>
       <div class="form-section">
         <div class="form-section-title">Información básica</div>
         <div class="form-group">
@@ -705,6 +735,20 @@
     <div class="form-modal-footer">
       <button class="btn-sm btn-sm-cancel" onclick="closeScheduleModal()">Cancelar</button>
       <button class="btn-sm btn-sm-green" onclick="saveSchedule()">Guardar automatización</button>
+    </div>
+  </div>
+</div>
+
+<!-- Draft / validation modal -->
+<div class="draft-modal-backdrop" id="draft-modal-backdrop">
+  <div class="draft-modal">
+    <div class="draft-modal-icon">⚠️</div>
+    <div class="draft-modal-title">Campos incompletos</div>
+    <div class="draft-modal-sub">Los siguientes campos son obligatorios. Puedes guardar un borrador para completarlo después.</div>
+    <div class="draft-missing-list" id="draft-missing-list"></div>
+    <div class="draft-modal-actions">
+      <button class="confirm-cancel" style="flex:1;" onclick="closeDraftModal()">Seguir editando</button>
+      <button class="confirm-ok" style="flex:1.5;" onclick="saveDraftAndClose()">💾&nbsp; Guardar borrador</button>
     </div>
   </div>
 </div>
@@ -1797,6 +1841,7 @@
 
   async function openClientForm(id) {
     _editingClientId = id || null;
+    _clearClientErrors();
     document.getElementById('client-modal-title').textContent = id ? 'Editar cliente' : 'Nuevo cliente';
 
     const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
@@ -1805,6 +1850,14 @@
       'cf-prompt-individual','cf-prompt-general'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '80000';
+
+    // Show restore banner only for new clients with a saved draft
+    const banner = document.getElementById('draft-banner');
+    if (!id && _hasDraft()) {
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
 
     if (id) {
       try {
@@ -1832,8 +1885,12 @@
         return;
       }
     }
+
     const b = document.getElementById('client-modal-backdrop');
     b.style.display = 'flex'; b.classList.add('show');
+
+    // Auto-save draft on every input change (new clients only)
+    if (!id) _attachClientAutoSave();
   }
 
   function closeClientModal() {
@@ -1843,16 +1900,24 @@
   }
 
   async function saveClient() {
-    const name = document.getElementById('cf-name').value.trim();
-    if (!name) { alert('El nombre del cliente es obligatorio.'); return; }
-    const folderId = document.getElementById('cf-folder-id').value.trim();
-    if (!folderId) { alert('La carpeta de Drive es obligatoria.'); return; }
-    const spreadsheetId = document.getElementById('cf-spreadsheet-id').value.trim();
-    if (!spreadsheetId) { alert('El ID del spreadsheet es obligatorio.'); return; }
-    const sheetName = document.getElementById('cf-sheet-name').value.trim();
-    if (!sheetName) { alert('El nombre de la pestaña es obligatorio.'); return; }
+    const missing = _validateClientForm();
+    if (missing.length) {
+      // Scroll the first red field into view
+      const firstErr = document.querySelector('#client-modal-backdrop .field-error');
+      if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Show draft popup with the list of missing fields
+      document.getElementById('draft-missing-list').innerHTML =
+        missing.map(m => `<div class="draft-missing-item"><div class="draft-missing-dot"></div>${_esc(m)}</div>`).join('');
+      const b = document.getElementById('draft-modal-backdrop');
+      b.style.display = 'flex'; b.classList.add('show');
+      return;
+    }
 
-    const rawPhrases = document.getElementById('cf-excluded-phrases').value;
+    const name          = document.getElementById('cf-name').value.trim();
+    const folderId      = document.getElementById('cf-folder-id').value.trim();
+    const spreadsheetId = document.getElementById('cf-spreadsheet-id').value.trim();
+    const sheetName     = document.getElementById('cf-sheet-name').value.trim();
+    const rawPhrases    = document.getElementById('cf-excluded-phrases').value;
     const payload = {
       name,
       folder_id:               folderId,
@@ -1879,6 +1944,7 @@
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${r.status}`);
       }
+      _clearDraft();
       closeClientModal();
       renderClientList();
       _refreshClientSelector();
@@ -1913,6 +1979,134 @@
       });
       if (prev) sel.value = prev;
     } catch(e) { console.warn('Could not refresh client selector:', e); }
+  }
+
+  // ── Client form validation & draft ────────────────────────────────────────
+  const _CF_REQUIRED = [
+    { id:'cf-name',             label:'Nombre del cliente' },
+    { id:'cf-folder-id',        label:'Carpeta de reportes (Drive ID)' },
+    { id:'cf-spreadsheet-id',   label:'ID del spreadsheet' },
+    { id:'cf-sheet-name',       label:'Nombre de la pestaña' },
+    { id:'cf-col-fecha',        label:'Columna de fecha' },
+    { id:'cf-col-asesor',       label:'Columna de asesor' },
+    { id:'cf-col-calif',        label:'Columna de calificación' },
+    { id:'cf-col-analisis',     label:'Columna de análisis' },
+    { id:'cf-col-transcripcion',label:'Columna de transcripción' },
+    { id:'cf-prompt-individual',label:'Prompt individual' },
+    { id:'cf-prompt-general',   label:'Prompt general' },
+  ];
+
+  function _clearClientErrors() {
+    _CF_REQUIRED.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el) return;
+      el.classList.remove('field-error');
+      const grp = el.closest('.form-group');
+      if (grp) grp.querySelector('.form-label')?.classList.remove('field-error');
+    });
+  }
+
+  function _validateClientForm() {
+    _clearClientErrors();
+    const missing = [];
+    _CF_REQUIRED.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el || !el.value.trim()) {
+        missing.push(f.label);
+        if (el) {
+          el.classList.add('field-error');
+          const grp = el.closest('.form-group');
+          if (grp) grp.querySelector('.form-label')?.classList.add('field-error');
+        }
+      }
+    });
+    return missing;
+  }
+
+  // Remove error highlight as soon as the user types in a field
+  function _attachClientAutoSave() {
+    const body = document.getElementById('client-modal-backdrop');
+    if (!body || body._draftListenerAttached) return;
+    body._draftListenerAttached = true;
+    let _timer = null;
+    body.addEventListener('input', e => {
+      // Clear the error on the field being edited
+      const el = e.target;
+      if (el.classList.contains('field-error')) {
+        el.classList.remove('field-error');
+        const grp = el.closest('.form-group');
+        if (grp) grp.querySelector('.form-label')?.classList.remove('field-error');
+      }
+      // Debounced auto-save
+      clearTimeout(_timer);
+      _timer = setTimeout(_autoSaveDraft, 1200);
+    });
+  }
+
+  const _DRAFT_KEY = 'zebra_client_draft';
+  const _CF_FIELDS = ['cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
+    'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
+    'cf-col-transcripcion','cf-col-duracion','cf-excluded-phrases','cf-max-chars',
+    'cf-prompt-individual','cf-prompt-general'];
+
+  function _autoSaveDraft() {
+    if (_editingClientId) return; // don't overwrite draft when editing an existing client
+    const data = {};
+    _CF_FIELDS.forEach(id => { const el = document.getElementById(id); if(el) data[id] = el.value; });
+    try { localStorage.setItem(_DRAFT_KEY, JSON.stringify(data)); } catch {}
+  }
+
+  function _hasDraft() {
+    try {
+      const d = JSON.parse(localStorage.getItem(_DRAFT_KEY) || '{}');
+      return !!d['cf-name']; // draft is meaningful only if it has a name
+    } catch { return false; }
+  }
+
+  function _clearDraft() {
+    try { localStorage.removeItem(_DRAFT_KEY); } catch {}
+    const banner = document.getElementById('draft-banner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  function restoreDraft() {
+    try {
+      const data = JSON.parse(localStorage.getItem(_DRAFT_KEY) || '{}');
+      _CF_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && data[id] !== undefined) el.value = data[id];
+      });
+    } catch {}
+    document.getElementById('draft-banner').style.display = 'none';
+    _showToast('✓ Borrador restaurado');
+  }
+
+  function discardDraft() {
+    _clearDraft();
+    _CF_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && id !== 'cf-max-chars') el.value = '';
+    });
+    document.getElementById('cf-max-chars').value = '80000';
+  }
+
+  function closeDraftModal() {
+    const b = document.getElementById('draft-modal-backdrop');
+    b.classList.remove('show'); b.style.display = 'none';
+  }
+
+  function saveDraftAndClose() {
+    _autoSaveDraft();
+    closeDraftModal();
+    _showToast('💾 Borrador guardado');
+  }
+
+  function _showToast(msg) {
+    const t = document.createElement('div');
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--surface);border:0.5px solid var(--border2);color:var(--fg);padding:10px 22px;border-radius:100px;font-size:12px;font-family:Inter,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:99999;letter-spacing:0.08em;white-space:nowrap;pointer-events:none;transition:opacity .3s;';
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 350); }, 2200);
   }
 
   // ── Schedules CRUD ─────────────────────────────────────────────────────────

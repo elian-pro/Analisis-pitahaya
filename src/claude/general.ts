@@ -110,12 +110,26 @@ const GENERAL_TOOL: Anthropic.Tool = {
   input_schema: {
     type: 'object',
     required: [
-      'resumen_ejecutivo','tendencia_equipo','fortalezas_equipo',
+      'resumen_ejecutivo','tendencia_equipo','kpi_bullets','fortalezas_equipo',
       'areas_oportunidad','mejores_practicas','patrones_objeciones','recomendaciones',
     ],
     properties: {
       resumen_ejecutivo: { type: 'string' },
       tendencia_equipo:  { type: 'string', enum: ['mejora','estable','mixto','retroceso','primer_mes'] },
+      kpi_bullets: {
+        type: 'array',
+        description: 'KPIs clave con valor actual, variacion vs periodo anterior y tendencia. Incluir score de cada asesor, score promedio del equipo, y metricas criticas como Fly and Buy. Si es primer periodo, omitir variacion.',
+        items: {
+          type: 'object',
+          required: ['label', 'valor', 'tendencia'],
+          properties: {
+            label:     { type: 'string', description: 'Nombre del KPI, ej: "Score equipo", "Melisa Noble", "Fly and Buy (menciones)"' },
+            valor:     { type: 'string', description: 'Valor actual, ej: "53/100", "60/100", "0 de 56 llamadas"' },
+            variacion: { type: 'string', description: 'Cambio vs periodo anterior, ej: "+14 pts", "-8 pts". Omitir si primer periodo.' },
+            tendencia: { type: 'string', enum: ['mejora', 'baja', 'estable', 'sin_dato'] },
+          },
+        },
+      },
       fortalezas_equipo: { type: 'array', items: { type: 'string' } },
       areas_oportunidad: { type: 'array', items: { type: 'string' } },
       mejores_practicas: {

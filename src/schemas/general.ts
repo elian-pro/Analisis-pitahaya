@@ -6,6 +6,14 @@ import { PrioridadEnum } from './individual';
 export const ClaudeGeneralOutputSchema = z.object({
   resumen_ejecutivo:  z.string().min(1),
   tendencia_equipo:   z.enum(['mejora', 'estable', 'mixto', 'retroceso', 'primer_mes']),
+
+  kpi_bullets: z.array(z.object({
+    label:     z.string(),
+    valor:     z.string(),
+    variacion: z.string().optional(),
+    tendencia: z.enum(['mejora', 'baja', 'estable', 'sin_dato']),
+  })).min(1),
+
   fortalezas_equipo:  z.array(z.string()).min(1),
   areas_oportunidad:  z.array(z.string()).min(1),
 

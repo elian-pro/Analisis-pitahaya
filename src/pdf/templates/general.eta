@@ -65,6 +65,15 @@
   .tendencia-estable   { color: #444; }
   .tendencia-primer_mes { color: #444; }
   .alert { background: transparent; border-top: 1.5px solid #0a0a0a; padding: 6pt 0 4pt 0; margin: 8pt 0; font-size: 9pt; color: #444; }
+  .kpi-bullets-label { font-size: 7pt; font-weight: 700; letter-spacing: 1.5px; color: #888; text-transform: uppercase; margin-bottom: 5pt; }
+  .resumen-bullets { margin: 0 0 0 0; padding: 0; list-style: none; }
+  .resumen-bullets li { display: flex; align-items: baseline; gap: 5pt; margin-bottom: 3pt; font-size: 9.5pt; }
+  .bullet-icon { font-weight: 700; min-width: 10pt; flex-shrink: 0; }
+  .bullet-icon.mejora  { color: #1e6b30; }
+  .bullet-icon.baja    { color: #b51e1e; }
+  .bullet-icon.estable { color: #666; }
+  .bullet-icon.sin_dato { color: #999; font-weight: 400; }
+  .resumen-divider { border: none; border-top: 1px solid #e3e0d6; margin: 8pt 0 6pt 0; }
   .grid-2 { page-break-inside: avoid; break-inside: avoid; }
   .kpi, .kpis { page-break-inside: avoid; break-inside: avoid; }
   table { page-break-inside: auto; }
@@ -123,7 +132,26 @@ const fmtDelta = function(n) { return (n >= 0 ? '+' : '') + n; };
   </div>
 </div>
 
-<div class="resumen"><%= it.resumen_ejecutivo %></div>
+<div class="resumen">
+<% if (it.kpi_bullets && it.kpi_bullets.length > 0) { %>
+  <div class="kpi-bullets-label">Variaciones vs. periodo anterior</div>
+  <ul class="resumen-bullets">
+  <% for (const b of it.kpi_bullets) { %>
+    <li>
+      <span class="bullet-icon <%= b.tendencia %>"><%
+        if (b.tendencia === 'mejora')   { %>↑<% }
+        else if (b.tendencia === 'baja')  { %>↓<% }
+        else if (b.tendencia === 'estable') { %>→<% }
+        else { %>·<% }
+      %></span>
+      <span><%= b.label %>: <b><%= b.valor %></b><% if (b.variacion) { %>&nbsp;<span class="<%= b.tendencia === 'mejora' ? 'delta-pos' : b.tendencia === 'baja' ? 'delta-neg' : '' %>">(<%= b.variacion %>)</span><% } %></span>
+    </li>
+  <% } %>
+  </ul>
+  <hr class="resumen-divider">
+<% } %>
+<%= it.resumen_ejecutivo %>
+</div>
 
 <!-- === Ranking del equipo === -->
 <div class="seccion">

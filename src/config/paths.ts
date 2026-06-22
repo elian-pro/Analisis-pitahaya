@@ -14,11 +14,13 @@ catch (e) { console.error('[paths] Could not create DATA_DIR:', (e as Error).mes
 export const SCHEDULES_FILE = process.env.SCHEDULES_FILE ?? path.join(DATA_DIR, 'schedules.json');
 export const JOBS_FILE      = process.env.JOBS_FILE      ?? path.join(DATA_DIR, 'jobs.json');
 export const TOKEN_FILE     = process.env.TOKEN_LOG_FILE ?? path.join(DATA_DIR, 'token_log.json');
-export const CLIENTS_FILE   = process.env.CLIENTS_FILE   ?? path.join(DATA_DIR, 'clients.json');
+// CLIENTS_FILE defaults to clients.json at the project root so UI additions persist there.
+// Override with CLIENTS_FILE env var to use a different path (e.g. a mounted volume in Docker).
+export const CLIENTS_FILE   = process.env.CLIENTS_FILE   ?? path.join(__dirname, '..', '..', 'clients.json');
 
-// Initialize empty JSON files on first run so stores never see a missing file
+// Initialize empty JSON files on first run so stores never see a missing file.
+// CLIENTS_FILE is intentionally excluded: it already exists at the project root.
 const defaultFiles: Record<string, unknown[]> = {
-  [CLIENTS_FILE]:   [],
   [SCHEDULES_FILE]: [],
   [JOBS_FILE]:      [],
   [TOKEN_FILE]:     [],

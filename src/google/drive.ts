@@ -188,6 +188,27 @@ export async function uploadReportSidecar(
   });
 }
 
+// The key that identifies the period currently being analysed.
+export function currentPeriodKey(
+  month: string,
+  periodType: 'monthly' | 'weekly',
+  dateFrom?: string,
+): string {
+  return periodType === 'weekly' && dateFrom ? dateFrom : month;
+}
+
+// Normalise any period key to a comparable start date (YYYY-MM-DD).
+// Monthly keys ('YYYY-MM') become the 1st of the month so they sort correctly
+// alongside weekly keys ('YYYY-MM-DD').
+function keyStartDate(periodKey: string): string {
+  return /^\d{4}-\d{2}$/.test(periodKey) ? `${periodKey}-01` : periodKey;
+}
+
+// Finds the MOST RECENT sidecar for this advisor that predates the current
+// period — instead of requiring the exact immediately-previous period to exist.
+// This makes the period-over-period comparison resilient to: non-contiguous
+// weeks, switching between monthly/weekly cadence, and month-boundary date
+// clamping. Returns null only when no earlier sidecar exists at all.
 export async function findPreviousReport(
   sidecarFolderId: string,
   advisorName:     string,
@@ -195,20 +216,21 @@ export async function findPreviousReport(
   periodType:      'monthly' | 'weekly' = 'monthly',
   dateFrom?:       string,
 ): Promise<string | null> {
-  const drive    = getDrive();
-  const prevKey  = previousPeriodKey(month, periodType, dateFrom);
-  const filename = `${sidecarFilename(advisorName, prevKey)}.txt`;
+  const drive      = getDrive();
+  const prefix     = `${sidecarFilename(advisorName, '')}`;          // "Sidecar_{name}_"
+  const currentKey = currentPeriodKey(month, periodType, dateFrom);
+  const currentStart = keyStartDate(currentKey);
 
   let list;
   try {
     list = await drive.files.list({
       q: [
         `'${sidecarFolderId}' in parents`,
-        `name = '${filename.replace(/'/g, "\\'")}'`,
+        `name contains '${prefix.replace(/'/g, "\\'")}'`,
         `trashed = false`,
       ].join(' and '),
       fields: 'files(id,name,mimeType)',
-      pageSize: 2,
+      pageSize: 100,
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     });
@@ -218,13 +240,28 @@ export async function findPreviousReport(
   }
 
   const files = list.data.files ?? [];
-  if (files.length === 0) {
-    console.log(`[drive] No previous sidecar found for ${advisorName} (key: ${prevKey})`);
+
+  // Extract the period key from each filename and keep only sidecars strictly
+  // before the current period.
+  const candidates = files
+    .map(f => {
+      const name = f.name ?? '';
+      if (!name.startsWith(prefix) || !name.endsWith('.txt')) return null;
+      const key = name.slice(prefix.length, -'.txt'.length);
+      return { file: f, key, start: keyStartDate(key) };
+    })
+    .filter((c): c is { file: typeof files[number]; key: string; start: string } =>
+      c !== null && c.start < currentStart)
+    .sort((a, b) => b.start.localeCompare(a.start));   // most recent first
+
+  if (candidates.length === 0) {
+    console.log(`[drive] No previous sidecar found for ${advisorName} (before ${currentKey})`);
     return null;
   }
 
-  const file = files[0];
+  const { file, key } = candidates[0];
   if (!file.id || !file.mimeType) return null;
+  console.log(`[drive] Previous sidecar for ${advisorName}: key=${key} (current=${currentKey})`);
 
   try {
     return await downloadText(file.id, file.mimeType);

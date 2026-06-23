@@ -1,5 +1,5 @@
-import path from 'path';
 import fs from 'fs';
+import { CLIENTS_FILE } from '../config/paths';
 import { getJob, updateJob, type Job } from './store';
 
 class CancelledError extends Error {
@@ -37,10 +37,9 @@ interface ClientConfig {
 }
 
 function loadClient(clientId: string): ClientConfig {
-  const p = path.join(__dirname, '..', '..', 'clients.json');
-  const all: ClientConfig[] = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  const all: ClientConfig[] = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8'));
   const client = all.find(c => c.id === clientId);
-  if (!client) throw new Error(`Client '${clientId}' not found in clients.json`);
+  if (!client) throw new Error(`Client '${clientId}' not found in ${CLIENTS_FILE}`);
   return client;
 }
 
@@ -235,14 +234,27 @@ export async function runJob(job: Job): Promise<void> {
     );
     console.log(`[runner] Step 7 done: combined PDF = ${combinedUrl}`);
 
-    // ── 8. Upload sidecars to _Sidecars folder (best-effort) ─────────────────
-    for (const r of individualResults) {
-      uploadReportSidecar(
-        sidecarFolderId,
-        r.asesor,
-        periodKey,
-        buildSidecar(r.reportData, periodKey),
-      ).catch(err => console.warn(`[runner] sidecar ${r.asesor} failed:`, (err as Error).message));
+    // ── 8. Upload sidecars to _Sidecars folder ───────────────────────────────
+    // These power next-period comparisons, so a silent failure here means every
+    // future report shows "Primer periodo". We await + surface any failures.
+    console.log(`[runner] Step 8: writing ${individualResults.length} sidecar(s) to folder ${sidecarFolderId}...`);
+    const sidecarSettled = await Promise.allSettled(
+      individualResults.map(r =>
+        uploadReportSidecar(sidecarFolderId, r.asesor, periodKey, buildSidecar(r.reportData, periodKey)),
+      ),
+    );
+    const sidecarFailures = sidecarSettled
+      .map((s, i) => (s.status === 'rejected'
+        ? `${individualResults[i].asesor}: ${(s.reason as Error)?.message ?? s.reason}`
+        : null))
+      .filter((x): x is string => x !== null);
+    if (sidecarFailures.length > 0) {
+      console.error(
+        `[runner] Step 8: ${sidecarFailures.length}/${individualResults.length} sidecar(s) FAILED — ` +
+        `next-period comparison will be unavailable for them: ${sidecarFailures.join(' | ')}`,
+      );
+    } else {
+      console.log(`[runner] Step 8 done: ${individualResults.length} sidecar(s) written (key=${periodKey})`);
     }
 
     // ── 9. Finalise ──────────────────────────────────────────────────────────
@@ -267,10 +279,14 @@ export async function runJob(job: Job): Promise<void> {
       tokens: tokenSummary,
     };
     console.log(`[runner] Step 9: finalising job, combined.driveUrl=${combinedUrl}`);
+    const partialErrors = [
+      ...failures,
+      ...sidecarFailures.map(f => `sidecar ${f} (sin comparación el próximo periodo)`),
+    ];
     updateJob(job.id, {
       status:  'done',
       results: finalResults,
-      ...(failures.length > 0 && { error: `Fallos parciales: ${failures.join('; ')}` }),
+      ...(partialErrors.length > 0 && { error: `Fallos parciales: ${partialErrors.join('; ')}` }),
     });
     console.log(`[runner] Job ${job.id} DONE`);
 

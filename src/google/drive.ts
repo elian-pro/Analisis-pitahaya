@@ -270,3 +270,61 @@ export async function findPreviousReport(
     return null;
   }
 }
+
+// Lightweight existence check used by the UI to tell — before a report runs —
+// whether a prior period exists to compare against. Unlike findPreviousReport
+// it does NOT download any sidecar contents: it only lists filenames and returns
+// the MOST RECENT prior period key across the given advisors (or null if none).
+export async function findPreviousPeriodKey(
+  sidecarFolderId: string,
+  advisorNames:    string[],
+  month:           string,
+  periodType:      'monthly' | 'weekly' = 'monthly',
+  dateFrom?:       string,
+): Promise<string | null> {
+  if (advisorNames.length === 0) return null;
+  const drive        = getDrive();
+  const currentKey   = currentPeriodKey(month, periodType, dateFrom);
+  const currentStart = keyStartDate(currentKey);
+
+  let list;
+  try {
+    list = await drive.files.list({
+      q: [
+        `'${sidecarFolderId}' in parents`,
+        `name contains 'Sidecar_'`,
+        `trashed = false`,
+      ].join(' and '),
+      fields: 'files(id,name)',
+      pageSize: 1000,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+  } catch (err) {
+    console.warn(`[drive] Could not list sidecar files:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  const wanted = new Set(advisorNames);
+  let bestKey: string | null = null;
+  let bestStart = '';
+
+  for (const f of list.data.files ?? []) {
+    const name = f.name ?? '';
+    if (!name.startsWith('Sidecar_') || !name.endsWith('.txt')) continue;
+    // "Sidecar_{advisor}_{periodKey}.txt" — period keys never contain '_', so the
+    // last underscore splits the (possibly underscore-containing) advisor name
+    // from the period key.
+    const body = name.slice('Sidecar_'.length, -'.txt'.length);
+    const sep  = body.lastIndexOf('_');
+    if (sep < 0) continue;
+    const advisor = body.slice(0, sep);
+    const key     = body.slice(sep + 1);
+    if (!wanted.has(advisor)) continue;
+    const start = keyStartDate(key);
+    if (start >= currentStart) continue;          // not a prior period
+    if (start > bestStart) { bestStart = start; bestKey = key; }
+  }
+
+  return bestKey;
+}

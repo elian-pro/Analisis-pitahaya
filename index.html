@@ -139,6 +139,10 @@
     .confirm-advisors{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px;}
     .confirm-avatar{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:100px;font-size:12px;font-weight:500;border:0.5px solid var(--border2);}
     .confirm-avatar-circle{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+    .confirm-prev-badge{display:flex;align-items:flex-start;gap:9px;position:relative;background:var(--surface2);border:0.5px solid var(--border2);border-radius:10px;padding:10px 13px;margin:16px 0 0;font-size:12px;color:var(--fg);line-height:1.5;}
+    .confirm-prev-badge::before{content:'';position:absolute;top:-6px;left:24px;width:10px;height:10px;background:var(--surface2);border-left:0.5px solid var(--border2);border-top:0.5px solid var(--border2);transform:rotate(45deg);}
+    .conf-prev-icon{font-size:14px;line-height:1.3;flex-shrink:0;}
+    .conf-prev-text strong{font-weight:600;}
     .confirm-warning{display:flex;align-items:flex-start;gap:9px;background:rgba(255,214,2,0.05);border:0.5px solid rgba(255,214,2,0.2);border-radius:10px;padding:11px 13px;margin:20px 0 22px;font-size:12px;color:var(--muted);line-height:1.5;}
     .confirm-actions{display:flex;gap:9px;}
     .confirm-cancel{flex:1;padding:10px;background:transparent;border:0.5px solid var(--border2);color:var(--muted);border-radius:100px;font-family:'Inter',sans-serif;font-size:11px;font-weight:400;letter-spacing:0.12em;cursor:pointer;transition:all 0.15s;}
@@ -331,7 +335,7 @@
     <div class="field" id="week-field" style="display:none;position:relative;">
       <div class="field-label">Semana</div>
       <div id="week-display" onclick="toggleCalPopup()" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
-        <span id="week-display-text">—</span><span style="font-size:9px;color:var(--text-dim);flex-shrink:0;">▾</span>
+        <span id="week-display-text">—</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
       </div>
       <select id="week-select" style="display:none;"></select>
       <div id="week-cal-popup" class="week-cal-popup">
@@ -359,9 +363,9 @@
       <div class="card-desc">El sistema genera un reporte individual por cada asesor seleccionado y luego sintetiza un reporte general del equipo en un único Google Doc.</div>
       <div class="check-actions">
         <button class="link-btn" onclick="toggleAll(true)">Todos</button>
-        <span style="color:var(--text-dim)">·</span>
+        <span style="color:var(--faint)">·</span>
         <button class="link-btn" onclick="toggleAll(false)">Ninguno</button>
-        <span style="color:var(--text-dim)">·</span>
+        <span style="color:var(--faint)">·</span>
         <button class="link-btn" onclick="restoreDefaults()">Restaurar</button>
         <span style="flex:1"></span>
         <button class="link-btn" style="color:var(--accent)" onclick="toggleAddForm()">+ Agregar asesor</button>
@@ -770,6 +774,10 @@
       <div class="confirm-label">Asesores (<span id="conf-count">0</span>)</div>
       <div class="confirm-advisors" id="conf-advisors"></div>
     </div>
+    <div class="confirm-prev-badge" id="conf-prev-badge" style="display:none;">
+      <span class="conf-prev-icon">📊</span>
+      <span class="conf-prev-text" id="conf-prev-text"></span>
+    </div>
     <div class="confirm-row" id="conf-general-row" style="display:none;">
       <div class="confirm-label">Reporte general del equipo</div>
       <div class="conf-gen-toggle">
@@ -825,14 +833,14 @@
   }
 
   const PC=[
-    {bg:"rgba(255,255,255,0.10)",color:"#f0f0f0"},
-    {bg:"rgba(255,255,255,0.08)",color:"#d0d0d0"},
-    {bg:"rgba(255,255,255,0.12)",color:"#ffffff"},
-    {bg:"rgba(255,255,255,0.06)",color:"#bbbbbb"},
-    {bg:"rgba(255,255,255,0.09)",color:"#e0e0e0"},
-    {bg:"rgba(255,255,255,0.07)",color:"#c8c8c8"},
-    {bg:"rgba(255,255,255,0.11)",color:"#ebebeb"},
-    {bg:"rgba(255,255,255,0.05)",color:"#aaaaaa"}
+    {bg:"#C0392B",color:"#ffffff"},
+    {bg:"#1F6FA8",color:"#ffffff"},
+    {bg:"#8E44AD",color:"#ffffff"},
+    {bg:"#117A65",color:"#ffffff"},
+    {bg:"#B9770E",color:"#ffffff"},
+    {bg:"#2C3E80",color:"#ffffff"},
+    {bg:"#C2185B",color:"#ffffff"},
+    {bg:"#2E7D32",color:"#ffffff"}
   ];
 
   let currentClient     = null;
@@ -1028,11 +1036,11 @@
   PC.forEach((c,i)=>{
     const d=document.createElement('div');
     d.className='color-dot'+(i===0?' selected':'');
-    d.style.cssText=`background:${c.bg};border:2px solid ${i===0?c.color:'transparent'}`;
+    d.style.cssText=`background:${c.bg};border:2px solid ${i===0?'var(--fg)':'transparent'}`;
     d.onclick=()=>{
       document.querySelectorAll('.color-dot').forEach((x,j)=>{
         x.classList.toggle('selected',j===i);
-        x.style.border=`2px solid ${j===i?PC[j].color:'transparent'}`;
+        x.style.border=`2px solid ${j===i?'var(--fg)':'transparent'}`;
       });
       sci=i;
     };
@@ -1481,17 +1489,16 @@
     const ca=document.getElementById('conf-advisors');
     ca.innerHTML='';
     try{
-      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'});
+      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'var(--surface2)',color:'var(--fg)'});
       if(list.length){
         list.forEach(a=>{
           const d=document.createElement('div');
           d.className='confirm-avatar';
-          d.style.background=a.bg;
-          d.innerHTML=`<div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};border:1px solid rgba(255,255,255,0.15);">${a.initials}</div><span style="color:${a.color};">${a.name}</span>`;
+          d.innerHTML=`<div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};">${a.initials}</div><span style="color:var(--fg);">${a.name}</span>`;
           ca.appendChild(d);
         });
       }else{
-        ca.innerHTML='<span style="font-size:12px;color:#888;">Ningún asesor seleccionado</span>';
+        ca.innerHTML='<span style="font-size:12px;color:var(--muted);">Ningún asesor seleccionado</span>';
       }
     }catch(e){
       ca.textContent=names.length?names.join(', '):'Ninguno';
@@ -1510,11 +1517,42 @@
     const cb=document.getElementById('confirm-backdrop');
     cb.style.display='flex';
     cb.classList.add('show');
+    // Async hint: does a prior-period report exist to compare against?
+    loadPreviousPeriodBadge(names);
+  }
+  // Shows a "se detectó reporte del periodo anterior" bubble in the confirm modal
+  // when prior-period sidecars exist. Purely informational — never blocks anything.
+  let _prevReqSeq=0;
+  async function loadPreviousPeriodBadge(names){
+    const badge=document.getElementById('conf-prev-badge');
+    const txt=document.getElementById('conf-prev-text');
+    badge.style.display='none';
+    if(!currentClient||!names.length)return;
+    const seq=++_prevReqSeq;
+    let qs=`client_id=${encodeURIComponent(currentClient.id)}&month=${encodeURIComponent(ms.value)}&period_type=${encodeURIComponent(currentPeriodType)}`;
+    if(currentPeriodType==='weekly'){
+      try{const wData=JSON.parse(document.getElementById('week-select').value||'{}');if(wData.start)qs+=`&date_from=${encodeURIComponent(wData.start)}`;}catch(e){}
+    }
+    names.forEach(n=>{qs+=`&advisors=${encodeURIComponent(n)}`;});
+    try{
+      const res=await fetch(`${REPORT_API}/previous?${qs}`);
+      if(seq!==_prevReqSeq)return;          // a newer modal open superseded this
+      if(!res.ok)return;
+      const data=await res.json();
+      if(seq!==_prevReqSeq)return;
+      if(data&&data.has_previous){
+        const period=data.period_label?` (${data.period_label})`:'';
+        txt.innerHTML=`<strong>Reporte del periodo anterior detectado${period}.</strong> El análisis incluirá la comparativa contra ese periodo.`;
+        badge.style.display='flex';
+      }
+    }catch(e){/* silent — la pista es opcional */}
   }
   function closeConfirm(){
     const cb=document.getElementById('confirm-backdrop');
     cb.classList.remove('show');cb.style.display='none';
     _pendingMode=null;
+    _prevReqSeq++;                          // invalidate any in-flight badge fetch
+    document.getElementById('conf-prev-badge').style.display='none';
   }
   async function confirmAndGenerate(){
     const advisorMode=_pendingMode;
@@ -1619,7 +1657,7 @@
         document.getElementById('modal-subtitle').textContent='Proceso cancelado';
         const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
         const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
-        mr.innerHTML='<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">El reporte fue cancelado. No se generó ningún archivo.</div>';
+        mr.innerHTML='<div style="font-size:13px;color:var(--muted);padding:4px 0;">El reporte fue cancelado. No se generó ningún archivo.</div>';
         document.getElementById('result-section').classList.remove('show');
       }else{
         errorModal(e.message);

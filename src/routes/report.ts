@@ -1,9 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import fs from 'fs';
+import { CLIENTS_FILE } from '../config/paths';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
+import { ensureSidecarFolder, findPreviousPeriodKey, monthLabel } from '../google/drive';
 
 const router = Router();
+
+// Human-friendly label for a sidecar period key: 'YYYY-MM' → "Junio 2026",
+// 'YYYY-MM-DD' → "Semana del 15/06".
+function periodKeyLabel(key: string): string {
+  if (/^\d{4}-\d{2}$/.test(key)) return monthLabel(key);
+  const [, m, d] = key.split('-');
+  return `Semana del ${d}/${m}`;
+}
 
 const PostBodySchema = z.object({
   client_id:   z.string().min(1),
@@ -54,6 +65,71 @@ router.post('/:jobId/cancel', (req: Request, res: Response): void => {
   updateJob(job.id, { status: 'cancelled' });
   console.log(`[report route] Job ${job.id} cancelled by user`);
   res.json({ ok: true });
+});
+
+// GET /api/report/previous — does a prior-period report exist to compare against?
+// Used by the confirmation modal to surface a "se detectó reporte anterior" hint.
+// Registered before '/:jobId' so the literal path isn't captured as a job id.
+const PreviousQuerySchema = z.object({
+  client_id:   z.string().min(1),
+  month:       z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+  period_type: z.enum(['monthly', 'weekly']).default('monthly'),
+  date_from:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  advisors:    z.union([z.string(), z.array(z.string())]).transform(
+    v => (Array.isArray(v) ? v : [v]).filter(Boolean),
+  ),
+});
+
+interface PreviousClientConfig {
+  id:                 string;
+  folder_id:          string;
+  sidecar_folder_id?: string;
+  [key: string]:      unknown;
+}
+
+router.get('/previous', async (req: Request, res: Response): Promise<void> => {
+  const parsed = PreviousQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues.map(i => i.message).join('; ') });
+    return;
+  }
+  const { client_id, month, period_type, date_from, advisors } = parsed.data;
+  if (advisors.length === 0) {
+    res.json({ has_previous: false });
+    return;
+  }
+
+  let client: PreviousClientConfig | undefined;
+  try {
+    const all = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8')) as PreviousClientConfig[];
+    client = all.find(c => c.id === client_id);
+  } catch {
+    res.status(500).json({ error: 'Failed to load clients configuration' });
+    return;
+  }
+  if (!client) {
+    res.status(404).json({ error: `Client '${client_id}' not found` });
+    return;
+  }
+
+  try {
+    const sidecarFolderId = client.sidecar_folder_id
+      ?? await ensureSidecarFolder(client.folder_id);
+    const prevKey = await findPreviousPeriodKey(
+      sidecarFolderId, advisors, month, period_type, date_from,
+    );
+    if (!prevKey) {
+      res.json({ has_previous: false });
+      return;
+    }
+    res.json({ has_previous: true, period_key: prevKey, period_label: periodKeyLabel(prevKey) });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[report previous]', msg);
+    // Treat lookup failure as "unknown" rather than an error — the hint is purely
+    // informational and must never block report generation.
+    res.json({ has_previous: false });
+  }
 });
 
 // GET /api/report/:jobId — poll job status

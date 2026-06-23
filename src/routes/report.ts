@@ -4,7 +4,7 @@ import fs from 'fs';
 import { CLIENTS_FILE } from '../config/paths';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
-import { ensureSidecarFolder, findPreviousPeriodKey, monthLabel } from '../google/drive';
+import { findSidecarFolder, findPreviousPeriodKey, monthLabel } from '../google/drive';
 
 const router = Router();
 
@@ -113,8 +113,14 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
+    // Read-only resolution: never create a _Sidecars folder from a GET. A missing
+    // folder simply means no prior report exists yet → "first period".
     const sidecarFolderId = client.sidecar_folder_id
-      ?? await ensureSidecarFolder(client.folder_id);
+      ?? await findSidecarFolder(client.folder_id);
+    if (!sidecarFolderId) {
+      res.json({ has_previous: false });
+      return;
+    }
     const prevKey = await findPreviousPeriodKey(
       sidecarFolderId, advisors, month, period_type, date_from,
     );
@@ -127,9 +133,9 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[report previous]', msg);
     // Treat lookup failure as "unknown" rather than an error — the hint is purely
-    // informational and must never block report generation. The UI hides the badge
-    // on `unknown` so it never falsely claims "first period" on a transient error.
-    res.json({ has_previous: false, unknown: true });
+    // informational and must never block report generation. `reason` is surfaced to
+    // the client only to aid debugging from the browser console.
+    res.json({ has_previous: false, unknown: true, reason: msg });
   }
 });
 

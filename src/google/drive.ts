@@ -104,6 +104,31 @@ export async function ensureSidecarFolder(parentFolderId: string): Promise<strin
   return folderId;
 }
 
+// Read-only lookup of the "_Sidecars" subfolder. Unlike ensureSidecarFolder it
+// never creates anything — used by GET endpoints (e.g. the prior-period hint)
+// that must not have side effects. Returns null when the folder doesn't exist.
+export async function findSidecarFolder(parentFolderId: string): Promise<string | null> {
+  if (_sidecarFolderCache.has(parentFolderId)) {
+    return _sidecarFolderCache.get(parentFolderId)!;
+  }
+  const drive = getDrive();
+  const list = await drive.files.list({
+    q: [
+      `'${parentFolderId}' in parents`,
+      `name = '_Sidecars'`,
+      `mimeType = 'application/vnd.google-apps.folder'`,
+      `trashed = false`,
+    ].join(' and '),
+    fields: 'files(id)',
+    pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  const folderId = list.data.files?.[0]?.id ?? null;
+  if (folderId) _sidecarFolderCache.set(parentFolderId, folderId);
+  return folderId;
+}
+
 // ── Upload ────────────────────────────────────────────────────────────────────
 
 export async function uploadPdf(

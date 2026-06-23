@@ -1554,21 +1554,26 @@
     try{
       const res=await fetch(`${REPORT_API}/previous?${qs}`);
       if(seq!==_prevReqSeq)return;          // a newer modal open superseded this
-      const data=res.ok?await res.json():null;
+      let data=null;
+      try{ data=await res.json(); }catch(_){ data=null; }
       if(seq!==_prevReqSeq)return;
-      if(data&&data.unknown){
-        // Lookup failed (e.g. Drive error) — don't assert either way
-        setPrevBadge('hidden');
-      }else if(data&&data.has_previous){
+      if(!res.ok||!data){
+        console.warn('[periodo anterior] respuesta no válida',res.status,data);
+        setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+      }else if(data.unknown){
+        // Lookup reached the server but Drive failed — show neutral, log the reason
+        console.warn('[periodo anterior] verificación falló:',data.reason||'(sin detalle)');
+        setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+      }else if(data.has_previous){
         const period=data.period_label?` (${data.period_label})`:'';
         setPrevBadge('yes','✅',`<strong>Reporte del periodo anterior detectado${period}.</strong> El análisis incluirá la comparativa contra ese periodo.`);
-      }else if(data){
-        setPrevBadge('no','⚠️','<strong>No se detectó reporte del periodo anterior.</strong> Este será el primer periodo, sin análisis comparativo.');
       }else{
-        setPrevBadge('hidden');
+        setPrevBadge('no','⚠️','<strong>No se detectó reporte del periodo anterior.</strong> Este será el primer periodo, sin análisis comparativo.');
       }
     }catch(e){
-      if(seq===_prevReqSeq) setPrevBadge('hidden');
+      if(seq!==_prevReqSeq)return;
+      console.warn('[periodo anterior] error de red',e);
+      setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
     }
   }
   function closeConfirm(){

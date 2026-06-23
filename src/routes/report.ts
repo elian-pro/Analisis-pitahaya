@@ -127,8 +127,9 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[report previous]', msg);
     // Treat lookup failure as "unknown" rather than an error — the hint is purely
-    // informational and must never block report generation.
-    res.json({ has_previous: false });
+    // informational and must never block report generation. The UI hides the badge
+    // on `unknown` so it never falsely claims "first period" on a transient error.
+    res.json({ has_previous: false, unknown: true });
   }
 });
 

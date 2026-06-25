@@ -1334,12 +1334,24 @@
       secs++;
       elapsed.textContent=`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')} transcurrido`;
     },1000);
-    let tick=0;
+    // Animación guiada por tiempo (independiente del backend): cada hito dura
+    // STEP_MS; la barra sube 100/N% por hito, de forma lineal, y se queda en 99%
+    // hasta que el job realmente termina (finishModal* salta a 100%). Si tarda más
+    // de N×1:15, el último hito sigue girando con la barra en 99%.
+    const STEP_MS=75000;            // 1:15 por hito
+    const N=steps.length;
+    const totalMs=N*STEP_MS;
+    const t0p=performance.now();
+    let lastStep=-1;
     progressInterval=setInterval(()=>{
-      tick++;
-      const p=Math.min(90,Math.round((tick/totalSecs)*90));
-      smoothProg(p);
-      const stepIndex=Math.min(steps.length-1,Math.floor((p/90)*(steps.length-1)));
+      const el=performance.now()-t0p;
+      const pctVal=Math.min(99,(el/totalMs)*100);
+      _progCur=pctVal;
+      if(bar)bar.style.width=pctVal.toFixed(1)+'%';
+      if(pct)pct.textContent=Math.round(pctVal)+'%';
+      const stepIndex=Math.min(N-1,Math.floor(el/STEP_MS));
+      if(stepIndex===lastStep)return;
+      lastStep=stepIndex;
       steps.forEach((_,i)=>{
         const item=document.getElementById('step-'+i);
         const icon=document.getElementById('step-icon-'+i);
@@ -1349,7 +1361,7 @@
         else if(i===stepIndex){item.className='step-item active';icon.className='step-icon active';icon.innerHTML='<div class="spin-step"></div>';txt.className='step-text active';subtitle.textContent=steps[i];}
         else{item.className='step-item pending';icon.className='step-icon pending';icon.textContent=i+1;txt.className='step-text pending';}
       });
-    },1000);
+    },200);
   }
 
   function _hideCancel(){
@@ -1433,13 +1445,6 @@
       const res=await fetch(`${REPORT_API}/${jobId}`);
       if(!res.ok) throw new Error(`Polling HTTP ${res.status}`);
       const job=await res.json();
-      if(job.progress && job.progress.total>0){
-        clearInterval(progressInterval);
-        const cap=mode==='general'?80:95;
-        const pct=Math.round((job.progress.completed/job.progress.total)*cap);
-        smoothProg(pct);
-        document.getElementById('modal-subtitle').textContent=`Procesando: ${job.progress.completed}/${job.progress.total} asesores`;
-      }
       if(job.status==='done') return job;
       if(job.status==='error') throw new Error(job.error||'Error al generar reportes');
       if(job.status==='cancelled'){const e=new Error('__cancelled__');e.name='cancelled';throw e;}
@@ -1625,7 +1630,6 @@
       'Subiendo a Google Drive'
     ];
     openModal(STEPS,Math.min(n*3*60,15*60));
-    document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
     try{
       // 1. Encolar job
       const postBody = { client_id: currentClient.id, month, type: reportType, advisors, period_type: periodType };
@@ -1648,13 +1652,7 @@
       }
       const {job_id}=await postRes.json();
       currentJobId=job_id;
-      // Switch to a slow creep while the server fetches sheet data & prepares advisors
-      clearInterval(progressInterval);
-      progressInterval=setInterval(()=>{
-        if(_progCur<12) smoothProg(Math.min(12,_progCur+0.25));
-      },1000);
-      document.getElementById('modal-subtitle').textContent='Preparando análisis…';
-      // 3. Polling hasta completar
+      // 3. Polling hasta completar (la barra/hitos los maneja la animación por tiempo)
       const job=await pollJob(job_id,n,reportType);
       // 4. Mostrar resultados
       const results=job.results||{individual:[]};

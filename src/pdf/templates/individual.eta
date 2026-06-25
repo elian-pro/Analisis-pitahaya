@@ -309,6 +309,11 @@ const fmtDelta = function(n) { return (n >= 0 ? '+' : '') + n; };
     <h3 style="color:#1e6b30;">Mejor llamada: <%= it.mejor_llamada.score %>/100</h3>
     <p style="font-size:9pt;color:#666;"><%= it.mejor_llamada.fecha %> · Lead: <%= it.mejor_llamada.lead %></p>
     <p><%= it.mejor_llamada.descripcion %></p>
+    <% if (it.mejor_llamada_record_url) { %>
+    <p style="margin-top:8px;">
+      <a href="<%= it.mejor_llamada_record_url %>" style="display:inline-block;background:#1e6b30;color:#fff;text-decoration:none;font-size:9pt;font-weight:600;padding:6px 12px;border-radius:4px;">▶ Escuchar grabación</a>
+    </p>
+    <% } %>
   </div>
   <div class="col">
     <h3 style="color:#b51e1e;">Peor llamada: <%= it.peor_llamada.score %>/100</h3>

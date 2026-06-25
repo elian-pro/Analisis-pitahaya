@@ -123,6 +123,7 @@ function buildUserMessage(
     previousReport ?? 'Sin reporte previo: primer periodo de evaluacion.',
     ``,
     `Analiza el desempeno de ${advisorName} y genera el reporte estructurado usando la herramienta.`,
+    `En mejor_llamada_indice indica el numero (N) de la llamada que elegiste como mejor llamada, segun el encabezado "--- Llamada N ---".`,
   ].join('\n');
 }
 
@@ -140,7 +141,7 @@ const REPORT_TOOL: Anthropic.Tool = {
       'pct_logra_siguiente_paso','resumen','criterios','elementos_producto',
       'elementos_subutilizados','objeciones','categorias_peor_manejadas','sesgos',
       'sesgos_subutilizados','talk_ratio','preguntas_promedio','cierres',
-      'fortalezas','debilidades','mejor_llamada','peor_llamada','recomendaciones',
+      'fortalezas','debilidades','mejor_llamada','mejor_llamada_indice','peor_llamada','recomendaciones',
     ],
     properties: {
       tipo_asesor:              { type: 'string', enum: ['linner','cerrador','desconocido'] },
@@ -216,6 +217,10 @@ const REPORT_TOOL: Anthropic.Tool = {
       mejor_llamada: {
         type: 'object', required: ['score','fecha','lead','descripcion'],
         properties: { score:{type:'number'}, fecha:{type:'string'}, lead:{type:'string'}, descripcion:{type:'string'} },
+      },
+      mejor_llamada_indice: {
+        type: 'integer',
+        description: 'Numero de la llamada elegida como mejor llamada, tal como aparece en el encabezado "--- Llamada N ---" de la lista de llamadas (1, 2, 3...). Debe corresponder exactamente a la llamada descrita en mejor_llamada.',
       },
       peor_llamada: {
         type: 'object', required: ['score','fecha','lead','descripcion'],
@@ -354,6 +359,14 @@ export async function processAdvisor(
     now.getFullYear(),
   ].join('/');
 
+  // Resolve the recording link for the best call. Claude returns a 1-based index
+  // into the call list; if it's out of range we fall back to the highest-scored call.
+  const idx       = claudeOut.mejor_llamada_indice;
+  const bestCall  = (Number.isInteger(idx) && idx >= 1 && idx <= calls.length)
+    ? calls[idx - 1]
+    : [...calls].sort((a, b) => (parseFloat(b.calif) || 0) - (parseFloat(a.calif) || 0))[0];
+  const mejor_llamada_record_url = bestCall?.record?.trim() || undefined;
+
   const has_previous           = prevMetrics !== null;
   const delta_score            = prevMetrics ? metrics.avg_score - prevMetrics.avg_score : undefined;
   const delta_siguiente_paso   = prevMetrics ? claudeOut.pct_logra_siguiente_paso - prevMetrics.pct_logra_siguiente_paso : undefined;
@@ -371,6 +384,7 @@ export async function processAdvisor(
     delta_score,
     delta_siguiente_paso,
     delta_talk_ratio,
+    mejor_llamada_record_url,
   };
 
   const pdfBuffer = await renderPdf('individual', reportData as unknown as Record<string, unknown>);

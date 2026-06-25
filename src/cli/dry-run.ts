@@ -34,6 +34,7 @@ interface ClientConfig {
   data_sheet_name: string; advisors_sheet_name: string;
   col_fecha: string; col_asesor: string; col_calif: string;
   col_analisis: string; col_transcripcion: string;
+  col_duracion?: string; col_record?: string;
   excluded_phrases: string[]; transcripcion_max_chars: number;
   prompt_individual: string; prompt_general: string;
 }
@@ -74,6 +75,7 @@ async function main() {
       fecha: client.col_fecha, asesor: client.col_asesor,
       calif: client.col_calif, analisis: client.col_analisis,
       transcripcion: client.col_transcripcion,
+      duracion: client.col_duracion, record: client.col_record,
     },
     month,
     client.excluded_phrases,

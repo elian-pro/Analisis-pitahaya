@@ -548,6 +548,10 @@
             <label class="form-label">Columna de duración</label>
             <input class="form-control-sm" id="cf-col-duracion" placeholder="Ej. Duracion (opcional)">
           </div>
+          <div class="form-group">
+            <label class="form-label">Columna de grabación</label>
+            <input class="form-control-sm" id="cf-col-record" placeholder="Ej. Record (opcional, link de la grabación)">
+          </div>
         </div>
       </div>
       <div class="form-section">
@@ -1913,7 +1917,7 @@
 
     const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
-      'cf-col-transcripcion','cf-col-duracion','cf-excluded-phrases','cf-max-chars',
+      'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
       'cf-prompt-individual','cf-prompt-general'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '80000';
@@ -1943,6 +1947,7 @@
         document.getElementById('cf-col-analisis').value     = c.col_analisis || '';
         document.getElementById('cf-col-transcripcion').value= c.col_transcripcion || '';
         document.getElementById('cf-col-duracion').value     = c.col_duracion || '';
+        document.getElementById('cf-col-record').value       = c.col_record || '';
         document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
         document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 80000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
@@ -1997,6 +2002,7 @@
       col_analisis:            document.getElementById('cf-col-analisis').value.trim(),
       col_transcripcion:       document.getElementById('cf-col-transcripcion').value.trim(),
       col_duracion:            document.getElementById('cf-col-duracion').value.trim() || undefined,
+      col_record:              document.getElementById('cf-col-record').value.trim() || undefined,
       excluded_phrases:        rawPhrases.split(',').map(s => s.trim()).filter(Boolean),
       transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 80000,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
@@ -2113,7 +2119,7 @@
   const _DRAFT_KEY = 'zebra_client_draft';
   const _CF_FIELDS = ['cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
     'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
-    'cf-col-transcripcion','cf-col-duracion','cf-excluded-phrases','cf-max-chars',
+    'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
     'cf-prompt-individual','cf-prompt-general'];
 
   function _autoSaveDraft() {

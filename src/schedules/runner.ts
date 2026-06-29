@@ -97,21 +97,36 @@ async function notifyChat(
 
 // ── Due-check ─────────────────────────────────────────────────────────────────
 
+// Convert a stored UTC ISO timestamp to a YYYY-MM-DD date string in the given tz,
+// so "already ran today" is judged in the schedule's own timezone (not UTC).
+function dateStrInTz(iso: string, tz: string): string {
+  try { return new Date(iso).toLocaleDateString('sv-SE', { timeZone: tz }); }
+  catch { return iso.slice(0, 10); }
+}
+
 function isDue(schedule: Schedule): boolean {
   if (!schedule.enabled) return false;
 
+  const tz = schedule.timezone || 'America/Mexico_City';
   let now: TzNow;
-  try { now = getNowInTz(schedule.timezone || 'America/Mexico_City'); }
+  try { now = getNowInTz(tz); }
   catch { return false; }
 
-  if (now.hour !== schedule.hour || now.minute !== schedule.minute) return false;
-
+  // Must be the right day for this frequency
   if (schedule.frequency === 'weekly'  && now.day  !== (schedule.day_of_week  ?? 1)) return false;
   if (schedule.frequency === 'monthly' && parseInt(now.dateStr.slice(8)) !== (schedule.day_of_month ?? 1)) return false;
   if (schedule.frequency === 'once'    && now.dateStr !== (schedule.run_date ?? '')) return false;
 
-  // Not already run today
-  if (schedule.last_run && schedule.last_run.slice(0, 10) === now.dateStr) return false;
+  // Already ran today (judged in the schedule's timezone)? Skip.
+  if (schedule.last_run && dateStrInTz(schedule.last_run, tz) === now.dateStr) return false;
+
+  // Catch-up semantics: fire once the scheduled time has ARRIVED OR PASSED today,
+  // not only at the exact target minute. This survives deploys, restarts, and
+  // event-loop delays that would otherwise skip the single target minute for the
+  // whole day. The "already ran today" guard above keeps it to one run per day.
+  const schedMinutes = schedule.hour * 60 + schedule.minute;
+  const nowMinutes   = now.hour * 60 + now.minute;
+  if (nowMinutes < schedMinutes) return false;
 
   return true;
 }
@@ -215,11 +230,14 @@ let _interval: ReturnType<typeof setInterval> | null = null;
 
 export function startScheduler(): void {
   if (_interval) return;
-  console.log('[scheduler] Started — checking every 60 s');
+  console.log('[scheduler] Started — checking every 60 s (catch-up enabled)');
 
   const check = async () => {
     for (const s of listSchedules()) {
-      if (isDue(s)) {
+      let due = false;
+      try { due = isDue(s); }
+      catch (e) { console.error(`[scheduler] isDue error for '${s.name}':`, (e as Error).message); }
+      if (due) {
         fireSchedule(s).catch(e =>
           console.error(`[scheduler] Error firing '${s.name}':`, (e as Error).message),
         );
@@ -227,6 +245,9 @@ export function startScheduler(): void {
     }
   };
 
+  // Run one check immediately so a fresh start catches up any run already due
+  // today (e.g. a deploy that spanned the scheduled minute).
+  check().catch(e => console.error('[scheduler] initial check error:', (e as Error).message));
   _interval = setInterval(check, 60_000);
 }
 

@@ -563,26 +563,6 @@
           <textarea class="form-textarea" id="cf-prompt-general" rows="8" placeholder="Prompt para el reporte ejecutivo del equipo…"></textarea>
         </div>
       </div>
-
-      <div class="form-section">
-        <div class="form-section-title">Notificación de errores (Google Chat)</div>
-        <div class="form-group">
-          <div class="form-toggle-row">
-            <button class="form-toggle-btn active" id="cf-err-no"  onclick="setClientErrorNotify(false)">Desactivada</button>
-            <button class="form-toggle-btn"        id="cf-err-yes" onclick="setClientErrorNotify(true)">Avisar a un canal</button>
-          </div>
-          <div class="form-hint">Si una automatización de este cliente falla, se enviará un aviso al canal seleccionado.</div>
-        </div>
-        <div id="cf-err-fields" style="display:none;">
-          <div class="form-group">
-            <label class="form-label">Espacio (canal)</label>
-            <select class="form-control" id="cf-error-chat-space">
-              <option value="">— Selecciona un espacio —</option>
-            </select>
-            <div class="form-hint">Solo aparecen los espacios donde la app de la service account es miembro.</div>
-          </div>
-        </div>
-      </div>
     </div>
     <div class="form-modal-footer">
       <button class="btn-sm btn-sm-cancel" onclick="closeClientModal()">Cancelar</button>
@@ -737,6 +717,27 @@
             <textarea class="form-textarea" id="sf-chat-message" rows="4"
               placeholder="📊 *Reporte listo*: {{nombre_cliente}} | {{periodo}}&#10;🔗 {{link}}"></textarea>
             <div class="form-hint">Variables disponibles: <code>{{nombre_cliente}}</code>, <code>{{periodo}}</code>, <code>{{link}}</code>, <code>{{nombre}}</code>. Deja vacío para usar el mensaje predeterminado.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notificación de errores -->
+      <div class="form-section">
+        <div class="form-section-title">Notificación de errores</div>
+        <div class="form-group">
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="sf-err-no"  onclick="setScheduleErrorNotify(false)">Sin aviso</button>
+            <button class="form-toggle-btn"        id="sf-err-yes" onclick="setScheduleErrorNotify(true)">Avisar si falla</button>
+          </div>
+          <div class="form-hint">Si esta automatización falla, se enviará un aviso al canal seleccionado.</div>
+        </div>
+        <div id="sf-err-fields" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Espacio (canal) *</label>
+            <select class="form-control" id="sf-err-space">
+              <option value="">— Selecciona un espacio —</option>
+            </select>
+            <div class="form-hint">Solo aparecen los espacios donde la app de la service account es miembro.</div>
           </div>
         </div>
       </div>
@@ -1870,8 +1871,6 @@
       'cf-prompt-individual','cf-prompt-general'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '80000';
-    document.getElementById('cf-error-chat-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
-    setClientErrorNotify(false);
 
     // Show restore banner only for new clients with a saved draft
     const banner = document.getElementById('draft-banner');
@@ -1902,7 +1901,6 @@
         document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 80000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
         document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
-        setClientErrorNotify(!!c.error_notify_enabled, c.error_chat_space_id || '');
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -1922,7 +1920,7 @@
     _editingClientId = null;
   }
 
-  // ── Error-notification config (per client) ──────────────────────────────────
+  // Shared, cached lookup of Google Chat spaces (used by the schedule form).
   let _chatSpacesCache = null;
   async function _fetchSpacesCached() {
     if (_chatSpacesCache) return _chatSpacesCache;
@@ -1932,38 +1930,6 @@
     });
     _chatSpacesCache = spaces;
     return spaces;
-  }
-
-  let _clientErrorNotify = false;
-  function setClientErrorNotify(enabled, currentSpaceId) {
-    _clientErrorNotify = enabled;
-    document.getElementById('cf-err-no').classList.toggle('active', !enabled);
-    document.getElementById('cf-err-yes').classList.toggle('active', enabled);
-    document.getElementById('cf-err-fields').style.display = enabled ? 'block' : 'none';
-    if (enabled) {
-      const sel = document.getElementById('cf-error-chat-space');
-      _loadClientErrorSpaces(currentSpaceId || sel.value || '');
-    }
-  }
-
-  async function _loadClientErrorSpaces(currentSpaceId) {
-    const sel = document.getElementById('cf-error-chat-space');
-    sel.innerHTML = '<option value="">Cargando espacios…</option>';
-    try {
-      const spaces = await _fetchSpacesCached();
-      sel.innerHTML = '<option value="">— Selecciona un espacio —</option>';
-      spaces.forEach(sp => {
-        const o = document.createElement('option');
-        o.value = sp.id; o.textContent = sp.name;
-        if (sp.id === currentSpaceId) o.selected = true;
-        sel.appendChild(o);
-      });
-      if (!spaces.length) {
-        sel.innerHTML = '<option value="">Sin espacios disponibles — agrega la app al canal</option>';
-      }
-    } catch(e) {
-      sel.innerHTML = `<option value="">Error: ${_esc(e.message)}</option>`;
-    }
   }
 
   async function saveClient() {
@@ -1977,11 +1943,6 @@
         missing.map(m => `<div class="draft-missing-item"><div class="draft-missing-dot"></div>${_esc(m)}</div>`).join('');
       const b = document.getElementById('draft-modal-backdrop');
       b.style.display = 'flex'; b.classList.add('show');
-      return;
-    }
-
-    if (_clientErrorNotify && !document.getElementById('cf-error-chat-space').value) {
-      alert('Selecciona un espacio de Google Chat para las notificaciones de error, o desactívalas.');
       return;
     }
 
@@ -2006,8 +1967,6 @@
       transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 80000,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
-      error_notify_enabled:    _clientErrorNotify,
-      error_chat_space_id:     _clientErrorNotify ? (document.getElementById('cf-error-chat-space').value || undefined) : undefined,
     };
 
     try {
@@ -2438,6 +2397,38 @@
     }
   }
 
+  let _scheduleErrorNotify = false;
+  function setScheduleErrorNotify(enabled, currentSpaceId) {
+    _scheduleErrorNotify = enabled;
+    document.getElementById('sf-err-no').classList.toggle('active', !enabled);
+    document.getElementById('sf-err-yes').classList.toggle('active', enabled);
+    document.getElementById('sf-err-fields').style.display = enabled ? '' : 'none';
+    if (enabled) {
+      const sel = document.getElementById('sf-err-space');
+      _loadScheduleErrorSpaces(currentSpaceId || sel.value || '');
+    }
+  }
+
+  async function _loadScheduleErrorSpaces(currentSpaceId) {
+    const sel = document.getElementById('sf-err-space');
+    sel.innerHTML = '<option value="">Cargando espacios…</option>';
+    try {
+      const spaces = await _fetchSpacesCached();
+      sel.innerHTML = '<option value="">— Selecciona un espacio —</option>';
+      spaces.forEach(sp => {
+        const o = document.createElement('option');
+        o.value = sp.id; o.textContent = sp.name;
+        if (sp.id === currentSpaceId) o.selected = true;
+        sel.appendChild(o);
+      });
+      if (!spaces.length) {
+        sel.innerHTML = '<option value="">Sin espacios disponibles — agrega la app al canal</option>';
+      }
+    } catch(e) {
+      sel.innerHTML = `<option value="">Error: ${_esc(e.message)}</option>`;
+    }
+  }
+
   async function openScheduleForm(id) {
     _editingScheduleId = id || null;
     _chatSpacesLoaded  = false;
@@ -2478,6 +2469,12 @@
     document.getElementById('sf-chat-no').classList.add('active');
     document.getElementById('sf-chat-yes').classList.remove('active');
     document.getElementById('sf-chat-fields').style.display = 'none';
+    // Reset error-notification toggle
+    document.getElementById('sf-err-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
+    _scheduleErrorNotify = false;
+    document.getElementById('sf-err-no').classList.add('active');
+    document.getElementById('sf-err-yes').classList.remove('active');
+    document.getElementById('sf-err-fields').style.display = 'none';
 
     if (id) {
       try {
@@ -2503,6 +2500,9 @@
         if (s.chat_space_id) {
           await setScheduleChat(true);
           await _loadChatSpaces(s.chat_space_id);
+        }
+        if (s.error_notify_enabled) {
+          setScheduleErrorNotify(true, s.error_chat_space_id || '');
         }
       } catch(e) {
         alert('Error cargando datos: ' + e.message);
@@ -2533,6 +2533,9 @@
     if (_scheduleChat && !document.getElementById('sf-chat-space').value) {
       alert('Selecciona un espacio de Google Chat o desactiva la notificación.'); return;
     }
+    if (_scheduleErrorNotify && !document.getElementById('sf-err-space').value) {
+      alert('Selecciona un espacio para la notificación de errores o desactívala.'); return;
+    }
 
     const payload = {
       name,
@@ -2548,6 +2551,8 @@
       notify_only:     _scheduleMode === 'notify_only',
       chat_space_id:   _scheduleChat ? document.getElementById('sf-chat-space').value : undefined,
       chat_message:    _scheduleChat ? document.getElementById('sf-chat-message').value.trim() || undefined : undefined,
+      error_notify_enabled: _scheduleErrorNotify,
+      error_chat_space_id:  _scheduleErrorNotify ? document.getElementById('sf-err-space').value : undefined,
     };
     if (_scheduleFreq === 'weekly')  payload.day_of_week  = parseInt(document.getElementById('sf-day-of-week').value);
     if (_scheduleFreq === 'monthly') payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;

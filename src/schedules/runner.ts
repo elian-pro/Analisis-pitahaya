@@ -95,28 +95,28 @@ async function notifyChat(
   }
 }
 
-// Sends a Google Chat alert to the client's configured error space when an
-// automation fails. No-op unless the client enabled error notifications.
+// Sends a Google Chat alert to the schedule's configured error space when the
+// automation fails. No-op unless the schedule enabled error notifications.
 async function notifyError(
-  client: { name: string; error_notify_enabled?: boolean; error_chat_space_id?: string },
-  scheduleName: string,
+  schedule: Schedule,
+  clientName: string,
   periodo: string,
   detail: string,
 ): Promise<void> {
-  if (!client.error_notify_enabled || !client.error_chat_space_id) return;
+  if (!schedule.error_notify_enabled || !schedule.error_chat_space_id) return;
 
   const text =
     `⚠️ *Error en automatización*\n` +
-    `Cliente: ${client.name}\n` +
-    `Automatización: ${scheduleName}\n` +
+    `Cliente: ${clientName}\n` +
+    `Automatización: ${schedule.name}\n` +
     `Periodo: ${periodo}\n` +
     `Detalle: ${detail}`;
 
   try {
-    await sendChatMessage(client.error_chat_space_id, text);
-    console.log(`[scheduler] Error notification sent for '${scheduleName}'`);
+    await sendChatMessage(schedule.error_chat_space_id, text);
+    console.log(`[scheduler] Error notification sent for '${schedule.name}'`);
   } catch (e) {
-    console.error(`[scheduler] Error notification FAILED for '${scheduleName}':`, (e as Error).message);
+    console.error(`[scheduler] Error notification FAILED for '${schedule.name}':`, (e as Error).message);
   }
 }
 
@@ -215,7 +215,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
       advisors = [...new Set(calls.map(c => c.asesor))].filter(Boolean);
     } catch (e) {
       console.error(`[scheduler] Failed to fetch advisors for '${schedule.name}':`, (e as Error).message);
-      await notifyError(client, schedule.name, periodLabel,
+      await notifyError(schedule, client.name, periodLabel,
         `No se pudieron leer los datos de la hoja: ${(e as Error).message}`);
       return;
     }
@@ -225,7 +225,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
 
   if (advisors.length === 0) {
     console.warn(`[scheduler] No advisors in period for '${schedule.name}' — skipping`);
-    await notifyError(client, schedule.name, periodLabel,
+    await notifyError(schedule, client.name, periodLabel,
       'No se encontraron asesores con llamadas en el periodo.');
     return;
   }
@@ -246,7 +246,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
       // Report generation failed — alert the client's error space instead of
       // sending a "report ready" message.
       if (done?.status === 'error') {
-        await notifyError(client, schedule.name, periodLabel,
+        await notifyError(schedule, client.name, periodLabel,
           done.error || 'La generación del reporte falló.');
         return;
       }
@@ -259,7 +259,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
     })
     .catch(async err => {
       console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message);
-      await notifyError(client, schedule.name, periodLabel, (err as Error).message);
+      await notifyError(schedule, client.name, periodLabel, (err as Error).message);
     });
 }
 

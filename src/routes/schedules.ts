@@ -21,6 +21,8 @@ const ScheduleBaseSchema = z.object({
   notify_only:     z.boolean().default(false),
   chat_space_id:   z.string().optional(),
   chat_message:    z.string().optional(),
+  error_notify_enabled: z.boolean().default(false),
+  error_chat_space_id:  z.string().optional(),
 });
 
 const ScheduleBodySchema = ScheduleBaseSchema.refine(

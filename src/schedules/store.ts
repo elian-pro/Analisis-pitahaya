@@ -20,6 +20,8 @@ export interface Schedule {
   notify_only?:   boolean;   // skip report, just send Chat message
   chat_space_id?: string;    // Google Chat space, e.g. "spaces/AAAA"
   chat_message?:  string;    // message template with {{variables}}
+  error_notify_enabled?: boolean;  // notify a Google Chat space when this automation fails
+  error_chat_space_id?:  string;   // "spaces/AAAA..." target for error notifications
   created_at:    string;
   last_run?:     string;
 }

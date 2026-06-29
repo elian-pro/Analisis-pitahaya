@@ -20,8 +20,6 @@ const ClientBodySchema = z.object({
   transcripcion_max_chars: z.number().int().min(100).default(3000),
   prompt_individual:       z.string().min(1),
   prompt_general:          z.string().min(1),
-  error_notify_enabled:    z.boolean().default(false),
-  error_chat_space_id:     z.string().optional(),
 });
 
 router.get('/', (_req: Request, res: Response): void => {

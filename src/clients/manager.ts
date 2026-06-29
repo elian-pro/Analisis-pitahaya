@@ -19,8 +19,6 @@ export interface ClientConfig {
   transcripcion_max_chars: number;
   prompt_individual:       string;
   prompt_general:          string;
-  error_notify_enabled?:   boolean;   // notify a Google Chat space when an automation fails
-  error_chat_space_id?:    string;    // "spaces/AAAA..." target for error notifications
 }
 
 

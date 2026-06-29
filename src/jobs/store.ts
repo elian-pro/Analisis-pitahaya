@@ -1,6 +1,7 @@
 import fs from 'fs';
 import crypto from 'crypto';
 import { JOBS_FILE } from '../config/paths';
+import { dbEnabled, JOBS_TABLE, dbLoadAll, dbUpsert } from '../config/db';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 
@@ -35,28 +36,66 @@ export interface Job {
   date_to?:    string;  // YYYY-MM-DD, required for weekly
 }
 
+// In-memory cache is the source of truth for reads (the runner polls job status
+// very frequently, e.g. to detect cancellation). Writes go through to Postgres
+// (or the JSON file) for durability so the history survives redeploys.
 const store = new Map<string, Job>();
 
-try {
-  const saved: Job[] = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
-  for (const job of saved) {
-    if (job.status === 'pending' || job.status === 'running') {
-      job.status = 'error';
-      job.error  = 'Service restarted while job was in progress';
-    }
-    store.set(job.id, job);
-  }
-  console.log(`[jobs/store] Restored ${store.size} job(s) from disk`);
-} catch {
-  // No file or parse error — start fresh
+function loadFromFile(): Job[] {
+  try { return JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8')); }
+  catch { return []; }
 }
 
-function persist(): void {
+// Persists a single job. Postgres write is fire-and-forget (the in-memory cache
+// already holds the authoritative value, so a request never waits on the DB and
+// the hot polling path stays synchronous). File mode rewrites the whole set.
+function persist(job: Job): void {
+  if (dbEnabled) {
+    dbUpsert(JOBS_TABLE, job.id, job).catch(err =>
+      console.warn('[jobs/store] DB upsert failed:', (err as Error).message),
+    );
+    return;
+  }
   try {
     fs.writeFileSync(JOBS_FILE, JSON.stringify(Array.from(store.values())), 'utf-8');
   } catch (err) {
     console.warn('[jobs/store] Persist failed:', (err as Error).message);
   }
+}
+
+/**
+ * Loads existing jobs into the in-memory cache at startup. Any job left
+ * 'pending' or 'running' (i.e. interrupted by a restart) is marked 'error'.
+ * On first boot with a database, migrates jobs from the legacy JSON file.
+ */
+export async function initJobs(): Promise<void> {
+  let saved: Job[] = [];
+  if (dbEnabled) {
+    saved = await dbLoadAll<Job>(JOBS_TABLE);
+    if (saved.length === 0) {
+      const fromFile = loadFromFile();
+      for (const job of fromFile) await dbUpsert(JOBS_TABLE, job.id, job);
+      if (fromFile.length > 0) {
+        console.log(`[jobs/store] Seeded ${fromFile.length} job(s) from jobs.json into Postgres`);
+      }
+      saved = fromFile;
+    }
+  } else {
+    saved = loadFromFile();
+  }
+
+  const corrected: Job[] = [];
+  for (const job of saved) {
+    if (job.status === 'pending' || job.status === 'running') {
+      job.status = 'error';
+      job.error  = 'Service restarted while job was in progress';
+      corrected.push(job);
+    }
+    store.set(job.id, job);
+  }
+  for (const job of corrected) persist(job);
+
+  console.log(`[jobs/store] Restored ${store.size} job(s)`);
 }
 
 export function createJob(
@@ -83,7 +122,7 @@ export function createJob(
     date_to,
   };
   store.set(job.id, job);
-  persist();
+  persist(job);
   return job;
 }
 
@@ -95,6 +134,6 @@ export function updateJob(id: string, patch: Partial<Omit<Job, 'id' | 'created_a
   const job = store.get(id);
   if (!job) throw new Error(`Job ${id} not found`);
   Object.assign(job, patch, { updated_at: new Date().toISOString() });
-  persist();
+  persist(job);
   return job;
 }

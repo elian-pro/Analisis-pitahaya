@@ -1,10 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import fs from 'fs';
-import { CLIENTS_FILE } from '../config/paths';
+import { getClient } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { findSidecarFolder, findPreviousPeriodKey, monthLabel } from '../google/drive';
+import { previousPeriodKeyFromDb } from '../metrics/store';
 
 const router = Router();
 
@@ -80,13 +80,6 @@ const PreviousQuerySchema = z.object({
   ),
 });
 
-interface PreviousClientConfig {
-  id:                 string;
-  folder_id:          string;
-  sidecar_folder_id?: string;
-  [key: string]:      unknown;
-}
-
 router.get('/previous', async (req: Request, res: Response): Promise<void> => {
   const parsed = PreviousQuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -99,10 +92,9 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  let client: PreviousClientConfig | undefined;
+  let client: Awaited<ReturnType<typeof getClient>>;
   try {
-    const all = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8')) as PreviousClientConfig[];
-    client = all.find(c => c.id === client_id);
+    client = await getClient(client_id);
   } catch {
     res.status(500).json({ error: 'Failed to load clients configuration' });
     return;
@@ -113,17 +105,20 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    // Read-only resolution: never create a _Sidecars folder from a GET. A missing
-    // folder simply means no prior report exists yet → "first period".
-    const sidecarFolderId = client.sidecar_folder_id
-      ?? await findSidecarFolder(client.folder_id);
-    if (!sidecarFolderId) {
-      res.json({ has_previous: false });
-      return;
+    // Database first: a single indexed query, no Drive calls needed when it hits.
+    let prevKey = await previousPeriodKeyFromDb(client_id, advisors, month, period_type, date_from);
+
+    // Fallback to Drive sidecars when the DB has nothing (e.g. periods generated
+    // before report_metrics existed). Read-only: never create a _Sidecars folder
+    // from a GET — a missing folder just means "first period".
+    if (!prevKey) {
+      const sidecarFolderId = client.sidecar_folder_id
+        ?? await findSidecarFolder(client.folder_id);
+      if (sidecarFolderId) {
+        prevKey = await findPreviousPeriodKey(sidecarFolderId, advisors, month, period_type, date_from);
+      }
     }
-    const prevKey = await findPreviousPeriodKey(
-      sidecarFolderId, advisors, month, period_type, date_from,
-    );
+
     if (!prevKey) {
       res.json({ has_previous: false });
       return;

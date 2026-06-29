@@ -1,6 +1,15 @@
 import fs from 'fs';
 import crypto from 'crypto';
 import { SCHEDULES_FILE } from '../config/paths';
+import {
+  dbEnabled,
+  SCHEDULES_TABLE,
+  dbLoadAll,
+  dbGet,
+  dbUpsert,
+  dbDelete,
+  dbCount,
+} from '../config/db';
 
 export interface Schedule {
   id:            string;
@@ -31,48 +40,88 @@ export interface Schedule {
   last_run?:     string;
 }
 
-
-function load(): Schedule[] {
+// ── File fallback (used only when DATABASE_URL is not set) ───────────────────
+function loadFromFile(): Schedule[] {
   try { return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8')); }
   catch { return []; }
 }
 
-function persist(schedules: Schedule[]): void {
+function saveToFile(schedules: Schedule[]): void {
   try { fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules), 'utf-8'); }
   catch (e) { console.warn('[schedules] persist failed:', (e as Error).message); }
 }
 
-export function listSchedules(): Schedule[] { return load(); }
+// ── Public API (async: Postgres when DATABASE_URL is set, else JSON file) ────
 
-export function getSchedule(id: string): Schedule | undefined {
-  return load().find(s => s.id === id);
+export async function listSchedules(): Promise<Schedule[]> {
+  if (dbEnabled) return dbLoadAll<Schedule>(SCHEDULES_TABLE);
+  return loadFromFile();
 }
 
-export function createSchedule(data: Omit<Schedule, 'id' | 'created_at'>): Schedule {
-  const schedules = load();
+export async function getSchedule(id: string): Promise<Schedule | undefined> {
+  if (dbEnabled) return dbGet<Schedule>(SCHEDULES_TABLE, id);
+  return loadFromFile().find(s => s.id === id);
+}
+
+export async function createSchedule(data: Omit<Schedule, 'id' | 'created_at'>): Promise<Schedule> {
   const schedule: Schedule = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-  schedules.push(schedule);
-  persist(schedules);
+  if (dbEnabled) {
+    await dbUpsert(SCHEDULES_TABLE, schedule.id, schedule);
+  } else {
+    const schedules = loadFromFile();
+    schedules.push(schedule);
+    saveToFile(schedules);
+  }
   return schedule;
 }
 
-export function updateSchedule(id: string, patch: Partial<Omit<Schedule, 'id' | 'created_at'>>): Schedule {
-  const schedules = load();
+export async function updateSchedule(
+  id: string,
+  patch: Partial<Omit<Schedule, 'id' | 'created_at'>>,
+): Promise<Schedule> {
+  if (dbEnabled) {
+    const existing = await dbGet<Schedule>(SCHEDULES_TABLE, id);
+    if (!existing) throw new Error(`Schedule '${id}' not found`);
+    const updated: Schedule = { ...existing, ...patch, id, created_at: existing.created_at };
+    await dbUpsert(SCHEDULES_TABLE, id, updated);
+    return updated;
+  }
+  const schedules = loadFromFile();
   const idx = schedules.findIndex(s => s.id === id);
   if (idx === -1) throw new Error(`Schedule '${id}' not found`);
-  schedules[idx] = { ...schedules[idx], ...patch };
-  persist(schedules);
+  schedules[idx] = { ...schedules[idx], ...patch, id, created_at: schedules[idx].created_at };
+  saveToFile(schedules);
   return schedules[idx];
 }
 
-export function deleteSchedule(id: string): void {
-  const schedules = load();
+export async function deleteSchedule(id: string): Promise<void> {
+  if (dbEnabled) {
+    await dbDelete(SCHEDULES_TABLE, id);
+    return;
+  }
+  const schedules = loadFromFile();
   const idx = schedules.findIndex(s => s.id === id);
   if (idx === -1) throw new Error(`Schedule '${id}' not found`);
   schedules.splice(idx, 1);
-  persist(schedules);
+  saveToFile(schedules);
 }
 
-export function markRan(id: string): void {
-  updateSchedule(id, { last_run: new Date().toISOString() });
+export async function markRan(id: string): Promise<void> {
+  await updateSchedule(id, { last_run: new Date().toISOString() });
+}
+
+/**
+ * One-time seed: if the database has no schedules yet but the legacy
+ * schedules.json file has entries, copy them in. Runs automatically at startup.
+ */
+export async function seedSchedulesFromFileIfEmpty(): Promise<void> {
+  if (!dbEnabled) return;
+  if ((await dbCount(SCHEDULES_TABLE)) > 0) return;
+  const fromFile = loadFromFile();
+  if (fromFile.length === 0) return;
+  for (const schedule of fromFile) {
+    if (!schedule.id) continue;
+    await dbUpsert(SCHEDULES_TABLE, schedule.id, schedule);
+  }
+  console.log(`[schedules] Seeded ${fromFile.length} schedule(s) from schedules.json into Postgres`);
 }

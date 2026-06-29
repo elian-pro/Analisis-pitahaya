@@ -10,14 +10,18 @@ const QuerySchema = z.object({
   client_id: z.string().optional(),
 });
 
-router.get('/', (req: Request, res: Response): void => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   const parsed = QuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: 'from and to (YYYY-MM-DD) are required' });
     return;
   }
   const { from, to, client_id } = parsed.data;
-  res.json(queryStats(from, to, client_id));
+  try {
+    res.json(await queryStats(from, to, client_id));
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 export default router;

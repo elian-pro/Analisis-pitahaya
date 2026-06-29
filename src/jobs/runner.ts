@@ -248,7 +248,7 @@ export async function runJob(job: Job): Promise<void> {
     };
     console.log(`[runner] Tokens: input=${totalInput} output=${totalOutput} cost=$${tokenSummary.cost_usd.toFixed(4)}`);
 
-    recordTokens(job.id, job.client_id, totalInput, totalOutput, individualResults.length);
+    await recordTokens(job.id, job.client_id, totalInput, totalOutput, individualResults.length);
 
     const finalResults = {
       individual: [],

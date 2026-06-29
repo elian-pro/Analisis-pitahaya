@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { dbEnabled, ensureSchema } from './config/db';
 import { seedClientsFromFileIfEmpty } from './clients/manager';
 import { seedSchedulesFromFileIfEmpty } from './schedules/store';
+import { seedTokenLogFromFileIfEmpty } from './tokens/store';
 import healthRouter from './routes/health';
 import advisorsRouter from './routes/advisors';
 import reportRouter from './routes/report';
@@ -43,6 +44,7 @@ async function bootstrap(): Promise<void> {
     // files into Postgres so existing deployments carry over automatically.
     await seedClientsFromFileIfEmpty();
     await seedSchedulesFromFileIfEmpty();
+    await seedTokenLogFromFileIfEmpty();
   } else {
     console.log('📄 No DATABASE_URL — using JSON files (data will NOT survive redeploys)');
   }

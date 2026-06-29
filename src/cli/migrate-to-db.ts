@@ -18,6 +18,7 @@ import {
   SCHEDULES_TABLE,
   dbUpsert,
 } from '../config/db';
+import { seedTokenLogFromFileIfEmpty } from '../tokens/store';
 
 function readJson<T extends { id?: string }>(file: string): T[] {
   try {
@@ -65,6 +66,10 @@ async function main(): Promise<void> {
 
   await migrateTable('clientes',         CLIENTS_TABLE,   clients);
   await migrateTable('automatizaciones', SCHEDULES_TABLE, schedules);
+
+  // Token log only seeds when the table is empty (its rows have no stable id to
+  // upsert on), so re-running the migration never duplicates usage entries.
+  await seedTokenLogFromFileIfEmpty();
 
   console.log('\n✅ Migración terminada.');
   await pool?.end();

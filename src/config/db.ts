@@ -46,12 +46,14 @@ if (pool) {
 // are preserved exactly with no per-field schema to keep in sync.
 export const CLIENTS_TABLE = 'clients';
 export const SCHEDULES_TABLE = 'schedules';
+export const TOKEN_LOG_TABLE = 'token_log';
 
 /**
  * Creates the tables if they don't exist. Safe to run on every boot.
  */
 export async function ensureSchema(): Promise<void> {
   if (!pool) return;
+  // Config tables: full object stored per row in a jsonb column.
   for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE]) {
     await pool.query(
       `CREATE TABLE IF NOT EXISTS ${table} (
@@ -62,7 +64,22 @@ export async function ensureSchema(): Promise<void> {
        )`,
     );
   }
-  console.log('[db] Schema ready (clients, schedules)');
+  // Token usage log: analytical data, so real columns (queried/aggregated by date).
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS ${TOKEN_LOG_TABLE} (
+       id         BIGSERIAL   PRIMARY KEY,
+       ts         TIMESTAMPTZ NOT NULL DEFAULT now(),
+       job_id     TEXT,
+       client_id  TEXT,
+       input      INTEGER     NOT NULL,
+       output     INTEGER     NOT NULL,
+       advisors   INTEGER     NOT NULL
+     )`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS token_log_ts_idx ON ${TOKEN_LOG_TABLE} (ts)`,
+  );
+  console.log('[db] Schema ready (clients, schedules, token_log)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

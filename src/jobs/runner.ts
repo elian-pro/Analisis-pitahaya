@@ -1,3 +1,5 @@
+import fs from 'fs';
+import { CLIENTS_FILE } from '../config/paths';
 import { getJob, updateJob, type Job } from './store';
 
 class CancelledError extends Error {
@@ -14,11 +16,30 @@ import { processAdvisor, buildSidecar, parseSidecarMetrics, type AdvisorResult }
 import { processGeneralReport } from '../claude/general';
 import { mergePdfs } from '../pdf/merge';
 import { recordTokens } from '../tokens/store';
-import { getClient } from '../clients/manager';
 
-async function loadClient(clientId: string) {
-  const client = await getClient(clientId);
-  if (!client) throw new Error(`Client '${clientId}' not found in Supabase`);
+interface ClientConfig {
+  id:                      string;
+  name:                    string;
+  folder_id:               string;
+  sidecar_folder_id?:      string;
+  spreadsheet_id:          string;
+  data_sheet_name:         string;
+  col_fecha:               string;
+  col_asesor:              string;
+  col_calif:               string;
+  col_analisis:            string;
+  col_transcripcion:       string;
+  col_duracion?:           string;
+  excluded_phrases:        string[];
+  transcripcion_max_chars: number;
+  prompt_individual:       string;
+  prompt_general:          string;
+}
+
+function loadClient(clientId: string): ClientConfig {
+  const all: ClientConfig[] = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8'));
+  const client = all.find(c => c.id === clientId);
+  if (!client) throw new Error(`Client '${clientId}' not found in ${CLIENTS_FILE}`);
   return client;
 }
 
@@ -53,7 +74,7 @@ export async function runJob(job: Job): Promise<void> {
   const isCancelled = (): boolean => getJob(job.id)?.status === 'cancelled';
 
   try {
-    const client = await loadClient(job.client_id);
+    const client = loadClient(job.client_id);
     console.log(`[runner] Client loaded: ${client.name}`);
 
     // Period label for filenames and templates

@@ -51,33 +51,32 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
 
 const SchedulePatchSchema = ScheduleBaseSchema.partial();
 
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
-  try { res.json(await listSchedules()); }
-  catch (e) { res.status(500).json({ error: (e as Error).message }); }
+router.get('/', (_req: Request, res: Response): void => {
+  res.json(listSchedules());
 });
 
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+router.post('/', (req: Request, res: Response): void => {
   const parsed = ScheduleBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues.map(i => i.message).join('; ') });
     return;
   }
-  try { res.status(201).json(await createSchedule(parsed.data)); }
+  try { res.status(201).json(createSchedule(parsed.data)); }
   catch (e) { res.status(500).json({ error: (e as Error).message }); }
 });
 
-router.put('/:id', async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', (req: Request, res: Response): void => {
   const parsed = SchedulePatchSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues.map((i: z.ZodIssue) => i.message).join('; ') });
     return;
   }
-  try { res.json(await updateSchedule(req.params.id, parsed.data)); }
+  try { res.json(updateSchedule(req.params.id, parsed.data)); }
   catch (e) { res.status(404).json({ error: (e as Error).message }); }
 });
 
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
-  try { await deleteSchedule(req.params.id); res.json({ ok: true }); }
+router.delete('/:id', (req: Request, res: Response): void => {
+  try { deleteSchedule(req.params.id); res.json({ ok: true }); }
   catch (e) { res.status(404).json({ error: (e as Error).message }); }
 });
 

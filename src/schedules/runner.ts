@@ -161,7 +161,7 @@ function isDue(schedule: Schedule): boolean {
 async function fireSchedule(schedule: Schedule): Promise<void> {
   console.log(`[scheduler] Firing '${schedule.name}' (${schedule.id})`);
 
-  const client = (await loadClients()).find(c => c.id === schedule.client_id);
+  const client = loadClients().find(c => c.id === schedule.client_id);
   if (!client) {
     console.error(`[scheduler] Client '${schedule.client_id}' not found — skipping`);
     return;
@@ -171,8 +171,8 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
 
   // ── Notify-only mode: just send a Chat message ────────────────────────────
   if (schedule.notify_only) {
-    await markRan(schedule.id);
-    if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
+    markRan(schedule.id);
+    if (schedule.frequency === 'once') updateSchedule(schedule.id, { enabled: false });
     await notifyChat(schedule, client.name, getNowInTz(tz).dateStr, '');
     return;
   }
@@ -247,8 +247,8 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
     : (schedule.include_general ? 'general' : 'selected');
 
   const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo);
-  await markRan(schedule.id);
-  if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
+  markRan(schedule.id);
+  if (schedule.frequency === 'once') updateSchedule(schedule.id, { enabled: false });
 
   console.log(`[scheduler] Job ${job.id} created for '${schedule.name}'`);
 
@@ -285,14 +285,7 @@ export function startScheduler(): void {
   console.log('[scheduler] Started — checking every 60 s (catch-up enabled)');
 
   const check = async () => {
-    let schedules: Awaited<ReturnType<typeof listSchedules>>;
-    try {
-      schedules = await listSchedules();
-    } catch (e) {
-      console.error('[scheduler] Could not load schedules:', (e as Error).message);
-      return;
-    }
-    for (const s of schedules) {
+    for (const s of listSchedules()) {
       let due = false;
       try { due = isDue(s); }
       catch (e) { console.error(`[scheduler] isDue error for '${s.name}':`, (e as Error).message); }

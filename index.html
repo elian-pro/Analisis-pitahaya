@@ -14,8 +14,12 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;transition:background .25s,color .25s;}
-    body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFFFFF;--on-accent:#0A0A0A;--danger:#E24B4A;--success:#46B36B;}
-    body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;--success:#2E7D32;}
+    /* MOTIF "Stripes" (marca Zebra · ZR-20): lineas diagonales SIEMPRE detras del contenido,
+       NUNCA sobre cards. Theme-aware via currentColor (--fg): negro en light, blanco en dark.
+       Angulo/grosor/espaciado/opacidad en tokens --motif-*. Web usa este gradiente (ZR-24). */
+    .zebra-motif{position:fixed;top:0;right:0;bottom:0;width:38%;pointer-events:none;z-index:0;color:var(--fg);opacity:var(--motif-opacity);background-image:repeating-linear-gradient(var(--motif-angle),currentColor 0 var(--motif-line),transparent var(--motif-line) var(--motif-gap));}
+    body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFFFFF;--on-accent:#0A0A0A;--danger:#E24B4A;--success:#46B36B;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.06;}
+    body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;--success:#2E7D32;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.05;}
     .header{display:flex;align-items:center;justify-content:space-between;padding:18px 48px;border-bottom:0.5px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
     .header-left{display:flex;align-items:center;gap:14px;}
     .logo-box{width:38px;height:38px;background:#0A0A0A;border:0.5px solid rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;}
@@ -23,7 +27,7 @@
     .brand-sub{font-size:10px;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;margin-top:2px;}
     .theme-btn{background:transparent;border:0.5px solid var(--border2);color:var(--fg);padding:9px 16px;border-radius:100px;cursor:pointer;font-size:11px;letter-spacing:0.12em;font-family:inherit;display:inline-flex;align-items:center;gap:8px;transition:background .15s;}
     .theme-btn:hover{background:var(--surface2);}
-    .main{max-width:1060px;margin:0 auto;padding:40px 48px;}
+    .main{max-width:1060px;margin:0 auto;padding:40px 48px;position:relative;z-index:1;}
     .section-label{display:flex;align-items:center;gap:10px;font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
     .section-label::after{content:'';flex:1;height:0.5px;background:var(--border);}
     .config-row{display:flex;gap:12px;align-items:flex-end;padding:18px 22px;background:var(--surface);border:0.5px solid var(--border);border-radius:14px;margin-bottom:28px;}
@@ -304,6 +308,7 @@
   </style>
 </head>
 <body data-theme="dark">
+<div class="zebra-motif" aria-hidden="true"></div>
 <header class="header">
   <div class="header-left">
     <div class="logo-box"><img src="Logo%20Zebra%20Blanco.png" alt="Logo" style="width:28px;height:28px;object-fit:contain;"></div>

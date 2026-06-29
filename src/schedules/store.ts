@@ -10,7 +10,12 @@ export interface Schedule {
   frequency:     'weekly' | 'monthly' | 'once';
   day_of_week?:  number;   // 0=Sun 1=Mon … 6=Sat  (weekly)
   day_of_month?: number;   // 1-28                  (monthly)
-  run_date?:     string;   // YYYY-MM-DD             (once)
+  run_date?:     string;   // YYYY-MM-DD             (once) — WHEN it executes
+  // For a one-time run, the modality + exact period it should analyse:
+  once_mode?:      'weekly' | 'monthly';
+  once_month?:     string;  // YYYY-MM     (once + monthly)
+  once_date_from?: string;  // YYYY-MM-DD  (once + weekly, Monday)
+  once_date_to?:   string;  // YYYY-MM-DD  (once + weekly, Sunday)
   hour:          number;   // 0-23
   minute:        number;   // 0-59
   timezone:      string;

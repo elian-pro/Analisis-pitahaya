@@ -656,6 +656,54 @@
             <div class="cal-rows" id="sf-date-cal-rows"></div>
           </div>
           <div class="form-hint">La automatización se ejecutará una vez y luego se desactivará automáticamente.</div>
+
+          <!-- Modalidad del reporte (solo 'una sola vez') -->
+          <label class="form-label" style="margin-top:14px;">Modalidad del reporte *</label>
+          <div class="form-toggle-row">
+            <button type="button" class="form-toggle-btn active" id="sf-once-weekly"  onclick="setOnceMode('weekly')">Semanal</button>
+            <button type="button" class="form-toggle-btn"        id="sf-once-monthly" onclick="setOnceMode('monthly')">Mensual</button>
+          </div>
+
+          <!-- Semanal: semana a analizar -->
+          <div id="sf-once-week-group" style="margin-top:12px;position:relative;">
+            <label class="form-label">Semana a analizar (lun–dom) *</label>
+            <input type="hidden" id="sf-once-week-from">
+            <input type="hidden" id="sf-once-week-to">
+            <div id="sf-once-week-display" onclick="toggleOnceWeekCal(event)" class="form-control" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+              <span id="sf-once-week-text" style="color:var(--muted);">Selecciona una semana</span>
+              <span style="font-size:9px;flex-shrink:0;color:var(--muted);">▾</span>
+            </div>
+            <div id="sf-once-week-cal" class="inline-cal" style="display:none;">
+              <div class="inline-cal-head">
+                <button type="button" class="cal-nav-btn" onclick="onceWeekCalNav(-1,event)">‹</button>
+                <div class="mini-cal-title" id="sf-once-week-cal-title" style="margin-bottom:0;"></div>
+                <button type="button" class="cal-nav-btn" onclick="onceWeekCalNav(1,event)">›</button>
+              </div>
+              <div class="cal-rows" id="sf-once-week-cal-rows"></div>
+            </div>
+          </div>
+
+          <!-- Mensual: mes a analizar -->
+          <div id="sf-once-month-group" style="margin-top:12px;display:none;">
+            <label class="form-label">Mes a analizar *</label>
+            <div class="form-grid-2">
+              <select class="form-control" id="sf-once-month-mes">
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+              <select class="form-control" id="sf-once-month-anio"></select>
+            </div>
+          </div>
         </div>
         <!-- Hora (siempre visible) -->
         <div class="form-grid-2">
@@ -2333,6 +2381,141 @@
     }
   });
 
+  // ── One-time report: modality + specific period ────────────────────────────
+  let _onceMode = 'weekly';
+  function setOnceMode(m) {
+    _onceMode = m;
+    document.getElementById('sf-once-weekly').classList.toggle('active', m === 'weekly');
+    document.getElementById('sf-once-monthly').classList.toggle('active', m === 'monthly');
+    document.getElementById('sf-once-week-group').style.display  = m === 'weekly'  ? '' : 'none';
+    document.getElementById('sf-once-month-group').style.display = m === 'monthly' ? '' : 'none';
+  }
+
+  function _ensureOnceMonthYears() {
+    const sel = document.getElementById('sf-once-month-anio');
+    if (sel.options.length) return;
+    const cy = new Date().getFullYear();
+    for (let y = cy; y >= cy - 2; y--) {
+      const o = document.createElement('option'); o.value = String(y); o.textContent = String(y); sel.appendChild(o);
+    }
+  }
+
+  function _initOnceMonthDefaults() {
+    const now  = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);   // previous month
+    document.getElementById('sf-once-month-mes').value  = String(prev.getMonth() + 1);
+    document.getElementById('sf-once-month-anio').value = String(prev.getFullYear());
+  }
+
+  // One-time WEEK picker (snaps any clicked week to Mon–Sun; past weeks allowed)
+  let _onceWeekCalYear = null, _onceWeekCalMonth = null;
+
+  function toggleOnceWeekCal(e) {
+    if (e) e.stopPropagation();
+    const cal = document.getElementById('sf-once-week-cal');
+    const isOpen = cal.style.display !== 'none' && cal.style.display !== '';
+    if (isOpen) { cal.style.display = 'none'; return; }
+    const cur = document.getElementById('sf-once-week-from').value;
+    if (cur) {
+      const [y, m] = cur.split('-').map(Number);
+      _onceWeekCalYear = y; _onceWeekCalMonth = m;
+    } else {
+      const now = new Date();
+      _onceWeekCalYear = now.getFullYear(); _onceWeekCalMonth = now.getMonth() + 1;
+    }
+    renderOnceWeekCal();
+    cal.style.display = 'block';
+  }
+
+  function onceWeekCalNav(delta, e) {
+    if (e) e.stopPropagation();
+    _onceWeekCalMonth += delta;
+    if (_onceWeekCalMonth < 1)  { _onceWeekCalMonth = 12; _onceWeekCalYear--; }
+    if (_onceWeekCalMonth > 12) { _onceWeekCalMonth = 1;  _onceWeekCalYear++; }
+    renderOnceWeekCal();
+  }
+
+  function renderOnceWeekCal() {
+    const year = _onceWeekCalYear, mon = _onceWeekCalMonth;
+    document.getElementById('sf-once-week-cal-title').textContent = `${_RD_MONTHS[mon-1]} ${year}`;
+    const todayISO = _rdISO(new Date());
+    const selFrom  = document.getElementById('sf-once-week-from').value;
+
+    const firstDay = new Date(year, mon - 1, 1);
+    const lastDay  = new Date(year, mon, 0);
+    const calStart = new Date(firstDay);
+    const fdow = calStart.getDay();
+    calStart.setDate(calStart.getDate() - (fdow === 0 ? 6 : fdow - 1));
+
+    let selMondayISO = null;
+    if (selFrom) {
+      const d = new Date(selFrom + 'T00:00:00');
+      const dw = d.getDay();
+      d.setDate(d.getDate() - (dw === 0 ? 6 : dw - 1));
+      selMondayISO = _rdISO(d);
+    }
+
+    const rowsEl = document.getElementById('sf-once-week-cal-rows');
+    rowsEl.innerHTML = '';
+    const hdr = document.createElement('div');
+    hdr.className = 'cal-row cal-hdr-row';
+    ['L','M','M','J','V','S','D'].forEach(h => {
+      const c = document.createElement('div'); c.className = 'cal-cell'; c.textContent = h; hdr.appendChild(c);
+    });
+    rowsEl.appendChild(hdr);
+
+    let monday = new Date(calStart);
+    let rowCount = 0;
+    while (monday <= lastDay && rowCount < 6) {
+      const rowMonday = new Date(monday);
+      const isSel = _rdISO(rowMonday) === selMondayISO;
+      const row = document.createElement('div');
+      row.className = 'cal-row cal-wk-row' + (isSel ? ' cal-sel' : '');
+      row.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const sun = new Date(rowMonday); sun.setDate(sun.getDate() + 6);
+        document.getElementById('sf-once-week-from').value = _rdISO(rowMonday);
+        document.getElementById('sf-once-week-to').value   = _rdISO(sun);
+        _updateOnceWeekDisplay();
+        document.getElementById('sf-once-week-cal').style.display = 'none';
+      });
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(rowMonday); day.setDate(day.getDate() + d);
+        const inMonth = day.getMonth() + 1 === mon && day.getFullYear() === year;
+        const isToday = _rdISO(day) === todayISO;
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell' + (!inMonth ? ' out-mo' : '') + (isToday ? ' is-today' : '');
+        cell.textContent = day.getDate();
+        row.appendChild(cell);
+      }
+      rowsEl.appendChild(row);
+      monday.setDate(monday.getDate() + 7);
+      rowCount++;
+    }
+  }
+
+  function _updateOnceWeekDisplay() {
+    const from = document.getElementById('sf-once-week-from').value;
+    const to   = document.getElementById('sf-once-week-to').value;
+    const disp = document.getElementById('sf-once-week-text');
+    if (from && to) {
+      const f = from.split('-'), t = to.split('-');
+      disp.textContent = `Semana ${f[2]}/${f[1]} al ${t[2]}/${t[1]}`;
+      disp.style.color = 'var(--fg)';
+    } else {
+      disp.textContent = 'Selecciona una semana';
+      disp.style.color = 'var(--muted)';
+    }
+  }
+
+  // Close the one-time week calendar when clicking outside its group
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#sf-once-week-group')) {
+      const cal = document.getElementById('sf-once-week-cal');
+      if (cal) cal.style.display = 'none';
+    }
+  });
+
   function setScheduleMode(m) {
     _scheduleMode = m;
     document.getElementById('sf-mode-report').classList.toggle('active', m === 'report');
@@ -2456,6 +2639,13 @@
     document.getElementById('sf-run-date').value      = '';
     document.getElementById('sf-date-cal').style.display = 'none';
     _updateRunDateDisplay();
+    _ensureOnceMonthYears();
+    _initOnceMonthDefaults();
+    document.getElementById('sf-once-week-from').value = '';
+    document.getElementById('sf-once-week-to').value   = '';
+    document.getElementById('sf-once-week-cal').style.display = 'none';
+    _updateOnceWeekDisplay();
+    setOnceMode('weekly');
     document.getElementById('sf-chat-message').value  = '';
     document.getElementById('sf-chat-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
     clientSel.value = '';
@@ -2490,6 +2680,19 @@
         document.getElementById('sf-day-of-month').value = s.day_of_month ?? 1;
         document.getElementById('sf-run-date').value      = s.run_date   || '';
         _updateRunDateDisplay();
+        if (s.frequency === 'once') {
+          _ensureOnceMonthYears();
+          setOnceMode(s.once_mode || 'monthly');
+          if (s.once_mode === 'weekly' && s.once_date_from) {
+            document.getElementById('sf-once-week-from').value = s.once_date_from;
+            document.getElementById('sf-once-week-to').value   = s.once_date_to || '';
+            _updateOnceWeekDisplay();
+          } else if (s.once_month) {
+            const [yy, mm] = s.once_month.split('-');
+            document.getElementById('sf-once-month-mes').value  = String(parseInt(mm));
+            document.getElementById('sf-once-month-anio').value = yy;
+          }
+        }
         document.getElementById('sf-chat-message').value  = s.chat_message || '';
         clientSel.value = s.client_id;
         setScheduleFreq(s.frequency || 'weekly');
@@ -2527,8 +2730,13 @@
     if (!clientId) { alert('Selecciona un cliente.'); return; }
     const hour = parseInt(document.getElementById('sf-hour').value);
     if (isNaN(hour) || hour < 0 || hour > 23) { alert('La hora debe estar entre 0 y 23.'); return; }
-    if (_scheduleFreq === 'once' && !document.getElementById('sf-run-date').value) {
-      alert('Selecciona la fecha de ejecución.'); return;
+    if (_scheduleFreq === 'once') {
+      if (!document.getElementById('sf-run-date').value) {
+        alert('Selecciona la fecha de ejecución.'); return;
+      }
+      if (_onceMode === 'weekly' && !document.getElementById('sf-once-week-from').value) {
+        alert('Selecciona la semana a analizar.'); return;
+      }
     }
     if (_scheduleChat && !document.getElementById('sf-chat-space').value) {
       alert('Selecciona un espacio de Google Chat o desactiva la notificación.'); return;
@@ -2556,7 +2764,18 @@
     };
     if (_scheduleFreq === 'weekly')  payload.day_of_week  = parseInt(document.getElementById('sf-day-of-week').value);
     if (_scheduleFreq === 'monthly') payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;
-    if (_scheduleFreq === 'once')    payload.run_date     = document.getElementById('sf-run-date').value;
+    if (_scheduleFreq === 'once') {
+      payload.run_date  = document.getElementById('sf-run-date').value;
+      payload.once_mode = _onceMode;
+      if (_onceMode === 'weekly') {
+        payload.once_date_from = document.getElementById('sf-once-week-from').value;
+        payload.once_date_to   = document.getElementById('sf-once-week-to').value;
+      } else {
+        const mes  = String(document.getElementById('sf-once-month-mes').value).padStart(2, '0');
+        const anio = document.getElementById('sf-once-month-anio').value;
+        payload.once_month = `${anio}-${mes}`;
+      }
+    }
 
     try {
       const r = _editingScheduleId

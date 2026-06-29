@@ -189,10 +189,23 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
     month = range.month; periodType = 'weekly'; dateFrom = range.dateFrom; dateTo = range.dateTo;
     periodLabel = `${dateFrom} — ${dateTo}`;
   } else if (schedule.frequency === 'once') {
-    // For a one-time run, analyse the current month up to today
-    const now2 = getNowInTz(tz);
-    month = now2.dateStr.slice(0, 7); periodType = 'monthly';
-    periodLabel = month;
+    // A one-time run analyses the specific period the user chose.
+    if (schedule.once_mode === 'weekly' && schedule.once_date_from && schedule.once_date_to) {
+      periodType = 'weekly';
+      dateFrom = schedule.once_date_from;
+      dateTo   = schedule.once_date_to;
+      month    = schedule.once_date_from.slice(0, 7);
+      periodLabel = `${dateFrom} — ${dateTo}`;
+    } else if (schedule.once_mode === 'monthly' && schedule.once_month) {
+      periodType = 'monthly';
+      month = schedule.once_month;
+      periodLabel = month;
+    } else {
+      // Backward-compatible fallback: current month up to today
+      const now2 = getNowInTz(tz);
+      month = now2.dateStr.slice(0, 7); periodType = 'monthly';
+      periodLabel = month;
+    }
   } else {
     month = lastMonthKey(tz); periodType = 'monthly';
     periodLabel = month;

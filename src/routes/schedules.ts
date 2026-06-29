@@ -12,6 +12,10 @@ const ScheduleBaseSchema = z.object({
   day_of_week:     z.number().int().min(0).max(6).optional(),
   day_of_month:    z.number().int().min(1).max(28).optional(),
   run_date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  once_mode:       z.enum(['weekly', 'monthly']).optional(),
+  once_month:      z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  once_date_from:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  once_date_to:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   hour:            z.number().int().min(0).max(23),
   minute:          z.number().int().min(0).max(59).default(0),
   timezone:        z.string().default('America/Mexico_City'),
@@ -34,6 +38,15 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
 ).refine(
   d => d.frequency !== 'once'    || d.run_date     !== undefined,
   { message: 'run_date required for once frequency' },
+).refine(
+  d => d.frequency !== 'once'    || d.once_mode    !== undefined,
+  { message: 'once_mode required for once frequency' },
+).refine(
+  d => d.frequency !== 'once' || d.once_mode !== 'weekly' || (!!d.once_date_from && !!d.once_date_to),
+  { message: 'once_date_from and once_date_to required for a one-time weekly report' },
+).refine(
+  d => d.frequency !== 'once' || d.once_mode !== 'monthly' || !!d.once_month,
+  { message: 'once_month required for a one-time monthly report' },
 );
 
 const SchedulePatchSchema = ScheduleBaseSchema.partial();

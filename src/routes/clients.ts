@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { loadClients, createClient, updateClient, deleteClient } from '../clients/manager';
+import { loadClients, getClient, createClient, updateClient, deleteClient } from '../clients/manager';
 
 const router = Router();
 
@@ -22,17 +22,25 @@ const ClientBodySchema = z.object({
   prompt_general:          z.string().min(1),
 });
 
-router.get('/', (_req: Request, res: Response): void => {
-  res.json(loadClients());
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    res.json(await loadClients());
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
-router.get('/:id', (req: Request, res: Response): void => {
-  const client = loadClients().find(c => c.id === req.params.id);
-  if (!client) { res.status(404).json({ error: `Client '${req.params.id}' not found` }); return; }
-  res.json(client);
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const client = await getClient(req.params.id);
+    if (!client) { res.status(404).json({ error: `Client '${req.params.id}' not found` }); return; }
+    res.json(client);
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
-router.post('/', (req: Request, res: Response): void => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   const parsed = ClientBodySchema.safeParse(req.body);
   if (!parsed.success) {
     const msg = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
@@ -40,13 +48,13 @@ router.post('/', (req: Request, res: Response): void => {
     return;
   }
   try {
-    res.status(201).json(createClient(parsed.data));
+    res.status(201).json(await createClient(parsed.data));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-router.put('/:id', (req: Request, res: Response): void => {
+router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   const parsed = ClientBodySchema.partial().safeParse(req.body);
   if (!parsed.success) {
     const msg = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
@@ -54,15 +62,15 @@ router.put('/:id', (req: Request, res: Response): void => {
     return;
   }
   try {
-    res.json(updateClient(req.params.id, parsed.data));
+    res.json(await updateClient(req.params.id, parsed.data));
   } catch (e) {
     res.status(404).json({ error: (e as Error).message });
   }
 });
 
-router.delete('/:id', (req: Request, res: Response): void => {
+router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    deleteClient(req.params.id);
+    await deleteClient(req.params.id);
     res.json({ ok: true });
   } catch (e) {
     res.status(404).json({ error: (e as Error).message });

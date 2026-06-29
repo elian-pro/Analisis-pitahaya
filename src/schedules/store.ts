@@ -1,6 +1,5 @@
-import fs from 'fs';
 import crypto from 'crypto';
-import { SCHEDULES_FILE } from '../config/paths';
+import { supabase, SCHEDULES_TABLE } from '../config/supabase';
 
 export interface Schedule {
   id:            string;
@@ -31,48 +30,61 @@ export interface Schedule {
   last_run?:     string;
 }
 
-
-function load(): Schedule[] {
-  try { return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8')); }
-  catch { return []; }
+// Each row stores the full schedule object in a `data` jsonb column keyed by `id`.
+export async function listSchedules(): Promise<Schedule[]> {
+  const { data, error } = await supabase
+    .from(SCHEDULES_TABLE)
+    .select('data')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`Supabase listSchedules failed: ${error.message}`);
+  return (data ?? []).map(r => r.data as Schedule);
 }
 
-function persist(schedules: Schedule[]): void {
-  try { fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules), 'utf-8'); }
-  catch (e) { console.warn('[schedules] persist failed:', (e as Error).message); }
+export async function getSchedule(id: string): Promise<Schedule | undefined> {
+  const { data, error } = await supabase
+    .from(SCHEDULES_TABLE)
+    .select('data')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`Supabase getSchedule failed: ${error.message}`);
+  return data ? (data.data as Schedule) : undefined;
 }
 
-export function listSchedules(): Schedule[] { return load(); }
-
-export function getSchedule(id: string): Schedule | undefined {
-  return load().find(s => s.id === id);
-}
-
-export function createSchedule(data: Omit<Schedule, 'id' | 'created_at'>): Schedule {
-  const schedules = load();
-  const schedule: Schedule = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-  schedules.push(schedule);
-  persist(schedules);
+export async function createSchedule(
+  input: Omit<Schedule, 'id' | 'created_at'>,
+): Promise<Schedule> {
+  const schedule: Schedule = {
+    ...input,
+    id: crypto.randomUUID(),
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from(SCHEDULES_TABLE)
+    .insert({ id: schedule.id, data: schedule });
+  if (error) throw new Error(`Supabase createSchedule failed: ${error.message}`);
   return schedule;
 }
 
-export function updateSchedule(id: string, patch: Partial<Omit<Schedule, 'id' | 'created_at'>>): Schedule {
-  const schedules = load();
-  const idx = schedules.findIndex(s => s.id === id);
-  if (idx === -1) throw new Error(`Schedule '${id}' not found`);
-  schedules[idx] = { ...schedules[idx], ...patch };
-  persist(schedules);
-  return schedules[idx];
+export async function updateSchedule(
+  id: string,
+  patch: Partial<Omit<Schedule, 'id' | 'created_at'>>,
+): Promise<Schedule> {
+  const existing = await getSchedule(id);
+  if (!existing) throw new Error(`Schedule '${id}' not found`);
+  const updated: Schedule = { ...existing, ...patch, id, created_at: existing.created_at };
+  const { error } = await supabase
+    .from(SCHEDULES_TABLE)
+    .update({ data: updated, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`Supabase updateSchedule failed: ${error.message}`);
+  return updated;
 }
 
-export function deleteSchedule(id: string): void {
-  const schedules = load();
-  const idx = schedules.findIndex(s => s.id === id);
-  if (idx === -1) throw new Error(`Schedule '${id}' not found`);
-  schedules.splice(idx, 1);
-  persist(schedules);
+export async function deleteSchedule(id: string): Promise<void> {
+  const { error } = await supabase.from(SCHEDULES_TABLE).delete().eq('id', id);
+  if (error) throw new Error(`Supabase deleteSchedule failed: ${error.message}`);
 }
 
-export function markRan(id: string): void {
-  updateSchedule(id, { last_run: new Date().toISOString() });
+export async function markRan(id: string): Promise<void> {
+  await updateSchedule(id, { last_run: new Date().toISOString() });
 }

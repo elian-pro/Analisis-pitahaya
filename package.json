@@ -8,10 +8,12 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dry-run": "tsx src/cli/dry-run.ts",
+    "migrate:supabase": "tsx src/cli/migrate-to-supabase.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
+    "@supabase/supabase-js": "^2.108.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "eta": "^3.5.0",

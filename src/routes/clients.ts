@@ -16,6 +16,7 @@ const ClientBodySchema = z.object({
   col_analisis:            z.string().min(1),
   col_transcripcion:       z.string().min(1),
   col_duracion:            z.string().optional(),
+  col_record:              z.string().optional(),
   excluded_phrases:        z.array(z.string()).default([]),
   transcripcion_max_chars: z.number().int().min(100).default(3000),
   prompt_individual:       z.string().min(1),

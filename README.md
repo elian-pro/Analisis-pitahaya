@@ -89,6 +89,7 @@ Cada entrada en `clients.json` define un cliente. Campos:
 | `col_calif` | Nombre de la columna de calificación (número 0-100) |
 | `col_analisis` | Nombre de la columna de análisis previo (puede estar vacía) |
 | `col_transcripcion` | Nombre de la columna de transcripción |
+| `col_record` | (Opcional) Nombre de la columna con el link de la grabación. Si se define, el reporte individual incluye un botón "Escuchar grabación" en la mejor llamada de cada asesor |
 | `excluded_phrases` | Frases que, si aparecen en la transcripción, excluyen esa llamada |
 | `transcripcion_max_chars` | Máximo de caracteres de transcripción enviados a Claude |
 | `prompt_individual` | Prompt del sistema para el análisis individual de cada asesor |

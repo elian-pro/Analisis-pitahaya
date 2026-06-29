@@ -104,6 +104,31 @@ export async function ensureSidecarFolder(parentFolderId: string): Promise<strin
   return folderId;
 }
 
+// Read-only lookup of the "_Sidecars" subfolder. Unlike ensureSidecarFolder it
+// never creates anything — used by GET endpoints (e.g. the prior-period hint)
+// that must not have side effects. Returns null when the folder doesn't exist.
+export async function findSidecarFolder(parentFolderId: string): Promise<string | null> {
+  if (_sidecarFolderCache.has(parentFolderId)) {
+    return _sidecarFolderCache.get(parentFolderId)!;
+  }
+  const drive = getDrive();
+  const list = await drive.files.list({
+    q: [
+      `'${parentFolderId}' in parents`,
+      `name = '_Sidecars'`,
+      `mimeType = 'application/vnd.google-apps.folder'`,
+      `trashed = false`,
+    ].join(' and '),
+    fields: 'files(id)',
+    pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  const folderId = list.data.files?.[0]?.id ?? null;
+  if (folderId) _sidecarFolderCache.set(parentFolderId, folderId);
+  return folderId;
+}
+
 // ── Upload ────────────────────────────────────────────────────────────────────
 
 export async function uploadPdf(
@@ -269,4 +294,62 @@ export async function findPreviousReport(
     console.warn(`[drive] Could not read previous sidecar for ${advisorName}:`, err);
     return null;
   }
+}
+
+// Lightweight existence check used by the UI to tell — before a report runs —
+// whether a prior period exists to compare against. Unlike findPreviousReport
+// it does NOT download any sidecar contents: it only lists filenames and returns
+// the MOST RECENT prior period key across the given advisors (or null if none).
+export async function findPreviousPeriodKey(
+  sidecarFolderId: string,
+  advisorNames:    string[],
+  month:           string,
+  periodType:      'monthly' | 'weekly' = 'monthly',
+  dateFrom?:       string,
+): Promise<string | null> {
+  if (advisorNames.length === 0) return null;
+  const drive        = getDrive();
+  const currentKey   = currentPeriodKey(month, periodType, dateFrom);
+  const currentStart = keyStartDate(currentKey);
+
+  let list;
+  try {
+    list = await drive.files.list({
+      q: [
+        `'${sidecarFolderId}' in parents`,
+        `name contains 'Sidecar_'`,
+        `trashed = false`,
+      ].join(' and '),
+      fields: 'files(id,name)',
+      pageSize: 1000,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+  } catch (err) {
+    console.warn(`[drive] Could not list sidecar files:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  const wanted = new Set(advisorNames);
+  let bestKey: string | null = null;
+  let bestStart = '';
+
+  for (const f of list.data.files ?? []) {
+    const name = f.name ?? '';
+    if (!name.startsWith('Sidecar_') || !name.endsWith('.txt')) continue;
+    // "Sidecar_{advisor}_{periodKey}.txt" — period keys never contain '_', so the
+    // last underscore splits the (possibly underscore-containing) advisor name
+    // from the period key.
+    const body = name.slice('Sidecar_'.length, -'.txt'.length);
+    const sep  = body.lastIndexOf('_');
+    if (sep < 0) continue;
+    const advisor = body.slice(0, sep);
+    const key     = body.slice(sep + 1);
+    if (!wanted.has(advisor)) continue;
+    const start = keyStartDate(key);
+    if (start >= currentStart) continue;          // not a prior period
+    if (start > bestStart) { bestStart = start; bestKey = key; }
+  }
+
+  return bestKey;
 }

@@ -73,6 +73,7 @@ export const ClaudeIndividualOutputSchema = z.object({
   })).min(1),
 
   mejor_llamada: z.object({ score: z.number(), fecha: z.string(), lead: z.string(), descripcion: z.string() }),
+  mejor_llamada_indice: z.number().int().positive(),
   peor_llamada:  z.object({ score: z.number(), fecha: z.string(), lead: z.string(), descripcion: z.string() }),
 
   recomendaciones: z.array(z.object({
@@ -102,4 +103,5 @@ export interface IndividualReportData extends ClaudeIndividualOutput {
   delta_score?:            number;    // positive = improved vs previous period
   delta_siguiente_paso?:   number;
   delta_talk_ratio?:       number;
+  mejor_llamada_record_url?: string;   // link de la grabacion de la mejor llamada (si la hoja tiene la columna)
 }

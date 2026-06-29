@@ -30,6 +30,7 @@ interface ClientConfig {
   col_analisis:            string;
   col_transcripcion:       string;
   col_duracion?:           string;
+  col_record?:             string;
   excluded_phrases:        string[];
   transcripcion_max_chars: number;
   prompt_individual:       string;
@@ -95,6 +96,7 @@ export async function runJob(job: Job): Promise<void> {
       analisis:      client.col_analisis,
       transcripcion: client.col_transcripcion,
       duracion:      client.col_duracion,
+      record:        client.col_record,
     };
 
     console.log(`[runner] Step 1: fetching call data from sheet "${client.data_sheet_name}"...`);

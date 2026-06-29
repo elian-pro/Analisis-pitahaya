@@ -14,8 +14,8 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;transition:background .25s,color .25s;}
-    body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFD602;--danger:#E24B4A;}
-    body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#FFD602;--danger:#C2342F;}
+    body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFD602;--danger:#E24B4A;--success:#46B36B;}
+    body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#FFD602;--danger:#C2342F;--success:#2E7D32;}
     .header{display:flex;align-items:center;justify-content:space-between;padding:18px 48px;border-bottom:0.5px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
     .header-left{display:flex;align-items:center;gap:14px;}
     .logo-box{width:38px;height:38px;background:#0A0A0A;border:0.5px solid rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;}
@@ -139,6 +139,16 @@
     .confirm-advisors{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px;}
     .confirm-avatar{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:100px;font-size:12px;font-weight:500;border:0.5px solid var(--border2);}
     .confirm-avatar-circle{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+    .confirm-prev-badge{display:flex;align-items:flex-start;gap:9px;position:relative;background:var(--surface2);border:0.5px solid var(--border2);border-radius:10px;padding:10px 13px;margin:16px 0 0;font-size:12px;color:var(--fg);line-height:1.5;}
+    .confirm-prev-badge::before{content:'';position:absolute;top:-6px;left:24px;width:10px;height:10px;background:inherit;border-left:0.5px solid var(--border2);border-top:0.5px solid var(--border2);transform:rotate(45deg);}
+    .confirm-prev-badge.is-yes{background:color-mix(in srgb, var(--success) 12%, var(--surface));border-color:color-mix(in srgb, var(--success) 45%, transparent);}
+    .confirm-prev-badge.is-yes::before{border-color:color-mix(in srgb, var(--success) 45%, transparent);}
+    .confirm-prev-badge.is-yes .conf-prev-text strong{color:var(--success);}
+    .confirm-prev-badge.is-no{background:color-mix(in srgb, var(--danger) 12%, var(--surface));border-color:color-mix(in srgb, var(--danger) 45%, transparent);}
+    .confirm-prev-badge.is-no::before{border-color:color-mix(in srgb, var(--danger) 45%, transparent);}
+    .confirm-prev-badge.is-no .conf-prev-text strong{color:var(--danger);}
+    .conf-prev-icon{font-size:14px;line-height:1.3;flex-shrink:0;}
+    .conf-prev-text strong{font-weight:600;}
     .confirm-warning{display:flex;align-items:flex-start;gap:9px;background:rgba(255,214,2,0.05);border:0.5px solid rgba(255,214,2,0.2);border-radius:10px;padding:11px 13px;margin:20px 0 22px;font-size:12px;color:var(--muted);line-height:1.5;}
     .confirm-actions{display:flex;gap:9px;}
     .confirm-cancel{flex:1;padding:10px;background:transparent;border:0.5px solid var(--border2);color:var(--muted);border-radius:100px;font-family:'Inter',sans-serif;font-size:11px;font-weight:400;letter-spacing:0.12em;cursor:pointer;transition:all 0.15s;}
@@ -331,7 +341,7 @@
     <div class="field" id="week-field" style="display:none;position:relative;">
       <div class="field-label">Semana</div>
       <div id="week-display" onclick="toggleCalPopup()" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
-        <span id="week-display-text">—</span><span style="font-size:9px;color:var(--text-dim);flex-shrink:0;">▾</span>
+        <span id="week-display-text">—</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
       </div>
       <select id="week-select" style="display:none;"></select>
       <div id="week-cal-popup" class="week-cal-popup">
@@ -359,9 +369,9 @@
       <div class="card-desc">El sistema genera un reporte individual por cada asesor seleccionado y luego sintetiza un reporte general del equipo en un único Google Doc.</div>
       <div class="check-actions">
         <button class="link-btn" onclick="toggleAll(true)">Todos</button>
-        <span style="color:var(--text-dim)">·</span>
+        <span style="color:var(--faint)">·</span>
         <button class="link-btn" onclick="toggleAll(false)">Ninguno</button>
-        <span style="color:var(--text-dim)">·</span>
+        <span style="color:var(--faint)">·</span>
         <button class="link-btn" onclick="restoreDefaults()">Restaurar</button>
         <span style="flex:1"></span>
         <button class="link-btn" style="color:var(--accent)" onclick="toggleAddForm()">+ Agregar asesor</button>
@@ -537,6 +547,10 @@
           <div class="form-group">
             <label class="form-label">Columna de duración</label>
             <input class="form-control-sm" id="cf-col-duracion" placeholder="Ej. Duracion (opcional)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Columna de grabación</label>
+            <input class="form-control-sm" id="cf-col-record" placeholder="Ej. Record (opcional, link de la grabación)">
           </div>
         </div>
       </div>
@@ -839,6 +853,10 @@
       <div class="confirm-label">Asesores (<span id="conf-count">0</span>)</div>
       <div class="confirm-advisors" id="conf-advisors"></div>
     </div>
+    <div class="confirm-prev-badge" id="conf-prev-badge" style="display:none;">
+      <span class="conf-prev-icon">📊</span>
+      <span class="conf-prev-text" id="conf-prev-text"></span>
+    </div>
     <div class="confirm-row" id="conf-general-row" style="display:none;">
       <div class="confirm-label">Reporte general del equipo</div>
       <div class="conf-gen-toggle">
@@ -894,14 +912,14 @@
   }
 
   const PC=[
-    {bg:"rgba(255,255,255,0.10)",color:"#f0f0f0"},
-    {bg:"rgba(255,255,255,0.08)",color:"#d0d0d0"},
-    {bg:"rgba(255,255,255,0.12)",color:"#ffffff"},
-    {bg:"rgba(255,255,255,0.06)",color:"#bbbbbb"},
-    {bg:"rgba(255,255,255,0.09)",color:"#e0e0e0"},
-    {bg:"rgba(255,255,255,0.07)",color:"#c8c8c8"},
-    {bg:"rgba(255,255,255,0.11)",color:"#ebebeb"},
-    {bg:"rgba(255,255,255,0.05)",color:"#aaaaaa"}
+    {bg:"#C0392B",color:"#ffffff"},
+    {bg:"#1F6FA8",color:"#ffffff"},
+    {bg:"#8E44AD",color:"#ffffff"},
+    {bg:"#117A65",color:"#ffffff"},
+    {bg:"#B9770E",color:"#ffffff"},
+    {bg:"#2C3E80",color:"#ffffff"},
+    {bg:"#C2185B",color:"#ffffff"},
+    {bg:"#2E7D32",color:"#ffffff"}
   ];
 
   let currentClient     = null;
@@ -1097,11 +1115,11 @@
   PC.forEach((c,i)=>{
     const d=document.createElement('div');
     d.className='color-dot'+(i===0?' selected':'');
-    d.style.cssText=`background:${c.bg};border:2px solid ${i===0?c.color:'transparent'}`;
+    d.style.cssText=`background:${c.bg};border:2px solid ${i===0?'var(--fg)':'transparent'}`;
     d.onclick=()=>{
       document.querySelectorAll('.color-dot').forEach((x,j)=>{
         x.classList.toggle('selected',j===i);
-        x.style.border=`2px solid ${j===i?PC[j].color:'transparent'}`;
+        x.style.border=`2px solid ${j===i?'var(--fg)':'transparent'}`;
       });
       sci=i;
     };
@@ -1385,12 +1403,24 @@
       secs++;
       elapsed.textContent=`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')} transcurrido`;
     },1000);
-    let tick=0;
+    // Animación guiada por tiempo (independiente del backend): cada hito dura
+    // STEP_MS; la barra sube 100/N% por hito, de forma lineal, y se queda en 99%
+    // hasta que el job realmente termina (finishModal* salta a 100%). Si tarda más
+    // de N×1:15, el último hito sigue girando con la barra en 99%.
+    const STEP_MS=75000;            // 1:15 por hito
+    const N=steps.length;
+    const totalMs=N*STEP_MS;
+    const t0p=performance.now();
+    let lastStep=-1;
     progressInterval=setInterval(()=>{
-      tick++;
-      const p=Math.min(90,Math.round((tick/totalSecs)*90));
-      smoothProg(p);
-      const stepIndex=Math.min(steps.length-1,Math.floor((p/90)*(steps.length-1)));
+      const el=performance.now()-t0p;
+      const pctVal=Math.min(99,(el/totalMs)*100);
+      _progCur=pctVal;
+      if(bar)bar.style.width=pctVal.toFixed(1)+'%';
+      if(pct)pct.textContent=Math.round(pctVal)+'%';
+      const stepIndex=Math.min(N-1,Math.floor(el/STEP_MS));
+      if(stepIndex===lastStep)return;
+      lastStep=stepIndex;
       steps.forEach((_,i)=>{
         const item=document.getElementById('step-'+i);
         const icon=document.getElementById('step-icon-'+i);
@@ -1400,7 +1430,7 @@
         else if(i===stepIndex){item.className='step-item active';icon.className='step-icon active';icon.innerHTML='<div class="spin-step"></div>';txt.className='step-text active';subtitle.textContent=steps[i];}
         else{item.className='step-item pending';icon.className='step-icon pending';icon.textContent=i+1;txt.className='step-text pending';}
       });
-    },1000);
+    },200);
   }
 
   function _hideCancel(){
@@ -1484,13 +1514,6 @@
       const res=await fetch(`${REPORT_API}/${jobId}`);
       if(!res.ok) throw new Error(`Polling HTTP ${res.status}`);
       const job=await res.json();
-      if(job.progress && job.progress.total>0){
-        clearInterval(progressInterval);
-        const cap=mode==='general'?80:95;
-        const pct=Math.round((job.progress.completed/job.progress.total)*cap);
-        smoothProg(pct);
-        document.getElementById('modal-subtitle').textContent=`Procesando: ${job.progress.completed}/${job.progress.total} asesores`;
-      }
       if(job.status==='done') return job;
       if(job.status==='error') throw new Error(job.error||'Error al generar reportes');
       if(job.status==='cancelled'){const e=new Error('__cancelled__');e.name='cancelled';throw e;}
@@ -1550,17 +1573,16 @@
     const ca=document.getElementById('conf-advisors');
     ca.innerHTML='';
     try{
-      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'rgba(255,255,255,0.10)',color:'#f0f0f0'});
+      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'var(--surface2)',color:'var(--fg)'});
       if(list.length){
         list.forEach(a=>{
           const d=document.createElement('div');
           d.className='confirm-avatar';
-          d.style.background=a.bg;
-          d.innerHTML=`<div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};border:1px solid rgba(255,255,255,0.15);">${a.initials}</div><span style="color:${a.color};">${a.name}</span>`;
+          d.innerHTML=`<div class="confirm-avatar-circle" style="background:${a.bg};color:${a.color};">${a.initials}</div><span style="color:var(--fg);">${a.name}</span>`;
           ca.appendChild(d);
         });
       }else{
-        ca.innerHTML='<span style="font-size:12px;color:#888;">Ningún asesor seleccionado</span>';
+        ca.innerHTML='<span style="font-size:12px;color:var(--muted);">Ningún asesor seleccionado</span>';
       }
     }catch(e){
       ca.textContent=names.length?names.join(', '):'Ninguno';
@@ -1579,11 +1601,65 @@
     const cb=document.getElementById('confirm-backdrop');
     cb.style.display='flex';
     cb.classList.add('show');
+    // Async hint: does a prior-period report exist to compare against?
+    loadPreviousPeriodBadge(names);
+  }
+  // Shows a bubble in the confirm modal stating whether a prior-period report
+  // exists to compare against: green when one is found, red when none (first
+  // period). Purely informational — never blocks report generation.
+  let _prevReqSeq=0;
+  function setPrevBadge(state,iconText,html){
+    const badge=document.getElementById('conf-prev-badge');
+    badge.classList.remove('is-yes','is-no');
+    if(state==='hidden'){badge.style.display='none';return;}
+    badge.querySelector('.conf-prev-icon').textContent=iconText;
+    document.getElementById('conf-prev-text').innerHTML=html;
+    if(state==='yes') badge.classList.add('is-yes');
+    else if(state==='no') badge.classList.add('is-no');
+    badge.style.display='flex';
+  }
+  async function loadPreviousPeriodBadge(names){
+    setPrevBadge('hidden');
+    if(!currentClient||!names.length)return;
+    const seq=++_prevReqSeq;
+    // Neutral loading placeholder while we query Drive
+    setPrevBadge('neutral','⏳','Verificando reportes del periodo anterior…');
+    let qs=`client_id=${encodeURIComponent(currentClient.id)}&month=${encodeURIComponent(ms.value)}&period_type=${encodeURIComponent(currentPeriodType)}`;
+    if(currentPeriodType==='weekly'){
+      try{const wData=JSON.parse(document.getElementById('week-select').value||'{}');if(wData.start)qs+=`&date_from=${encodeURIComponent(wData.start)}`;}catch(e){}
+    }
+    names.forEach(n=>{qs+=`&advisors=${encodeURIComponent(n)}`;});
+    try{
+      const res=await fetch(`${REPORT_API}/previous?${qs}`);
+      if(seq!==_prevReqSeq)return;          // a newer modal open superseded this
+      let data=null;
+      try{ data=await res.json(); }catch(_){ data=null; }
+      if(seq!==_prevReqSeq)return;
+      if(!res.ok||!data){
+        console.warn('[periodo anterior] respuesta no válida',res.status,data);
+        setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+      }else if(data.unknown){
+        // Lookup reached the server but Drive failed — show neutral, log the reason
+        console.warn('[periodo anterior] verificación falló:',data.reason||'(sin detalle)');
+        setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+      }else if(data.has_previous){
+        const period=data.period_label?` (${data.period_label})`:'';
+        setPrevBadge('yes','✅',`<strong>Reporte del periodo anterior detectado${period}.</strong> El análisis incluirá la comparativa contra ese periodo.`);
+      }else{
+        setPrevBadge('no','⚠️','<strong>No se detectó reporte del periodo anterior.</strong> Este será el primer periodo, sin análisis comparativo.');
+      }
+    }catch(e){
+      if(seq!==_prevReqSeq)return;
+      console.warn('[periodo anterior] error de red',e);
+      setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+    }
   }
   function closeConfirm(){
     const cb=document.getElementById('confirm-backdrop');
     cb.classList.remove('show');cb.style.display='none';
     _pendingMode=null;
+    _prevReqSeq++;                          // invalidate any in-flight badge fetch
+    document.getElementById('conf-prev-badge').style.display='none';
   }
   async function confirmAndGenerate(){
     const advisorMode=_pendingMode;
@@ -1623,7 +1699,6 @@
       'Subiendo a Google Drive'
     ];
     openModal(STEPS,Math.min(n*3*60,15*60));
-    document.getElementById('modal-subtitle').textContent=`Tiempo estimado: ${n}–${n*3} min`;
     try{
       // 1. Encolar job
       const postBody = { client_id: currentClient.id, month, type: reportType, advisors, period_type: periodType };
@@ -1646,13 +1721,7 @@
       }
       const {job_id}=await postRes.json();
       currentJobId=job_id;
-      // Switch to a slow creep while the server fetches sheet data & prepares advisors
-      clearInterval(progressInterval);
-      progressInterval=setInterval(()=>{
-        if(_progCur<12) smoothProg(Math.min(12,_progCur+0.25));
-      },1000);
-      document.getElementById('modal-subtitle').textContent='Preparando análisis…';
-      // 3. Polling hasta completar
+      // 3. Polling hasta completar (la barra/hitos los maneja la animación por tiempo)
       const job=await pollJob(job_id,n,reportType);
       // 4. Mostrar resultados
       const results=job.results||{individual:[]};
@@ -1688,7 +1757,7 @@
         document.getElementById('modal-subtitle').textContent='Proceso cancelado';
         const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
         const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
-        mr.innerHTML='<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">El reporte fue cancelado. No se generó ningún archivo.</div>';
+        mr.innerHTML='<div style="font-size:13px;color:var(--muted);padding:4px 0;">El reporte fue cancelado. No se generó ningún archivo.</div>';
         document.getElementById('result-section').classList.remove('show');
       }else{
         errorModal(e.message);
@@ -1915,7 +1984,7 @@
 
     const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
-      'cf-col-transcripcion','cf-col-duracion','cf-excluded-phrases','cf-max-chars',
+      'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
       'cf-prompt-individual','cf-prompt-general'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '80000';
@@ -1945,6 +2014,7 @@
         document.getElementById('cf-col-analisis').value     = c.col_analisis || '';
         document.getElementById('cf-col-transcripcion').value= c.col_transcripcion || '';
         document.getElementById('cf-col-duracion').value     = c.col_duracion || '';
+        document.getElementById('cf-col-record').value       = c.col_record || '';
         document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
         document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 80000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
@@ -2011,6 +2081,7 @@
       col_analisis:            document.getElementById('cf-col-analisis').value.trim(),
       col_transcripcion:       document.getElementById('cf-col-transcripcion').value.trim(),
       col_duracion:            document.getElementById('cf-col-duracion').value.trim() || undefined,
+      col_record:              document.getElementById('cf-col-record').value.trim() || undefined,
       excluded_phrases:        rawPhrases.split(',').map(s => s.trim()).filter(Boolean),
       transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 80000,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
@@ -2127,7 +2198,7 @@
   const _DRAFT_KEY = 'zebra_client_draft';
   const _CF_FIELDS = ['cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
     'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
-    'cf-col-transcripcion','cf-col-duracion','cf-excluded-phrases','cf-max-chars',
+    'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
     'cf-prompt-individual','cf-prompt-general'];
 
   function _autoSaveDraft() {

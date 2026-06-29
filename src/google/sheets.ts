@@ -14,6 +14,7 @@ export interface CallRow {
   calif:             string;
   analisis:          string;
   transcripcion:     string;
+  record:            string;
   rowNumber:         number;
   duracion_segundos: number;
 }
@@ -25,6 +26,7 @@ export interface SheetColumns {
   analisis:      string;
   transcripcion: string;
   duracion?:     string;
+  record?:       string;
 }
 
 // ── Date parsing ──────────────────────────────────────────────────────────────
@@ -163,6 +165,7 @@ export async function getCallData(
     analisis:      headerIndex(headers, cols.analisis),
     transcripcion: headerIndex(headers, cols.transcripcion),
     duracion:      cols.duracion ? headerIndex(headers, cols.duracion) : -1,
+    record:        cols.record   ? headerIndex(headers, cols.record)   : -1,
   };
 
   const result: CallRow[] = [];
@@ -205,6 +208,7 @@ export async function getCallData(
       calif:             idx.calif  >= 0 ? String(row[idx.calif]  ?? '').trim() : '',
       analisis:          idx.analisis >= 0 ? String(row[idx.analisis] ?? '').trim() : '',
       transcripcion,
+      record:            idx.record >= 0 ? String(row[idx.record] ?? '').trim() : '',
       rowNumber:         i + 1,
       duracion_segundos: duracionKnown ? duracionSeg : 0,
     });

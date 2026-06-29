@@ -1,0 +1,144 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Zebra · Virtual Stripes 26 — design tokens (DTCG). Fuente: src/styles/tokens.css + tailwind.config.mjs. Portable a cualquier proyecto/herramienta.",
+  "color": {
+    "$type": "color",
+    "ink": {
+      "$description": "Rampa monocromatica (light). Acento = negro. ink-400 solo decorativo, nunca texto.",
+      "ink":     { "$value": "#0A0A0A" },
+      "ink-900": { "$value": "#0F172A" },
+      "ink-700": { "$value": "#262626" },
+      "ink-500": { "$value": "#737373", "$description": "Minimo legible como texto (4.74:1 AA)" },
+      "ink-400": { "$value": "#94A3B8", "$description": "Solo decorativo (2.56:1, falla AA como texto)" },
+      "ink-300": { "$value": "#CBD5E1" },
+      "ink-200": { "$value": "#E5E5E5" },
+      "ink-100": { "$value": "#F5F7FA" },
+      "ink-50":  { "$value": "#F9FAFB" },
+      "white":   { "$value": "#FFFFFF" }
+    },
+    "ink-dark": {
+      "$description": "Rampa ink invertida para dark mode (neutros sobre fondo oscuro).",
+      "ink":     { "$value": "#FFFFFF" },
+      "ink-900": { "$value": "#F5F5F5" },
+      "ink-700": { "$value": "#E5E5E5" },
+      "ink-500": { "$value": "#A3A3A3" },
+      "ink-400": { "$value": "#737373" },
+      "ink-300": { "$value": "#404040" },
+      "ink-200": { "$value": "#2E2E2E" },
+      "ink-100": { "$value": "#222222" },
+      "ink-50":  { "$value": "#1A1A1A" },
+      "bg":      { "$value": "#0A0A0A" }
+    },
+    "semantic-light": {
+      "$description": "Tokens theme-aware (modo claro).",
+      "bg":          { "$value": "#FFFFFF" },
+      "surface":     { "$value": "#FFFFFF" },
+      "surface-2":   { "$value": "#F9FAFB" },
+      "text":        { "$value": "#0A0A0A" },
+      "text-muted":  { "$value": "#737373" },
+      "accent":      { "$value": "#0A0A0A" },
+      "border":      { "$value": "rgba(10,10,10,0.10)" },
+      "border-strong": { "$value": "rgba(10,10,10,0.12)" },
+      "overlay":     { "$value": "rgba(10,10,10,0.45)" }
+    },
+    "semantic-dark": {
+      "$description": "Tokens theme-aware (modo oscuro).",
+      "bg":          { "$value": "#0A0A0A" },
+      "surface":     { "$value": "#161616" },
+      "surface-2":   { "$value": "#1C1C1C" },
+      "text":        { "$value": "#FFFFFF" },
+      "text-muted":  { "$value": "#A3A3A3" },
+      "accent":      { "$value": "#FFFFFF" },
+      "border":      { "$value": "rgba(255,255,255,0.10)" },
+      "border-strong": { "$value": "rgba(255,255,255,0.14)" },
+      "overlay":     { "$value": "rgba(0,0,0,0.6)" }
+    },
+    "status": {
+      "$description": "Colores semanticos de estado (no theme-aware).",
+      "error":   { "$value": "#B91C1C", "$description": "Rojo de error (distinto del rojo de marca)" },
+      "success": { "$value": "#047857" },
+      "warning": { "$value": "#D97706" }
+    },
+    "industry": {
+      "$description": "Acentos por vertical (apagados, todos AA con texto blanco). Se activan via data-theme.",
+      "inmobiliario": { "$value": "#7C6A3E", "$description": "oro · 5.27:1" },
+      "restaurantes": { "$value": "#A85A4C", "$description": "rojo · 4.96:1" },
+      "medico":       { "$value": "#46807C", "$description": "teal · 4.53:1" }
+    },
+    "audiovisual": {
+      "$description": "Excepcion de marca al monocromo: SOLO en contenido de video (subtitulos, lower-thirds).",
+      "av-yellow":     { "$value": "#FFCE00" },
+      "av-yellow-ink": { "$value": "#16150F" }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "$description": "Escala Muy sutil. Botones ya no pill (10px). pill solo para circulos reales.",
+    "chip":    { "$value": "6px" },
+    "control": { "$value": "8px" },
+    "input":   { "$value": "10px" },
+    "btn":     { "$value": "10px" },
+    "card":    { "$value": "12px" },
+    "pill":    { "$value": "999px" }
+  },
+  "spacing": {
+    "$type": "dimension",
+    "$description": "Malla de 4px.",
+    "1": { "$value": "4px" },
+    "2": { "$value": "8px" },
+    "3": { "$value": "12px" },
+    "4": { "$value": "16px" },
+    "5": { "$value": "20px" },
+    "6": { "$value": "24px" },
+    "8": { "$value": "32px" },
+    "10": { "$value": "40px" },
+    "12": { "$value": "48px" },
+    "section": { "$value": "60px" }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "$description": "Escala de 5 niveles por elevacion (PCB R96). Multicapa: 1.a capa 0 0 0 1px imita el borde (R55). Light = profundidad real; dark = capa de borde blanca tenue + profundidad atenuada (R56).",
+    "light": {
+      "sm":  { "$value": "0 0 0 1px rgba(10,10,10,0.04), 0 1px 2px rgba(10,10,10,0.06)", "$description": "cards" },
+      "md":  { "$value": "0 0 0 1px rgba(10,10,10,0.04), 0 2px 4px -1px rgba(10,10,10,0.08), 0 4px 8px -2px rgba(10,10,10,0.06)", "$description": "dropdowns" },
+      "lg":  { "$value": "0 0 0 1px rgba(10,10,10,0.04), 0 4px 8px -2px rgba(10,10,10,0.10), 0 12px 24px -6px rgba(10,10,10,0.10)", "$description": "modales" },
+      "xl":  { "$value": "0 0 0 1px rgba(10,10,10,0.04), 0 8px 16px -4px rgba(10,10,10,0.12), 0 24px 48px -12px rgba(10,10,10,0.14)", "$description": "drawers" },
+      "2xl": { "$value": "0 0 0 1px rgba(10,10,10,0.04), 0 16px 32px -8px rgba(10,10,10,0.16), 0 40px 72px -16px rgba(10,10,10,0.18)", "$description": "flotantes criticos" }
+    },
+    "dark": {
+      "sm":  { "$value": "0 0 0 1px rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.4)" },
+      "md":  { "$value": "0 0 0 1px rgba(255,255,255,0.05), 0 2px 6px -1px rgba(0,0,0,0.5)" },
+      "lg":  { "$value": "0 0 0 1px rgba(255,255,255,0.06), 0 6px 16px -4px rgba(0,0,0,0.55)" },
+      "xl":  { "$value": "0 0 0 1px rgba(255,255,255,0.06), 0 12px 28px -8px rgba(0,0,0,0.6)" },
+      "2xl": { "$value": "0 0 0 1px rgba(255,255,255,0.07), 0 20px 44px -12px rgba(0,0,0,0.65)" }
+    }
+  },
+  "typography": {
+    "$description": "Inter (sans) + JetBrains Mono (mono: eyebrows, cifras, indices). Headings semibold (600).",
+    "fontFamily": {
+      "$type": "fontFamily",
+      "sans": { "$value": ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"] },
+      "mono": { "$value": ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"] }
+    },
+    "fontWeight": {
+      "$type": "fontWeight",
+      "body":    { "$value": 400 },
+      "medium":  { "$value": 500 },
+      "heading": { "$value": 600, "$description": "Headings y card titles (semibold, no extrabold)" }
+    },
+    "scale": {
+      "display": { "$value": "clamp(2.5rem, 5vw + 1rem, 4.5rem)", "$description": "lh 1.05 · tracking -0.03em" },
+      "h1":      { "$value": "clamp(2rem, 3vw + 1rem, 3rem)", "$description": "lh 1.1 · tracking -0.02em · 600" },
+      "h2":      { "$value": "clamp(1.5rem, 1.5vw + 1rem, 2rem)", "$description": "lh 1.2 · tracking -0.01em" },
+      "body":    { "$value": "15px", "$description": "lh 1.55 (desviacion de marca vs 16px)" },
+      "small":   { "$value": "14px" },
+      "caption": { "$value": "12px" },
+      "eyebrow": { "$value": "11px", "$description": "JetBrains Mono uppercase · tracking 0.22em · 500" }
+    }
+  },
+  "motion": {
+    "$description": "Un solo easing para todo.",
+    "easingSignature": { "$value": "cubic-bezier(0.16, 1, 0.3, 1)", "$description": "ease-out expo" },
+    "focusRing": { "$value": "0 0 0 1px var(--accent)", "$description": "Anillo de foco fino 1px, animado 0.18s" }
+  }
+}

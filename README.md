@@ -162,10 +162,21 @@ sobreviven a los redeploys:
 | Automatizaciones | `schedules` | `id` + objeto `jsonb` |
 | Historial de reportes | `jobs` | `id` + objeto `jsonb` (caché en memoria con escritura a DB) |
 | Consumo de tokens | `token_log` | columnas reales (`ts`, `input`, `output`, …) para sumar por fecha |
+| Métricas por reporte | `report_metrics` | columnas reales (`client_id`, `advisor`, `period_key`, `avg_score`, …) |
 
 > El historial de reportes (`jobs`) usa una caché en memoria para las lecturas frecuentes
 > del runner (estado/cancelación) y escribe a Postgres en paralelo para durabilidad. El
 > log de tokens usa columnas reales porque es data analítica que se agrega por fecha.
+
+### Comparación con el periodo anterior (DB + Drive)
+
+Al comparar un reporte contra el periodo anterior, el sistema busca **primero en la base
+de datos** (tabla `report_metrics`, una consulta indexada) y solo si no encuentra nada cae
+a los **sidecars de Google Drive** como respaldo. Cada vez que se genera un reporte, las
+métricas de cada asesor se guardan en `report_metrics` *además* de subir el sidecar a
+Drive. Así la comparación es rápida y confiable aunque un archivo de Drive se borre, se
+mueva o falle la lectura — y sigue funcionando para periodos viejos generados antes de
+esta tabla (vía el fallback a Drive). Sin `DATABASE_URL`, usa Drive como siempre.
 
 ---
 

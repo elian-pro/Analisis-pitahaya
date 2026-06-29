@@ -225,7 +225,7 @@ export function currentPeriodKey(
 // Normalise any period key to a comparable start date (YYYY-MM-DD).
 // Monthly keys ('YYYY-MM') become the 1st of the month so they sort correctly
 // alongside weekly keys ('YYYY-MM-DD').
-function keyStartDate(periodKey: string): string {
+export function keyStartDate(periodKey: string): string {
   return /^\d{4}-\d{2}$/.test(periodKey) ? `${periodKey}-01` : periodKey;
 }
 

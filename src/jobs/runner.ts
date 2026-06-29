@@ -15,6 +15,7 @@ import { processAdvisor, buildSidecar, parseSidecarMetrics, type AdvisorResult }
 import { processGeneralReport } from '../claude/general';
 import { mergePdfs } from '../pdf/merge';
 import { recordTokens } from '../tokens/store';
+import { recordReportMetrics, previousReportTextFromDb } from '../metrics/store';
 
 async function loadClient(clientId: string) {
   const client = await getClient(clientId);
@@ -139,9 +140,11 @@ export async function runJob(job: Job): Promise<void> {
     const settled = await runBatch(advisorsWithData, 5, async (advisorName) => {
       console.log(`[runner]   processing advisor: ${advisorName}`);
       const calls      = callMap.get(advisorName)!;
-      const prevText   = await findPreviousReport(
-        sidecarFolderId, advisorName, job.month, job.period_type, job.date_from,
-      );
+      // Previous report: try the database first (robust + fast), fall back to the
+      // Drive sidecar when the DB has nothing (e.g. periods predating this table).
+      const prevText   =
+        (await previousReportTextFromDb(job.client_id, advisorName, job.month, job.period_type, job.date_from))
+        ?? (await findPreviousReport(sidecarFolderId, advisorName, job.month, job.period_type, job.date_from));
       const prevMetrics = prevText ? parseSidecarMetrics(prevText) : null;
       const result      = await processAdvisor(
         advisorName, calls, client, job.month, prevText, prevMetrics, periodLabel,
@@ -218,10 +221,11 @@ export async function runJob(job: Job): Promise<void> {
     // These power next-period comparisons, so a silent failure here means every
     // future report shows "Primer periodo". We await + surface any failures.
     console.log(`[runner] Step 8: writing ${individualResults.length} sidecar(s) to folder ${sidecarFolderId}...`);
+    // Build each sidecar text once, then write it to BOTH stores: Drive (legacy,
+    // redundant) and Postgres (primary source for next-period comparison).
+    const sidecars = individualResults.map(r => ({ r, text: buildSidecar(r.reportData, periodKey) }));
     const sidecarSettled = await Promise.allSettled(
-      individualResults.map(r =>
-        uploadReportSidecar(sidecarFolderId, r.asesor, periodKey, buildSidecar(r.reportData, periodKey)),
-      ),
+      sidecars.map(({ r, text }) => uploadReportSidecar(sidecarFolderId, r.asesor, periodKey, text)),
     );
     const sidecarFailures = sidecarSettled
       .map((s, i) => (s.status === 'rejected'
@@ -231,11 +235,24 @@ export async function runJob(job: Job): Promise<void> {
     if (sidecarFailures.length > 0) {
       console.error(
         `[runner] Step 8: ${sidecarFailures.length}/${individualResults.length} sidecar(s) FAILED — ` +
-        `next-period comparison will be unavailable for them: ${sidecarFailures.join(' | ')}`,
+        `next-period comparison falls back to the database for them: ${sidecarFailures.join(' | ')}`,
       );
     } else {
       console.log(`[runner] Step 8 done: ${individualResults.length} sidecar(s) written (key=${periodKey})`);
     }
+
+    // Persist per-advisor metrics to Postgres (no-op without DATABASE_URL). This
+    // is what makes the next period's comparison robust even if a Drive sidecar
+    // is missing, moved, or the Drive lookup fails.
+    await Promise.allSettled(
+      sidecars.map(({ r, text }) =>
+        recordReportMetrics(
+          job.client_id, r.asesor, periodKey,
+          r.reportData.avg_score, r.reportData.pct_logra_siguiente_paso, r.reportData.talk_ratio,
+          text,
+        ),
+      ),
+    );
 
     // ── 9. Finalise ──────────────────────────────────────────────────────────
     const totalInput  = individualResults.reduce((s, r) => s + r.input_tokens,  0) + generalInput;

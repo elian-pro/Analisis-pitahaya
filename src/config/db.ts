@@ -48,6 +48,7 @@ export const CLIENTS_TABLE = 'clients';
 export const SCHEDULES_TABLE = 'schedules';
 export const JOBS_TABLE = 'jobs';
 export const TOKEN_LOG_TABLE = 'token_log';
+export const REPORT_METRICS_TABLE = 'report_metrics';
 
 /**
  * Creates the tables if they don't exist. Safe to run on every boot.
@@ -80,7 +81,27 @@ export async function ensureSchema(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS token_log_ts_idx ON ${TOKEN_LOG_TABLE} (ts)`,
   );
-  console.log('[db] Schema ready (clients, schedules, jobs, token_log)');
+  // Per-advisor report metrics per period: powers "compare vs previous period"
+  // from the database (with Drive sidecars kept as a redundant fallback).
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS ${REPORT_METRICS_TABLE} (
+       client_id     TEXT        NOT NULL,
+       advisor       TEXT        NOT NULL,
+       period_key    TEXT        NOT NULL,
+       period_start  DATE        NOT NULL,
+       avg_score     INTEGER,
+       pct_siguiente INTEGER,
+       talk_ratio    INTEGER,
+       sidecar_text  TEXT,
+       created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+       PRIMARY KEY (client_id, advisor, period_key)
+     )`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS report_metrics_lookup_idx
+       ON ${REPORT_METRICS_TABLE} (client_id, advisor, period_start)`,
+  );
+  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

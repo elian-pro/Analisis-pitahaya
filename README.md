@@ -35,6 +35,8 @@ Ve a **Service → Environment** y agrega:
 | `GOOGLE_SA_JSON` | JSON completo de la cuenta de servicio de Google (ver abajo) |
 | `ANTHROPIC_API_KEY` | API key de Anthropic (console.anthropic.com) |
 | `PORT` | Puerto del servidor (default: `3000`, normalmente no cambiar) |
+| `DATABASE_URL` | (Recomendado) URL de PostgreSQL para persistir clientes y automatizaciones (ver sección **Base de datos PostgreSQL**) |
+| `DATABASE_SSL` | (Opcional) `true` solo si conectas por un host externo que requiere SSL |
 
 #### Obtener `GOOGLE_SA_JSON`
 
@@ -68,6 +70,92 @@ Debe responder:
 ```json
 {"status":"ok","ts":"2026-..."}
 ```
+
+---
+
+## Base de datos PostgreSQL (persistencia que sobrevive a redeploys)
+
+Por defecto, los **clientes** y las **automatizaciones** se guardan en archivos JSON
+dentro del contenedor. Esos archivos forman parte de la imagen Docker, así que **cada
+redeploy los sobrescribe** y se pierde lo que hayas creado o editado desde la interfaz.
+
+Para que la información sea **editable y persistente**, configura una base de datos
+PostgreSQL. Cuando defines `DATABASE_URL`, la app guarda clientes y automatizaciones en
+Postgres en lugar de los archivos JSON. Si **no** defines `DATABASE_URL`, sigue usando
+los archivos JSON (útil para desarrollo local).
+
+### 1. Crear el servicio Postgres en EasyPanel
+
+1. Abre tu **proyecto** en EasyPanel (el mismo que contiene la app).
+2. **Create Service → Postgres**.
+3. Ponle un nombre, por ejemplo `db`, y elige una contraseña (o usa la autogenerada).
+4. **Create**. EasyPanel levanta el contenedor de Postgres con un volumen persistente
+   (sus datos sí sobreviven a los redeploys de la app).
+
+### 2. Copiar la URL de conexión interna
+
+1. Abre el servicio Postgres que acabas de crear.
+2. En la pestaña **Credentials** verás los datos de conexión. Usa la **Internal
+   Connection URL** (host interno del proyecto, no la externa). Tiene esta forma:
+
+   ```
+   postgres://postgres:TU_PASSWORD@<proyecto>_<servicio>:5432/postgres
+   ```
+
+   > El host interno (`<proyecto>_<servicio>`) solo es accesible dentro de la red privada
+   > del proyecto y **no necesita SSL**. Por eso ambos servicios deben estar en el mismo
+   > proyecto de EasyPanel.
+
+### 3. Configurar la app
+
+1. Ve al servicio de la **app** → **Environment**.
+2. Agrega la variable:
+
+   ```
+   DATABASE_URL=postgres://postgres:TU_PASSWORD@<proyecto>_<servicio>:5432/postgres
+   ```
+
+3. Guarda y haz **Deploy**.
+
+### 4. Migración automática
+
+En el **primer arranque con `DATABASE_URL` configurada**, la app:
+
+1. Crea las tablas `clients` y `schedules` automáticamente (no necesitas correr ningún SQL).
+2. Si las tablas están vacías, **copia** los clientes de `clients.json` y las
+   automatizaciones existentes a Postgres.
+
+En los logs del servicio verás algo como:
+
+```
+🗄️  DATABASE_URL detected — using PostgreSQL for clients & schedules
+[db] Schema ready (clients, schedules)
+[clients] Seeded 5 client(s) from clients.json into Postgres
+```
+
+A partir de ahí, todo lo que crees o edites desde la interfaz se guarda en Postgres y
+**sobrevive a los redeploys**.
+
+> **Migración manual (opcional):** si prefieres ejecutarla a mano (por ejemplo desde tu
+> máquina apuntando a la base de datos de producción):
+> ```bash
+> DATABASE_URL=postgres://... npm run migrate:db
+> ```
+> Es idempotente: puedes correrla varias veces sin duplicar datos (hace upsert por `id`).
+
+### Modelo de datos
+
+Cada cliente/automatización se guarda como una fila con su objeto completo en una columna
+`jsonb`, identificada por `id`:
+
+```sql
+CREATE TABLE clients   (id TEXT PRIMARY KEY, data JSONB NOT NULL, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ);
+CREATE TABLE schedules (id TEXT PRIMARY KEY, data JSONB NOT NULL, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ);
+```
+
+> **Nota:** el historial de jobs (`data/jobs.json`) y el log de tokens (`data/token_log.json`)
+> siguen en archivos. Si quieres que también sobrevivan a los redeploys, monta un volumen
+> en EasyPanel apuntado a `/data` y define `DATA_DIR=/data` en el Environment de la app.
 
 ---
 
@@ -174,8 +262,9 @@ npm run dry-run -- pitahaya-investments 2026-05 Felipe
 ├── index.html              SPA frontend
 ├── clients.json            Configuración de clientes
 ├── src/
-│   ├── server.ts           Express entry point
+│   ├── server.ts           Express entry point (bootstrap de DB + scheduler)
 │   ├── config/env.ts       Validación de variables de entorno (Zod)
+│   ├── config/db.ts        Conexión a PostgreSQL + helpers (clients, schedules)
 │   ├── google/
 │   │   ├── auth.ts         JWT service account
 │   │   ├── sheets.ts       getAdvisors(), getCallData()
@@ -199,7 +288,8 @@ npm run dry-run -- pitahaya-investments 2026-05 Felipe
 │   │   ├── advisors.ts
 │   │   └── report.ts
 │   └── cli/
-│       └── dry-run.ts      CLI para pruebas sin Drive upload
+│       ├── dry-run.ts      CLI para pruebas sin Drive upload
+│       └── migrate-to-db.ts  Migración manual JSON → PostgreSQL
 ├── fixtures/               Outputs del dry-run (gitignored en producción)
 ├── Dockerfile              Multi-stage: Node 20 builder + runtime con Chromium
 └── .env.example            Plantilla de variables de entorno

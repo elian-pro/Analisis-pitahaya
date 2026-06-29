@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import fs from 'fs';
-import { CLIENTS_FILE } from '../config/paths';
+import { getClient } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { findSidecarFolder, findPreviousPeriodKey, monthLabel } from '../google/drive';
@@ -80,13 +79,6 @@ const PreviousQuerySchema = z.object({
   ),
 });
 
-interface PreviousClientConfig {
-  id:                 string;
-  folder_id:          string;
-  sidecar_folder_id?: string;
-  [key: string]:      unknown;
-}
-
 router.get('/previous', async (req: Request, res: Response): Promise<void> => {
   const parsed = PreviousQuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -99,10 +91,9 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  let client: PreviousClientConfig | undefined;
+  let client: Awaited<ReturnType<typeof getClient>>;
   try {
-    const all = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8')) as PreviousClientConfig[];
-    client = all.find(c => c.id === client_id);
+    client = await getClient(client_id);
   } catch {
     res.status(500).json({ error: 'Failed to load clients configuration' });
     return;

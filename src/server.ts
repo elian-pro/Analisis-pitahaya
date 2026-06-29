@@ -6,6 +6,7 @@ import { dbEnabled, ensureSchema } from './config/db';
 import { seedClientsFromFileIfEmpty } from './clients/manager';
 import { seedSchedulesFromFileIfEmpty } from './schedules/store';
 import { seedTokenLogFromFileIfEmpty } from './tokens/store';
+import { initJobs } from './jobs/store';
 import healthRouter from './routes/health';
 import advisorsRouter from './routes/advisors';
 import reportRouter from './routes/report';
@@ -38,7 +39,7 @@ app.get('*', (_req, res) => {
 
 async function bootstrap(): Promise<void> {
   if (dbEnabled) {
-    console.log('🗄️  DATABASE_URL detected — using PostgreSQL for clients & schedules');
+    console.log('🗄️  DATABASE_URL detected — using PostgreSQL for clients, schedules, jobs & tokens');
     await ensureSchema();
     // First boot with a database: migrate any data still living in the JSON
     // files into Postgres so existing deployments carry over automatically.
@@ -48,6 +49,10 @@ async function bootstrap(): Promise<void> {
   } else {
     console.log('📄 No DATABASE_URL — using JSON files (data will NOT survive redeploys)');
   }
+
+  // Load existing jobs into the in-memory cache (from Postgres or the JSON file)
+  // and flag any interrupted by the restart. Runs in both modes.
+  await initJobs();
 
   app.listen(env.PORT, () => {
     console.log(`✅ Zebra Reports listening on port ${env.PORT}`);

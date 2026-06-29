@@ -46,6 +46,7 @@ if (pool) {
 // are preserved exactly with no per-field schema to keep in sync.
 export const CLIENTS_TABLE = 'clients';
 export const SCHEDULES_TABLE = 'schedules';
+export const JOBS_TABLE = 'jobs';
 export const TOKEN_LOG_TABLE = 'token_log';
 
 /**
@@ -53,8 +54,8 @@ export const TOKEN_LOG_TABLE = 'token_log';
  */
 export async function ensureSchema(): Promise<void> {
   if (!pool) return;
-  // Config tables: full object stored per row in a jsonb column.
-  for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE]) {
+  // Config + job tables: full object stored per row in a jsonb column.
+  for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE, JOBS_TABLE]) {
     await pool.query(
       `CREATE TABLE IF NOT EXISTS ${table} (
          id         TEXT PRIMARY KEY,
@@ -79,7 +80,7 @@ export async function ensureSchema(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS token_log_ts_idx ON ${TOKEN_LOG_TABLE} (ts)`,
   );
-  console.log('[db] Schema ready (clients, schedules, token_log)');
+  console.log('[db] Schema ready (clients, schedules, jobs, token_log)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

@@ -153,9 +153,19 @@ CREATE TABLE clients   (id TEXT PRIMARY KEY, data JSONB NOT NULL, created_at TIM
 CREATE TABLE schedules (id TEXT PRIMARY KEY, data JSONB NOT NULL, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ);
 ```
 
-> **Nota:** el historial de jobs (`data/jobs.json`) y el log de tokens (`data/token_log.json`)
-> siguen en archivos. Si quieres que también sobrevivan a los redeploys, monta un volumen
-> en EasyPanel apuntado a `/data` y define `DATA_DIR=/data` en el Environment de la app.
+Con `DATABASE_URL` configurada, **cuatro** conjuntos de datos viven en PostgreSQL y
+sobreviven a los redeploys:
+
+| Dato | Tabla | Forma |
+|---|---|---|
+| Clientes | `clients` | `id` + objeto `jsonb` |
+| Automatizaciones | `schedules` | `id` + objeto `jsonb` |
+| Historial de reportes | `jobs` | `id` + objeto `jsonb` (caché en memoria con escritura a DB) |
+| Consumo de tokens | `token_log` | columnas reales (`ts`, `input`, `output`, …) para sumar por fecha |
+
+> El historial de reportes (`jobs`) usa una caché en memoria para las lecturas frecuentes
+> del runner (estado/cancelación) y escribe a Postgres en paralelo para durabilidad. El
+> log de tokens usa columnas reales porque es data analítica que se agrega por fecha.
 
 ---
 
@@ -281,7 +291,7 @@ npm run dry-run -- pitahaya-investments 2026-05 Felipe
 │   │   ├── individual.ts   Zod schema para output de Claude
 │   │   └── general.ts
 │   ├── jobs/
-│   │   ├── store.ts        In-memory + /tmp/jobs.json
+│   │   ├── store.ts        Caché en memoria + persistencia (PostgreSQL o jobs.json)
 │   │   └── runner.ts       Orquestador del pipeline completo
 │   ├── routes/
 │   │   ├── health.ts

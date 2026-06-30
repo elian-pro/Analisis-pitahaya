@@ -505,13 +505,35 @@
           <option value="">Selecciona un cliente</option>
         </select>
       </div>
-      <div class="field">
+      <div class="field" id="dash-from-field" style="position:relative;">
         <div class="field-label">Desde</div>
-        <input type="date" id="dash-from" class="token-date-input" onchange="loadDashboard()">
+        <input type="hidden" id="dash-from">
+        <div id="dash-from-display" onclick="toggleDashCal('from',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+          <span id="dash-from-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+        </div>
+        <div id="dash-from-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+          <div class="inline-cal-head">
+            <button type="button" class="cal-nav-btn" onclick="dashCalNav('from',-1,event)">‹</button>
+            <div class="mini-cal-title" id="dash-from-cal-title" style="margin-bottom:0;"></div>
+            <button type="button" class="cal-nav-btn" onclick="dashCalNav('from',1,event)">›</button>
+          </div>
+          <div class="cal-rows" id="dash-from-cal-rows"></div>
+        </div>
       </div>
-      <div class="field">
+      <div class="field" id="dash-to-field" style="position:relative;">
         <div class="field-label">Hasta</div>
-        <input type="date" id="dash-to" class="token-date-input" onchange="loadDashboard()">
+        <input type="hidden" id="dash-to">
+        <div id="dash-to-display" onclick="toggleDashCal('to',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+          <span id="dash-to-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+        </div>
+        <div id="dash-to-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+          <div class="inline-cal-head">
+            <button type="button" class="cal-nav-btn" onclick="dashCalNav('to',-1,event)">‹</button>
+            <div class="mini-cal-title" id="dash-to-cal-title" style="margin-bottom:0;"></div>
+            <button type="button" class="cal-nav-btn" onclick="dashCalNav('to',1,event)">›</button>
+          </div>
+          <div class="cal-rows" id="dash-to-cal-rows"></div>
+        </div>
       </div>
       <div class="field">
         <div class="field-label">Granularidad</div>
@@ -2082,6 +2104,125 @@
     loadDashboard();
   }
 
+  // ── Dashboard: selector de fecha con calendario inline (mismo patrón que la
+  // fecha de ejecución de Automatización: input oculto + display clicable +
+  // calendario navegable por mes). A diferencia de ese, aquí no se deshabilitan
+  // fechas pasadas: el dashboard analiza rangos históricos.
+  const _DASH_MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  let _dashCalState = { from: null, to: null };
+
+  function _dashISO(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function _dashDateLabel(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${d} de ${_DASH_MONTHS[m-1].toLowerCase()} de ${y}`;
+  }
+
+  function _updateDashDateDisplay(which) {
+    const iso  = document.getElementById(`dash-${which}`).value;
+    const disp = document.getElementById(`dash-${which}-display-text`);
+    if (iso) { disp.textContent = _dashDateLabel(iso); disp.style.color = 'var(--fg)'; }
+    else     { disp.textContent = 'Selecciona fecha';  disp.style.color = 'var(--muted)'; }
+  }
+
+  function _setDashDate(which, iso) {
+    document.getElementById(`dash-${which}`).value = iso;
+    _updateDashDateDisplay(which);
+  }
+
+  function toggleDashCal(which, e) {
+    if (e) e.stopPropagation();
+    const cal = document.getElementById(`dash-${which}-cal`);
+    const isOpen = cal.style.display !== 'none' && cal.style.display !== '';
+    ['from', 'to'].forEach(w => {
+      if (w !== which) document.getElementById(`dash-${w}-cal`).style.display = 'none';
+    });
+    if (isOpen) { cal.style.display = 'none'; return; }
+    const cur = document.getElementById(`dash-${which}`).value;
+    const ref = cur ? new Date(`${cur}T00:00:00`) : new Date();
+    _dashCalState[which] = { year: ref.getFullYear(), month: ref.getMonth() + 1 };
+    renderDashCal(which);
+    cal.style.display = 'block';
+  }
+
+  function dashCalNav(which, delta, e) {
+    if (e) e.stopPropagation();
+    const st = _dashCalState[which];
+    st.month += delta;
+    if (st.month < 1)  { st.month = 12; st.year--; }
+    if (st.month > 12) { st.month = 1;  st.year++; }
+    renderDashCal(which);
+  }
+
+  function renderDashCal(which) {
+    const st = _dashCalState[which];
+    const year = st.year, mon = st.month;
+    const todayISO = _isoToday();
+    const selISO   = document.getElementById(`dash-${which}`).value;
+    document.getElementById(`dash-${which}-cal-title`).textContent = `${_DASH_MONTHS[mon-1]} ${year}`;
+
+    const firstDay = new Date(year, mon - 1, 1);
+    const lastDay  = new Date(year, mon, 0);
+    const calStart = new Date(firstDay);
+    const fdow = calStart.getDay();
+    calStart.setDate(calStart.getDate() - (fdow === 0 ? 6 : fdow - 1));
+
+    const rowsEl = document.getElementById(`dash-${which}-cal-rows`);
+    rowsEl.innerHTML = '';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'cal-row cal-hdr-row';
+    ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach(h => {
+      const c = document.createElement('div');
+      c.className = 'cal-cell';
+      c.textContent = h;
+      hdr.appendChild(c);
+    });
+    rowsEl.appendChild(hdr);
+
+    const day = new Date(calStart);
+    let rowCount = 0;
+    while (day <= lastDay && rowCount < 6) {
+      const row = document.createElement('div');
+      row.className = 'cal-row';
+      for (let d = 0; d < 7; d++) {
+        const cellDate = new Date(day);
+        const iso      = _dashISO(cellDate);
+        const inMonth  = cellDate.getMonth() + 1 === mon && cellDate.getFullYear() === year;
+        const isToday  = iso === todayISO;
+        const isSel    = iso === selISO;
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell cal-day-cell'
+          + (!inMonth ? ' out-mo' : '')
+          + (isToday ? ' is-today' : '')
+          + (isSel ? ' cal-day-sel' : '');
+        cell.textContent = cellDate.getDate();
+        cell.addEventListener('click', ev => {
+          ev.stopPropagation();
+          _setDashDate(which, iso);
+          document.getElementById(`dash-${which}-cal`).style.display = 'none';
+          loadDashboard();
+        });
+        row.appendChild(cell);
+        day.setDate(day.getDate() + 1);
+      }
+      rowsEl.appendChild(row);
+      rowCount++;
+    }
+  }
+
+  // Close a dashboard calendar when clicking outside its field.
+  document.addEventListener('click', e => {
+    ['from', 'to'].forEach(which => {
+      if (!e.target.closest(`#dash-${which}-field`)) {
+        const cal = document.getElementById(`dash-${which}-cal`);
+        if (cal) cal.style.display = 'none';
+      }
+    });
+  });
+
   function setDashView(v) {
     _dashView = v;
     document.getElementById('dash-view-team').classList.toggle('active', v === 'team');
@@ -2127,8 +2268,8 @@
     const toInput   = document.getElementById('dash-to');
     if (!fromInput.value || !toInput.value) {
       const def = _dashDefaultRange();
-      if (!fromInput.value) fromInput.value = def.from;
-      if (!toInput.value)   toInput.value   = def.to;
+      if (!fromInput.value) _setDashDate('from', def.from);
+      if (!toInput.value)   _setDashDate('to', def.to);
     }
     const from = fromInput.value;
     const to   = toInput.value;

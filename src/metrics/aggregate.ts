@@ -40,6 +40,15 @@ export interface AggregatedMetrics {
   by_advisor: Record<string, SeriesPoint[]>;
 }
 
+export const GRANULARITY_LABELS_ES: Record<Granularity, string> = {
+  weekly:     'Semanal',
+  monthly:    'Mensual',
+  bimonthly:  'Bimestral',
+  quarterly:  'Trimestral',
+  semiannual: 'Semestral',
+  annual:     'Anual',
+};
+
 const MONTH_LABELS = [
   'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
 ];

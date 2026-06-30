@@ -537,6 +537,12 @@
         <div class="field-label">Asesor</div>
         <select id="dash-advisor-select" onchange="renderDashboard()"></select>
       </div>
+      <div class="field" style="margin-left:auto;">
+        <div class="field-label">&nbsp;</div>
+        <button class="btn-secondary" id="dash-pdf-btn" style="width:auto;padding:11px 22px;" onclick="generateDashboardPdf()">
+          <i class="ti ti-file-type-pdf"></i>Generar PDF
+        </button>
+      </div>
     </div>
     <div id="dash-body">
       <div class="token-empty">Selecciona un cliente para ver sus métricas.</div>
@@ -2312,6 +2318,100 @@
       },
       options: _chartOptions(),
     }));
+  }
+
+  // ── Dashboard: exportar a PDF ────────────────────────────────────────────────
+  // The PDF always shows the team-level overview (trend + ranking), regardless
+  // of which view (Equipo/Asesor) is currently on screen — built fresh here so
+  // the export works even when the user is looking at the advisor view.
+  function _pdfChartOptions(extra) {
+    return Object.assign({
+      responsive: false,
+      animation: false,
+      plugins: { legend: { labels: { color: '#1a1a1a', font: { family: 'Helvetica', size: 13 } } } },
+      scales: {
+        x: { ticks: { color: '#444' }, grid: { color: '#e3e0d6' } },
+        y: { ticks: { color: '#444' }, grid: { color: '#e3e0d6' }, beginAtZero: true },
+      },
+    }, extra || {});
+  }
+
+  // Renders a one-off Chart.js chart on a detached canvas and returns it as a
+  // PNG data URL, then discards the chart instance. Used only for PDF export,
+  // independent of whatever is currently shown on screen.
+  function _buildExportImage(type, data, options, width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const chart = new Chart(canvas, { type, data, options: Object.assign({ responsive: false, animation: false }, options) });
+    const img = chart.toBase64Image('image/png', 1);
+    chart.destroy();
+    return img;
+  }
+
+  async function generateDashboardPdf() {
+    if (!dashData || dashData.buckets.length === 0) {
+      alert('No hay datos para exportar en este rango.');
+      return;
+    }
+    const btn = document.getElementById('dash-pdf-btn');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spin-xs"></div> Generando...';
+    try {
+      const labels = dashData.buckets.map(b => b.label);
+      const teamTrendImage = _buildExportImage('line', {
+        labels,
+        datasets: [
+          _lineDataset('Puntaje promedio',       dashData.team.map(p => p.avg_score),     '#0a6cff'),
+          _lineDataset('% logra siguiente paso', dashData.team.map(p => p.pct_siguiente), '#d4af37'),
+          _lineDataset('Talk ratio',             dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+        ],
+      }, _pdfChartOptions(), 900, 420);
+
+      const lastBucket = dashData.buckets[dashData.buckets.length - 1];
+      const rankingRows = dashData.advisors
+        .map(a => ({ advisor: a, value: (dashData.by_advisor[a] || []).find(p => p.bucket === lastBucket.key)?.avg_score ?? null }))
+        .filter(r => r.value !== null)
+        .sort((a, b) => b.value - a.value);
+      const rankingImage = rankingRows.length > 0
+        ? _buildExportImage('bar', {
+            labels: rankingRows.map(r => r.advisor),
+            datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+          }, _pdfChartOptions({ plugins: { legend: { display: false } } }), 900, 420)
+        : null;
+
+      const res = await fetch(`${METRICS_API}/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: dashData.client_id,
+          from: dashData.from,
+          to: dashData.to,
+          granularity: dashData.granularity,
+          team_trend_image: teamTrendImage,
+          ranking_image: rankingImage,
+        }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dashboard_${dashData.client_id}_${dashData.from}_${dashData.to}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Error generando el PDF: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
   }
 
   // ── HTML escape helper ─────────────────────────────────────────────────────

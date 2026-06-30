@@ -533,6 +533,25 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   problemático. Deja la decisión escrita.
 - **DoD:** estrategia elegida y justificada.
 
+> **✅ Decisión (cerrado): Opción B — imagen embebida.**
+> El Ticket 0.6 dejó anotado el riesgo clave: las plantillas `.eta` existentes (`individual.eta`,
+> `general.eta`) **no ejecutan ningún `<script>` ni usan `<canvas>`** — todas sus "gráficas" son
+> CSS puro. No hay ningún precedente en el repo de que `page.setContent()` + `waitUntil:
+> 'networkidle'` espere con éxito la carga de un recurso CDN externo dentro del Chromium headless
+> de producción, y el plan no documenta si el contenedor permite esa salida de red durante el
+> render (aunque sí la necesita para Google/Anthropic, así que es probable que funcione, pero no
+> está verificado). Construir el render de Chart.js **dentro** de la plantilla además exige
+> sincronizar el `page.pdf()` con el momento en que termina de dibujarse el canvas (animaciones,
+> `requestAnimationFrame`), lo que añade fragilidad nueva a un pipeline que hoy es 100% síncrono.
+> **Opción B evita todo esto:** el navegador del usuario (donde Chart.js ya corrió exitosamente
+> para la pantalla, Ticket 2.2/2.3) exporta cada gráfica a PNG vía `chart.toBase64Image()`, las
+> envía como parte del body de `POST /api/metrics/pdf`, y la plantilla simplemente hace
+> `<img src="<%= it.team_trend_image %>">`, exactamente el mismo patrón que ya usa el pipeline
+> para el logo (`_logoB64`, inyectado como `data:image/png;base64,...`). Cero scripts nuevos en
+> Chromium, cero dependencia de red durante el render del PDF, reutiliza un patrón ya probado.
+> Trade-off aceptado: el PDF depende de que el navegador haya renderizado las gráficas antes de
+> pedir la exportación, se resuelve generándolas bajo demanda en el momento del clic (Ticket 3.4).
+
 ### Ticket 3.2 `[IMPL]` Plantilla `.eta` del dashboard + datos
 - Crea `src/pdf/templates/dashboard.eta` siguiendo el patrón confirmado en 0.6 (recepción de
   datos, inyección de logo `_logoB64`).
@@ -541,6 +560,16 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **Asegura que el `Dockerfile` copie la nueva plantilla a `dist/`** (la línea identificada en
   0.6). Este paso es fácil de olvidar y rompe el PDF en producción.
 - **DoD:** la plantilla renderiza un HTML correcto con datos de ejemplo.
+
+> **✅ Cerrado.** `src/pdf/templates/dashboard.eta` creada con el mismo patrón visual y de datos
+> que `individual.eta` (membrete negro + barra dorada, `_logoB64` inyectado automáticamente por
+> `renderPdf()`). Recibe: `client_name`, `from`/`to`, `granularity_label`, `generated_date`,
+> `buckets`, `advisors`, `by_advisor` (para la tabla resumen) y `team_trend_image`/`ranking_image`
+> (data URLs PNG, Opción B del Ticket 3.1, pueden ser `null` si no hay datos suficientes, manejado
+> con un mensaje en vez de una imagen rota). Tabla resumen: una fila por asesor y periodo con las 3
+> métricas, `N/D` en vez de em dash para valores nulos. **No requirió tocar el `Dockerfile`**: la
+> línea `COPY src/pdf/templates ./dist/pdf/templates` (Ticket 0.6) copia toda la carpeta, así que
+> el `.eta` nuevo se incluye automáticamente.
 
 ### Ticket 3.3 `[IMPL]` Generación del PDF (backend)
 - Decide e implementa el disparador siguiendo el patrón existente del sistema (confírmalo en el
@@ -552,17 +581,69 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   convención del sistema y documenta la elección.
 - **DoD:** el endpoint produce un PDF válido y legible para `midstorage`.
 
+> **✅ Cerrado.** `POST /api/metrics/pdf` en `src/routes/metrics.ts`, mismo router que
+> `GET /api/metrics`. Recibe `client_id`, `from`, `to`, `granularity` (mismos params que el GET) más
+> `team_trend_image`/`ranking_image` (data URLs PNG validadas por regex, o `null`). Reutiliza
+> **exactamente** `queryReportMetrics()` y `aggregateMetrics()` del Sprint 1 para construir la
+> tabla resumen, así que los números del PDF están garantizados a coincidir con lo que el
+> dashboard mostró en pantalla, no se duplica lógica. Reutiliza `renderPdf()` de
+> `src/pdf/renderer.ts` sin tocarlo; no aplica `merge.ts` (es un solo documento, no varios PDFs a
+> fusionar).
+> **Decisión de entrega (no estaba explícito en el ticket): descarga directa, no se sube a
+> Drive.** A diferencia de los reportes por asesor/equipo (que pertenecen a un cliente y una
+> carpeta de Drive fijos, Ticket 0.6 / `runJob()`), este PDF es un export ad-hoc de un rango de
+> fechas arbitrario elegido en el dashboard, sin un job ni una carpeta natural a la que adjuntarlo.
+> El endpoint responde el PDF directamente (`Content-Type: application/pdf`,
+> `Content-Disposition: attachment`), igual que cualquier descarga de archivo binario; no crea fila
+> en `jobs` ni sube nada a Drive.
+
 ### Ticket 3.4 `[IMPL]` Botón "Generar PDF" en el dashboard
 - Añade el botón en la pestaña Dashboard; usa el rango/cliente/granularidad actuales.
 - Muestra estado de "generando..." y maneja el resultado (descarga o link), consistente con cómo
   el SPA maneja los PDFs de reportes hoy.
 - **DoD:** desde la UI, un clic genera y entrega el PDF del estado visible.
 
+> **✅ Cerrado.** Botón "Generar PDF" en la fila de controles de vista (`#dash-pdf-btn`). Al hacer
+> clic: construye las 2 gráficas del equipo (tendencia y ranking) **siempre desde cero en un
+> `<canvas>` desechable**, sin importar si el usuario está viendo la vista Equipo o Asesor en ese
+> momento, para que el PDF nunca dependa de qué esté visible en pantalla. Muestra estado
+> "Generando..." con spinner mientras espera la respuesta, deshabilita el botón, y al recibir el
+> PDF dispara la descarga directa con `URL.createObjectURL` (sin abrir pestaña nueva, consistente
+> con que no hay un "link de Drive" al que apuntar). Maneja error con `alert()` (no hay un
+> componente de toast/notificación en el SPA existente para reutilizar; es el mismo mecanismo que
+> ya usa el resto del SPA en otros flujos puntuales).
+
 ### Ticket 3.5 `[TEST]` Validación end-to-end del PDF
 - Genera el PDF en varias granularidades; revisa que las gráficas y la tabla coincidan con lo que
   muestra el dashboard en pantalla.
 - Verifica que funcione en el entorno de Docker (Chromium del sistema, `CHROMIUM_PATH`).
 - **DoD:** PDF correcto en local y en Docker.
+
+> **✅ Cerrado (con una salvedad).** Flujo completo probado de extremo a extremo con Playwright
+> contra el servidor real corriendo en modo dev (`tsx src/server.ts`, sin Docker):
+> 1. Página cargada, pestaña Dashboard, cliente seleccionado, datos de `/api/metrics` simulados
+>    (mock de red, mismo motivo que en el Sprint 2: el CDN de Chart.js no es alcanzable desde este
+>    sandbox).
+> 2. Clic en "Generar PDF" → la llamada `POST /api/metrics/pdf` **fue real, no simulada**: pegó al
+>    backend de verdad, que volvió a consultar `report_metrics` (vacío, sin `DATABASE_URL` en este
+>    sandbox), agregó con `aggregateMetrics()`, renderizó la plantilla con Eta y generó el PDF con
+>    Playwright/Chromium real (`executablePath: /opt/pw-browsers/chromium`, el binario provisto en
+>    este entorno).
+> 3. El navegador descargó un PDF de 97 KB, cabecera `%PDF-` válida, 2 páginas.
+> 4. Verificación visual (capturas con el visor de PDF de Chromium): portada con logo, cliente,
+>    rango y granularidad; gráfica de tendencia del equipo embebida correctamente; página 2 con el
+>    ranking de asesores embebido correctamente y el pie "Pagina 1 / 2".
+> - **Salvedad:** no se probó "en Docker" porque no hay un daemon de Docker disponible en este
+>   sandbox. Sí se usó el mismo motor (Playwright/Chromium) y el mismo flag `CHROMIUM_PATH` que usa
+>   el `Dockerfile`, así que el riesgo restante es bajo, pero **antes de dar el Sprint 3 por
+>   cerrado en producción, conviene construir la imagen y generar un PDF real ahí** para confirmar
+>   que el Chromium de `apt` (`/usr/bin/chromium`) se comporta igual que el de Playwright usado
+>   aquí.
+> - **Tampoco se probó con datos reales de `report_metrics`** (mismo motivo de siempre: sin
+>   `DATABASE_URL` en este sandbox) — la tabla resumen del PDF generado en esta prueba salió vacía
+>   porque la consulta real a la DB no encontró filas. La lógica de la tabla ya está cubierta por
+>   los tests de `aggregate.ts` (Sprint 1), así que el riesgo es bajo, pero vale la pena una
+>   verificación visual contra datos reales antes de considerar el Sprint 3 completamente cerrado.
 
 ---
 

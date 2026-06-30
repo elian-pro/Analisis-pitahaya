@@ -256,24 +256,37 @@
     .kebab-item.danger i{color:var(--danger);}
     .kebab-item.danger:hover{background:color-mix(in srgb, var(--danger) 10%, var(--surface));}
     .kebab-sep{height:0.5px;background:var(--border);margin:5px 2px;}
-    /* ── "Running" state: animated neon-green gradient border (n8n-style). ──
-       Deliberate DS color exception (ZR-05): a live processing state reads best in
-       n8n's signature neon green; documented here as an intentional exception. */
+    /* ── "Running" state: animated monochrome gradient border (--accent sweep). ──
+       On-brand (ZR-05): white in dark, black in light. Light gets a thicker, more
+       contrasted sweep so the black reads with enough presence on a white card. */
     @property --zr-ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
-    .schedule-card.running{position:relative;border-color:transparent;box-shadow:0 0 18px -4px rgba(57,255,20,.45);}
+    .schedule-card.running{position:relative;border-color:transparent;box-shadow:0 0 16px -5px color-mix(in srgb, var(--accent) 42%, transparent);}
     .schedule-card.running.disabled{opacity:1;}  /* keep the animation fully visible even if paused (manual run) */
     .schedule-card.running::before{
       content:'';position:absolute;inset:0;border-radius:12px;padding:1.6px;pointer-events:none;z-index:1;
       background:conic-gradient(from var(--zr-ang),
-        rgba(57,255,20,0) 0deg, rgba(57,255,20,0) 200deg,
-        #39ff14 285deg, #caffb3 320deg, #39ff14 360deg);
+        transparent 0deg, transparent 205deg,
+        color-mix(in srgb, var(--accent) 45%, transparent) 265deg,
+        var(--accent) 322deg,
+        color-mix(in srgb, var(--accent) 45%, transparent) 355deg,
+        transparent 360deg);
       -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
       -webkit-mask-composite:xor; mask-composite:exclude;
       animation:zr-rotate 1.4s linear infinite;
     }
+    /* Light: black needs more mass + contrast to read on white. */
+    body[data-theme="light"] .schedule-card.running{box-shadow:0 0 18px -3px color-mix(in srgb, var(--accent) 62%, transparent);}
+    body[data-theme="light"] .schedule-card.running::before{
+      padding:2.5px;
+      background:conic-gradient(from var(--zr-ang),
+        transparent 0deg, transparent 170deg,
+        color-mix(in srgb, var(--accent) 72%, transparent) 235deg,
+        var(--accent) 295deg, var(--accent) 342deg,
+        color-mix(in srgb, var(--accent) 72%, transparent) 360deg);
+    }
     @keyframes zr-rotate{ to{ --zr-ang:360deg; } }
     @media (prefers-reduced-motion: reduce){
-      .schedule-card.running::before{animation:none;background:#39ff14;}
+      .schedule-card.running::before{animation:none;background:var(--accent);}
     }
     .sched-name{font-size:14px;font-weight:500;}
     .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}

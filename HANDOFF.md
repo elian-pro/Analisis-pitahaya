@@ -3,7 +3,7 @@
 > Servicio que genera **reportes PDF de desempeño de asesores de ventas** a partir de
 > transcripciones de llamadas almacenadas en **Google Sheets**, usando **Claude (Anthropic)**
 > para el análisis cualitativo y **Google Drive** para la entrega. Incluye un dashboard web
-> (SPA) y un programador de automatizaciones.
+> (SPA) con métricas agregadas y exportación a PDF, y un programador de automatizaciones.
 
 Este documento describe **cómo funciona el proyecto por dentro**: arquitectura, modelo de
 datos, persistencia, integración con Google y Claude, el pipeline de generación, el dashboard
@@ -41,6 +41,8 @@ Scripts (`package.json`):
 - `npm run dry-run -- <client_id> <YYYY-MM> [asesor]` — prueba de lectura/análisis sin subir a Drive
 - `npm run migrate:db` — migra JSON → Postgres (idempotente)
 - `npm run type-check` — `tsc --noEmit`
+- `npm test` — `tsx --test src/**/*.test.ts` (test runner nativo de Node, sin dependencia nueva;
+  hoy solo cubre `src/metrics/aggregate.ts`)
 
 ---
 
@@ -140,8 +142,18 @@ El sistema funciona en **dos modos**, decididos por la presencia de `DATABASE_UR
   `token_log.json`) y `clients.json` en la raíz. Útil para desarrollo; **se pierden en cada
   rebuild del contenedor** salvo que montes un volumen.
 
-Cada store (`clients/manager.ts`, `schedules/store.ts`, `jobs/store.ts`, `tokens/store.ts`,
-`metrics/store.ts`) implementa la misma API pública con ambos backends de forma transparente.
+`clients/manager.ts`, `schedules/store.ts`, `jobs/store.ts` y `tokens/store.ts` implementan la
+misma API pública con ambos backends de forma transparente.
+
+> ⚠️ **`metrics/store.ts` es la excepción: es DB-only, no tiene fallback a JSON.** Cada función
+> empieza con `if (!dbEnabled) return …` (array vacío o `null` según el caso), así que sin
+> `DATABASE_URL` el módulo es un no-op silencioso. Esto es intencional: `report_metrics` es un
+> dato **redundante y de mejora** (acelera el comparativo periodo-a-periodo y alimenta el
+> dashboard de métricas), nunca la única fuente de verdad — los sidecars `.txt` en Drive siguen
+> siendo el fallback real para el comparativo, y sin DB el dashboard de métricas simplemente no
+> tiene datos que mostrar (ver §11.1). *(Corregido en un repaso del código: una versión anterior
+> de este documento implicaba que `metrics/store.ts` seguía el mismo patrón dual que los demás
+> stores; no es así.)*
 
 ### 6.1 Tablas (creadas automáticamente en el arranque por `ensureSchema()`)
 
@@ -151,7 +163,7 @@ Cada store (`clients/manager.ts`, `schedules/store.ts`, `jobs/store.ts`, `tokens
 | Automatizaciones | `schedules` | `id TEXT PK` + `data JSONB` | Objeto completo por fila. |
 | Historial de jobs | `jobs` | `id TEXT PK` + `data JSONB` | **Caché en memoria** + escritura a DB (ver 6.2). |
 | Consumo de tokens | `token_log` | Columnas reales (`ts`, `input`, `output`, `advisors`, …) | Data analítica, se agrega por fecha. |
-| Métricas por reporte | `report_metrics` | Columnas reales (`client_id`, `advisor`, `period_key`, `avg_score`, …, `sidecar_text`) | PK `(client_id, advisor, period_key)`. |
+| Métricas por reporte | `report_metrics` | Columnas reales: `client_id TEXT`, `advisor TEXT`, `period_key TEXT`, `period_start DATE`, `avg_score INTEGER`, `pct_siguiente INTEGER`, `talk_ratio INTEGER`, `sidecar_text TEXT`, `created_at TIMESTAMPTZ`. | PK `(client_id, advisor, period_key)`. **No existen** `call_count`, `min`, `max` ni `sigma` como columnas — esas métricas se calculan en memoria por reporte (§9) pero no se persisten aquí. Índices: `(client_id, advisor, period_start)` y `(client_id, period_start)` (este último agregado para el dashboard, §11.1). DB-only, ver arriba. |
 
 El patrón "objeto en columna `jsonb`" (clients/schedules/jobs) evita mantener un esquema
 por campo: agregar un campo nuevo al objeto TypeScript **persiste solo**, sin migración SQL.
@@ -253,7 +265,11 @@ Dos módulos espejo: `src/claude/individual.ts` (por asesor) y `src/claude/gener
   fija anti em‑dash y pro‑acentos/ñ.
 - **Métricas deterministas:** el código calcula directamente (no Claude) `avg_score`, `min`,
   `max`, `sigma`, `call_count` desde la columna de calificación. Los **deltas vs periodo
-  anterior** también se calculan en código a partir del sidecar previo.
+  anterior** también se calculan en código a partir del sidecar previo. **Importante:** de todo
+  esto, solo `avg_score`, `pct_logra_siguiente_paso` (como `pct_siguiente`) y `talk_ratio` se
+  persisten en `report_metrics` (§6.1) — `min`, `max`, `sigma` y `call_count` viven únicamente en
+  el PDF/sidecar del periodo y **no son consultables históricamente** (por eso el dashboard de
+  métricas, §11.1, solo puede graficar esas 3).
 - **Mejor llamada:** Claude devuelve un índice 1‑based; si está fuera de rango se cae a la
   llamada de mayor `calif`. De ahí sale el link de grabación opcional.
 
@@ -270,8 +286,10 @@ búsqueda del periodo anterior toma **el sidecar más reciente estrictamente ant
 
 `src/pdf/renderer.ts` + `src/pdf/templates/*.eta` + `src/pdf/merge.ts`.
 
-- Las plantillas **Eta** (`individual.eta`, `general.eta`) reciben el `*ReportData` y producen
-  HTML. El logo se inyecta como base64 (`_logoB64`).
+- Las plantillas **Eta** (`individual.eta`, `general.eta`, `dashboard.eta`) reciben datos y
+  producen HTML. El logo se inyecta como base64 (`_logoB64`). Ninguna plantilla ejecuta
+  `<script>`/JS: cualquier gráfica se construye con CSS puro o se inyecta como `<img>` ya
+  renderizada (ver `dashboard.eta`, §11.1).
 - **Playwright/Chromium** (`page.setContent` + `page.pdf`, formato A4, `printBackground`,
   márgenes 0) convierte el HTML a PDF. El **browser se reutiliza** entre renders
   (singleton `_browser`). En Docker usa `CHROMIUM_PATH=/usr/bin/chromium` con `--no-sandbox`.
@@ -284,13 +302,15 @@ búsqueda del periodo anterior toma **el sidecar más reciente estrictamente ant
 
 ## 11. El dashboard (SPA `index.html`)
 
-Un **único archivo** servido como estático; sin framework ni build. Tres pestañas
-(`setTab`): **Reportes**, **Ajustes**, **Automatización**. Habla con la API por `fetch`.
+Un **único archivo** servido como estático; sin framework ni build. Cuatro pestañas
+(`setTab`): **Reportes**, **Dashboard**, **Ajustes**, **Automatización**. Habla con la API por
+`fetch`.
 
 - **Reportes:** elige cliente + mes/semana + asesores → modal de confirmación
   (consulta `GET /api/report/previous` para avisar si hay periodo anterior comparable) →
   `POST /api/report` → **polling** de `GET /api/report/:jobId` mostrando progreso paso a paso →
   links a los PDFs. Incluye el panel **"Consumo de tokens · IA"** que consulta `GET /api/stats`.
+- **Dashboard:** ver §11.1.
 - **Ajustes:** CRUD de clientes (`/api/clients`) — incluye los prompts por cliente.
 - **Automatización:** CRUD de automatizaciones (`/api/schedules`), disparo manual
   (`POST /api/schedules/:id/run`), indicador de salud (verde/rojo/gris) y, mientras la pestaña
@@ -298,6 +318,44 @@ Un **único archivo** servido como estático; sin framework ni build. Tres pesta
 
 Carga de asesores: `GET /api/advisors?client_id=&month=`. Espacios de Google Chat (para
 notificaciones de automatizaciones): `GET /api/chat/spaces`.
+
+### 11.1 Dashboard de métricas
+
+Vista de rendimiento agregado por cliente sobre `report_metrics`, con exportación a PDF.
+Construido en 4 sprints (`DASHBOARD_METRICAS_PLAN.md` tiene la traza completa de decisiones).
+
+- **Backend (`src/metrics/aggregate.ts` + `src/routes/metrics.ts`):**
+  - `queryReportMetrics(clientId, from, to, advisor?)` (`metrics/store.ts`) lee filas crudas de
+    `report_metrics` por `client_id` y rango de `period_start`, filtrando **solo periodos
+    mensuales** (`period_key` con forma `YYYY-MM`). Esto evita doble conteo si algún día coexisten
+    filas semanales y mensuales para el mismo cliente y rango (nada en el sistema lo impide hoy).
+  - `aggregateMetrics(rows, granularity)` (función pura, con tests) agrupa por bucket temporal en
+    6 granularidades (`weekly`, `monthly`, `bimonthly`, `quarterly`, `semiannual`, `annual`) con
+    **promedio simple** (no hay `call_count` para ponderar), generando una serie de equipo y una
+    serie por asesor.
+  - `GET /api/metrics?client_id=&from=&to=&granularity=&advisor=` devuelve
+    `{ advisors, buckets, team, by_advisor }` para esos filtros.
+  - `POST /api/metrics/pdf` recibe los mismos filtros más dos imágenes PNG (base64, ya
+    renderizadas por el navegador) y devuelve el PDF como descarga directa (no sube a Drive: es un
+    export ad-hoc sin job ni carpeta asociados).
+- **Frontend:** controles de cliente/rango/granularidad + toggle Vista equipo / Vista asesor.
+  Gráficas con **Chart.js cargado vía CDN** (`<script src="cdn.jsdelivr.net/npm/chart.js@4">`,
+  sin build nuevo — consistente con que el resto del SPA ya depende de CDNs para iconos y
+  tipografía). Vista de equipo: tendencia (línea) + ranking de asesores del último periodo del
+  rango (barras). Vista de asesor: serie histórica + línea de referencia del promedio del equipo
+  + delta vs periodo anterior (misma lógica de resta simple que `delta_score`/
+  `delta_siguiente_paso` en `claude/individual.ts`, recalculada sobre los dos últimos puntos de la
+  serie del asesor).
+- **PDF (`src/pdf/templates/dashboard.eta`):** portada + gráfica de tendencia + gráfica de ranking
+  + tabla resumen por asesor y periodo. Las gráficas se generan **en el navegador** y se inyectan
+  como `<img>` (igual que el logo `_logoB64`), **no** se ejecuta Chart.js dentro de Chromium
+  durante el render del PDF — las plantillas `.eta` de este proyecto nunca han ejecutado JS, así
+  que esto evita introducir esa dependencia nueva (y la incertidumbre de si el contenedor de
+  producción permite esa salida de red durante el render).
+- **Pendiente de validar en producción** (no se pudo verificar en el entorno donde se construyó
+  esta feature, que no tenía `DATABASE_URL` ni Docker disponibles): el query real contra
+  `report_metrics` con datos reales, y la generación del PDF dentro del contenedor Docker
+  (`CHROMIUM_PATH=/usr/bin/chromium`) en vez de con el Chromium de Playwright usado en desarrollo.
 
 ---
 
@@ -348,6 +406,8 @@ Base: `/api`. Todas devuelven JSON; errores como `{ "error": "..." }`.
 | POST | `/report/:jobId/cancel` | Cancela un job en curso. |
 | GET | `/report/previous?client_id=&month=&period_type=&date_from=&advisors=` | ¿Hay periodo anterior comparable? (hint para la UI). |
 | GET | `/stats?from=YYYY-MM-DD&to=YYYY-MM-DD&client_id?` | Consumo de tokens agregado (input/output/costo/jobs/por día). |
+| GET | `/metrics?client_id=&from=YYYY-MM-DD&to=YYYY-MM-DD&granularity=&advisor?` | Métricas agregadas del dashboard (§11.1). `granularity` ∈ `weekly\|monthly\|bimonthly\|quarterly\|semiannual\|annual`. |
+| POST | `/metrics/pdf` | Genera el PDF del dashboard. Body: mismos filtros que el GET + `team_trend_image`, `ranking_image` (PNG en base64, o `null`). Devuelve el PDF como descarga directa. |
 | GET/POST/PUT/DELETE | `/clients` · `/clients/:id` | CRUD de clientes. |
 | GET/POST/PUT/DELETE | `/schedules` · `/schedules/:id` | CRUD de automatizaciones. GET incluye `running`. |
 | POST | `/schedules/:id/run` | Dispara manualmente (bypassa día/hora). `202 { ok, job_id }` o `422 { ok:false, error }`. |
@@ -409,16 +469,20 @@ src/
   pdf/
     renderer.ts          Eta → Chromium → PDF (browser singleton)
     merge.ts             pdf-lib merge
-    templates/*.eta      Plantillas HTML de los PDFs
+    templates/*.eta      Plantillas HTML de los PDFs (individual, general, dashboard)
   jobs/
     store.ts             Job model, caché en memoria + persistencia, initJobs()
     runner.ts            runJob(): orquesta el pipeline de 9 pasos
   schedules/
     store.ts             Schedule model, CRUD, markRan/markFailed
     runner.ts            isDue(), fireSchedule(), runScheduleNow(), running set, scheduler 60s
-  metrics/store.ts       report_metrics (DB): comparativo periodo anterior robusto
-  tokens/store.ts        token_log: registro y agregación de consumo
-  routes/                health, advisors, report, stats, clients, schedules, chat
+  metrics/
+    store.ts            report_metrics (DB-only, sin fallback JSON): comparativo periodo
+                         anterior + queryReportMetrics() para el dashboard (§11.1)
+    aggregate.ts         aggregateMetrics(): bucketing puro por granularidad (con tests)
+    aggregate.test.ts    tests (node:test, via `npm test`)
+  tokens/store.ts       token_log: registro y agregación de consumo
+  routes/               health, advisors, report, stats, metrics, clients, schedules, chat
   cli/
     dry-run.ts           Prueba sin Drive
     migrate-to-db.ts     Migración manual JSON → Postgres
@@ -446,6 +510,10 @@ Dockerfile · .env.example
   (en automatizaciones y en disparo manual). El disparo manual pide confirmación en la UI.
 - **`claude-sonnet-4-6`** está fijado en `claude/individual.ts` y `claude/general.ts`; cambiar el
   modelo es editar esas dos constantes `MODEL`.
+- **Dashboard de métricas sin `DATABASE_URL`:** como `metrics/store.ts` es DB-only (ver §6),
+  `GET /api/metrics` responde `200` con arrays vacíos en vez de fallar, y el dashboard muestra el
+  estado "sin datos" en vez de romperse. Es el comportamiento esperado en desarrollo local sin DB,
+  no un bug.
 
 ---
 

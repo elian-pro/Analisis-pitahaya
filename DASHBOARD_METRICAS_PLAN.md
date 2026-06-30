@@ -654,17 +654,49 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   (índice por `(client_id, period_start)` si no existe). Confirma índices actuales antes.
 - **DoD:** consulta del dashboard responde rápido con el volumen esperado.
 
+> **✅ Cerrado.** Se confirmó el índice actual antes de tocar nada (Ticket 0.1):
+> `report_metrics_lookup_idx (client_id, advisor, period_start)`. La query nueva del dashboard
+> (`queryReportMetrics`) filtra por `client_id` + rango de `period_start`, **casi siempre sin
+> `advisor`** (vista de equipo): ese índice no sirve un range scan eficiente sin la columna
+> `advisor` fijada, porque `advisor` va antes que `period_start` en su definición. Se agregó
+> `report_metrics_client_period_idx ON report_metrics (client_id, period_start)` en
+> `ensureSchema()` (`src/config/db.ts`), con `CREATE INDEX IF NOT EXISTS` (mismo patrón idempotente
+> que los demás índices, se crea solo una vez, seguro en cada arranque). No se agregó caché en
+> memoria: con el volumen actual (1 cliente, pocos periodos) sería sobre-ingeniería: y la query es
+> una sola consulta indexada + agregación en memoria sobre, como mucho, unas pocas docenas de
+> filas por cliente y rango.
+
 ### Ticket 4.2 `[TEST]` Regresión del sistema existente
 - Confirma que **Reportes, Ajustes y Automatización siguen funcionando** igual que antes (no se
   rompió el SPA ni el montaje de routers).
 - `npm run build` y `npm run type-check` limpios. La app arranca sin errores.
 - **DoD:** sistema completo funcional, sin regresiones.
 
+> **✅ Cerrado.** `npm run type-check`, `npm test` (7/7) y `npm run build` limpios. Regresión
+> verificada con Playwright contra el servidor real (modo dev, `tsx src/server.ts`): las 4
+> pestañas (Reportes, Dashboard, Ajustes, Automatización) cargan y muestran su contenido esperado,
+> el cambio de tema sigue funcionando, y no se registró ningún error de JS en consola durante el
+> recorrido completo. El montaje de routers en `server.ts` no rompió ninguno de los existentes
+> (`/api/health` y el resto responden `200`).
+
 ### Ticket 4.3 `[IMPL]` Documentar lo construido
 - Actualiza `HANDOFF.md` (o crea un anexo) con: el endpoint nuevo, la capa de agregación, la
   pestaña de dashboard, la plantilla de PDF, y **corrige las imprecisiones detectadas en el
   Sprint 0** (especialmente el esquema real de `report_metrics`).
 - **DoD:** documentación al día; un futuro lector no repite las confusiones de este proceso.
+
+> **✅ Cerrado.** `HANDOFF.md` actualizado: nueva subsección **§11.1 Dashboard de métricas**
+> (resumen del feature completo), filas nuevas en la **tabla de API** (§13) para `GET /api/metrics`
+> y `POST /api/metrics/pdf`, **estructura del proyecto** (§16) actualizada con `metrics/aggregate.ts`
+> y `dashboard.eta`, y una nota en **operación** (§17) sobre el comportamiento sin `DATABASE_URL`.
+> **Correcciones de las imprecisiones del Sprint 0:**
+> - §6: se aclaró explícitamente que `metrics/store.ts` **no** sigue el patrón dual DB/JSON de los
+>   demás stores (es DB-only), corrigiendo la frase que antes lo agrupaba con el resto.
+> - §6.1: la fila de `report_metrics` ahora lista las columnas reales **exhaustivamente** (antes
+>   usaba "…") y dice explícitamente que `call_count`/`min`/`max`/`sigma` **no** son columnas.
+> - §9: se aclaró que de las métricas deterministas que sí se calculan en código, solo 3
+>   (`avg_score`, `pct_siguiente`, `talk_ratio`) se persisten en `report_metrics`; el resto no es
+>   consultable históricamente.
 
 ---
 

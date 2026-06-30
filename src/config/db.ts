@@ -101,6 +101,14 @@ export async function ensureSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS report_metrics_lookup_idx
        ON ${REPORT_METRICS_TABLE} (client_id, advisor, period_start)`,
   );
+  // Dashboard aggregation (queryReportMetrics in metrics/store.ts) filters by
+  // client_id + a period_start range, usually WITHOUT an advisor (team view).
+  // The lookup index above leads with advisor, so it can't range-scan
+  // period_start without one; this index serves that access pattern directly.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS report_metrics_client_period_idx
+       ON ${REPORT_METRICS_TABLE} (client_id, period_start)`,
+  );
   console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics)');
 }
 

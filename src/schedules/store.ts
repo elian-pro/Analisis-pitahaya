@@ -37,7 +37,10 @@ export interface Schedule {
   error_notify_enabled?: boolean;  // notify a Google Chat space when this automation fails
   error_chat_space_id?:  string;   // "spaces/AAAA..." target for error notifications
   created_at:    string;
-  last_run?:     string;
+  last_run?:     string;   // timestamp of the last SUCCESSFUL fire
+  last_attempt?: string;   // timestamp of the last fire attempt (success or failure)
+  last_status?:  'ok' | 'error';   // health of the last attempt
+  last_error?:   string | null;    // failure detail when last_status === 'error'
 }
 
 // ── File fallback (used only when DATABASE_URL is not set) ───────────────────
@@ -107,7 +110,19 @@ export async function deleteSchedule(id: string): Promise<void> {
 }
 
 export async function markRan(id: string): Promise<void> {
-  await updateSchedule(id, { last_run: new Date().toISOString() });
+  const now = new Date().toISOString();
+  await updateSchedule(id, { last_run: now, last_attempt: now, last_status: 'ok', last_error: null });
+}
+
+// Records a failed fire so the UI can show a red health indicator. Deliberately
+// does NOT touch last_run (which marks the last SUCCESS) nor the scheduler's
+// "already ran today" guard, so a transient failure can still be retried.
+export async function markFailed(id: string, error: string): Promise<void> {
+  await updateSchedule(id, {
+    last_attempt: new Date().toISOString(),
+    last_status:  'error',
+    last_error:   (error || 'Error desconocido').slice(0, 500),
+  });
 }
 
 /**

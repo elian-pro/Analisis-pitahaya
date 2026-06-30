@@ -1,4 +1,4 @@
-import { listSchedules, markRan, updateSchedule, type Schedule } from './store';
+import { listSchedules, markRan, markFailed, updateSchedule, type Schedule } from './store';
 import { loadClients } from '../clients/manager';
 import { getCallData } from '../google/sheets';
 import { createJob, getJob } from '../jobs/store';
@@ -164,6 +164,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
   const client = (await loadClients()).find(c => c.id === schedule.client_id);
   if (!client) {
     console.error(`[scheduler] Client '${schedule.client_id}' not found — skipping`);
+    await markFailed(schedule.id, `Cliente '${schedule.client_id}' no encontrado.`);
     return;
   }
 
@@ -228,6 +229,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
       advisors = [...new Set(calls.map(c => c.asesor))].filter(Boolean);
     } catch (e) {
       console.error(`[scheduler] Failed to fetch advisors for '${schedule.name}':`, (e as Error).message);
+      await markFailed(schedule.id, `No se pudieron leer los datos de la hoja: ${(e as Error).message}`);
       await notifyError(schedule, client.name, periodLabel,
         `No se pudieron leer los datos de la hoja: ${(e as Error).message}`);
       return;
@@ -238,6 +240,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
 
   if (advisors.length === 0) {
     console.warn(`[scheduler] No advisors in period for '${schedule.name}' — skipping`);
+    await markFailed(schedule.id, 'No se encontraron asesores con llamadas en el periodo.');
     await notifyError(schedule, client.name, periodLabel,
       'No se encontraron asesores con llamadas en el periodo.');
     return;
@@ -259,6 +262,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
       // Report generation failed — alert the client's error space instead of
       // sending a "report ready" message.
       if (done?.status === 'error') {
+        await markFailed(schedule.id, done.error || 'La generación del reporte falló.');
         await notifyError(schedule, client.name, periodLabel,
           done.error || 'La generación del reporte falló.');
         return;
@@ -272,6 +276,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
     })
     .catch(async err => {
       console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message);
+      await markFailed(schedule.id, (err as Error).message);
       await notifyError(schedule, client.name, periodLabel, (err as Error).message);
     });
 }

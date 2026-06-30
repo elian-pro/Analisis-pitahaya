@@ -241,8 +241,11 @@
     .schedule-card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:border-color .15s;}
     .schedule-card:hover{border-color:var(--border2);}
     .schedule-card.disabled{opacity:0.5;}
-    .sched-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
-    .sched-dot.off{background:var(--faint);}
+    .sched-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;transition:background .2s,box-shadow .2s;}
+    .sched-dot.off{background:var(--faint);box-shadow:none;}
+    /* Health indicator: subtle green when active & healthy, red when the last run failed. */
+    .sched-dot.ok{background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb, var(--success) 16%, transparent);}
+    .sched-dot.err{background:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);}
     .sched-name{font-size:14px;font-weight:500;}
     .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}
     .sched-badge{padding:3px 10px;border-radius:100px;font-size:10px;font-weight:500;letter-spacing:0.12em;background:color-mix(in srgb, var(--accent) 12%, var(--surface));color:var(--accent);border:0.5px solid color-mix(in srgb, var(--accent) 35%, transparent);white-space:nowrap;}
@@ -2336,11 +2339,19 @@
         const card = document.createElement('div');
         card.className = 'schedule-card' + (s.enabled ? '' : ' disabled');
         const clientName = cMap[s.client_id] || s.client_id;
+        const health = !s.enabled ? 'off' : (s.last_status === 'error' ? 'err' : 'ok');
+        const healthTitle = !s.enabled ? 'Pausada'
+          : s.last_status === 'error' ? `Error en la última ejecución: ${s.last_error || 'sin detalle'}`
+          : (s.last_run ? 'Activa · última ejecución correcta' : 'Activa · aún no se ejecuta');
+        const errNote = (s.enabled && s.last_status === 'error')
+          ? `<div class="sched-desc" style="color:var(--danger);margin-top:3px;">Último intento falló: ${_esc((s.last_error || '').slice(0,140))}</div>`
+          : '';
         card.innerHTML =
-          `<div class="sched-dot${s.enabled ? '' : ' off'}"></div>` +
+          `<div class="sched-dot ${health}" title="${_esc(healthTitle)}"></div>` +
           `<div style="flex:1;min-width:0;">` +
             `<div class="sched-name">${_esc(s.name)}</div>` +
             `<div class="sched-desc">${_esc(clientName)} · ${_esc(_describeSchedule(s))}</div>` +
+            errNote +
           `</div>` +
           `<span class="sched-badge${s.enabled ? '' : ' off'}">${s.enabled ? 'ACTIVA' : 'PAUSADA'}</span>` +
           `<div class="client-row-actions">` +

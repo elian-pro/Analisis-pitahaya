@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { listSchedules, createSchedule, updateSchedule, deleteSchedule } from '../schedules/store';
+import { runScheduleNow } from '../schedules/runner';
 
 const router = Router();
 
@@ -74,6 +75,23 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   }
   try { res.json(await updateSchedule(req.params.id, parsed.data)); }
   catch (e) { res.status(404).json({ error: (e as Error).message }); }
+});
+
+// POST /:id/run — manually fire a schedule now (bypasses time/day gating).
+// Works even when the schedule is paused. Returns 202 once the report job has
+// been enqueued; immediate failures (sheet read, no advisors) return 422.
+router.post('/:id/run', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await runScheduleNow(req.params.id);
+    if (!result.ok) {
+      res.status(422).json({ ok: false, error: result.error || 'La ejecución falló.' });
+      return;
+    }
+    res.status(202).json({ ok: true, job_id: result.job_id });
+  } catch (e) {
+    const msg = (e as Error).message;
+    res.status(/not found/i.test(msg) ? 404 : 500).json({ ok: false, error: msg });
+  }
 });
 
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {

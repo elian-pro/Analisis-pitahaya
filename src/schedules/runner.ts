@@ -1,4 +1,9 @@
-import { listSchedules, markRan, markFailed, updateSchedule, type Schedule } from './store';
+import { listSchedules, getSchedule, markRan, markFailed, updateSchedule, type Schedule } from './store';
+
+// Result of a single fire attempt's SYNCHRONOUS phase (advisor read + job
+// enqueue). The report job itself runs asynchronously afterwards; its outcome
+// is reflected later via the schedule's health status, not this return value.
+export interface FireResult { ok: boolean; job_id?: string; error?: string }
 import { loadClients } from '../clients/manager';
 import { getCallData } from '../google/sheets';
 import { createJob, getJob } from '../jobs/store';
@@ -158,14 +163,15 @@ function isDue(schedule: Schedule): boolean {
 
 // ── Fire a schedule ───────────────────────────────────────────────────────────
 
-async function fireSchedule(schedule: Schedule): Promise<void> {
+async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   console.log(`[scheduler] Firing '${schedule.name}' (${schedule.id})`);
 
   const client = (await loadClients()).find(c => c.id === schedule.client_id);
   if (!client) {
-    console.error(`[scheduler] Client '${schedule.client_id}' not found — skipping`);
-    await markFailed(schedule.id, `Cliente '${schedule.client_id}' no encontrado.`);
-    return;
+    const error = `Cliente '${schedule.client_id}' no encontrado.`;
+    console.error(`[scheduler] ${error} — skipping`);
+    await markFailed(schedule.id, error);
+    return { ok: false, error };
   }
 
   const tz = schedule.timezone || 'America/Mexico_City';
@@ -175,7 +181,7 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
     await markRan(schedule.id);
     if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
     await notifyChat(schedule, client.name, getNowInTz(tz).dateStr, '');
-    return;
+    return { ok: true };
   }
 
   // ── Determine period ──────────────────────────────────────────────────────
@@ -229,10 +235,10 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
       advisors = [...new Set(calls.map(c => c.asesor))].filter(Boolean);
     } catch (e) {
       console.error(`[scheduler] Failed to fetch advisors for '${schedule.name}':`, (e as Error).message);
-      await markFailed(schedule.id, `No se pudieron leer los datos de la hoja: ${(e as Error).message}`);
-      await notifyError(schedule, client.name, periodLabel,
-        `No se pudieron leer los datos de la hoja: ${(e as Error).message}`);
-      return;
+      const error = `No se pudieron leer los datos de la hoja: ${(e as Error).message}`;
+      await markFailed(schedule.id, error);
+      await notifyError(schedule, client.name, periodLabel, error);
+      return { ok: false, error };
     }
   } else {
     advisors = schedule.advisors;
@@ -240,10 +246,10 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
 
   if (advisors.length === 0) {
     console.warn(`[scheduler] No advisors in period for '${schedule.name}' — skipping`);
-    await markFailed(schedule.id, 'No se encontraron asesores con llamadas en el periodo.');
-    await notifyError(schedule, client.name, periodLabel,
-      'No se encontraron asesores con llamadas en el periodo.');
-    return;
+    const error = 'No se encontraron asesores con llamadas en el periodo.';
+    await markFailed(schedule.id, error);
+    await notifyError(schedule, client.name, periodLabel, error);
+    return { ok: false, error };
   }
 
   const reportType = schedule.report_type === 'general' ? 'general'
@@ -279,6 +285,17 @@ async function fireSchedule(schedule: Schedule): Promise<void> {
       await markFailed(schedule.id, (err as Error).message);
       await notifyError(schedule, client.name, periodLabel, (err as Error).message);
     });
+
+  return { ok: true, job_id: job.id };
+}
+
+// Manually fire a schedule right now, bypassing the isDue() time/day gating.
+// Used by the "Ejecutar ahora" action; works even if the schedule is paused.
+export async function runScheduleNow(id: string): Promise<FireResult> {
+  const schedule = await getSchedule(id);
+  if (!schedule) throw new Error(`Schedule '${id}' not found`);
+  console.log(`[scheduler] Manual run requested for '${schedule.name}' (${id})`);
+  return fireSchedule(schedule);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

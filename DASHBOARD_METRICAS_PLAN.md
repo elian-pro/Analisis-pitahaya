@@ -336,6 +336,11 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **DoD:** función exportada, tipada, que corre contra DB real y devuelve filas correctas para
   `midstorage`.
 
+> **✅ Cerrado.** `queryReportMetrics(clientId, from, to, advisor?)` en `src/metrics/store.ts`.
+> Devuelve `[]` si `!dbEnabled` (no hay modo dual, ver hallazgo del Ticket 0.1). Filtra
+> `period_key ~ '^\d{4}-\d{2}$'` (solo mensuales) por la decisión del Ticket 0.3. Filas crudas
+> tipadas como `ReportMetricRow`.
+
 ### Ticket 1.2 `[IMPL]` Capa de agregación por granularidad
 - Crea un módulo (ej. `src/metrics/aggregate.ts`) con una función pura que reciba las filas
   crudas y una `granularity` (`weekly | monthly | bimonthly | quarterly | semiannual | annual`)
@@ -354,6 +359,10 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **DoD:** función pura con tests unitarios mínimos (Ticket 1.4) que cubran 1 punto, varios
   puntos y mezcla de granularidades.
 
+> **✅ Cerrado.** `aggregateMetrics(rows, granularity)` en `src/metrics/aggregate.ts`. Sin
+> dependencias de DB. Bucket vacío = se omite (no se emite con `null`s), tal como permitía el
+> ticket. Las 6 granularidades implementadas con buckets/labels en español. Tests en Ticket 1.4.
+
 ### Ticket 1.3 `[IMPL]` Router `GET /api/metrics`
 - **Precondición:** Ticket 0.1 (estilo de routers) cerrado.
 - Crea `src/routes/metrics.ts` siguiendo **exactamente** el patrón de los routers existentes
@@ -367,12 +376,46 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **DoD:** `GET /api/metrics?client_id=midstorage&from=...&to=...&granularity=monthly` responde
   `200` con datos reales.
 
+> **✅ Cerrado.** `src/routes/metrics.ts`, montado en `server.ts` como `app.use('/api/metrics',
+> metricsRouter)` junto a los demás routers, mismo patrón Zod + try/catch que `stats.ts`/
+> `clients.ts`. Forma de la respuesta:
+> ```json
+> {
+>   "client_id": "midstorage", "from": "2026-01-01", "to": "2026-12-31", "granularity": "monthly",
+>   "advisors": ["Ana", "Beto"],
+>   "buckets": [{ "key": "2026-06", "start": "2026-06-01", "end": "2026-06-30", "label": "Jun 2026" }],
+>   "team": [{ "bucket": "2026-06", "avg_score": 78.5, "pct_siguiente": 60, "talk_ratio": 45, "count": 2 }],
+>   "by_advisor": { "Ana": [{ "bucket": "2026-06", "avg_score": 80, ... }], "Beto": [...] }
+> }
+> ```
+> `advisor` es opcional y filtra a un solo asesor. Probado en vivo (ver Ticket 1.4).
+
 ### Ticket 1.4 `[TEST]` Validación del backend
 - Tests unitarios de `aggregate.ts` (los 3 casos del 1.2).
 - Prueba manual del endpoint con `midstorage` en cada una de las 6 granularidades; confirma que
   con los pocos datos actuales no rompe y devuelve algo coherente.
 - Si existe `npm run type-check`, debe pasar.
 - **DoD:** tests verdes, type-check limpio, endpoint probado en las 6 granularidades.
+
+> **✅ Cerrado.** No había framework de testing instalado (hallazgo del cierre del Sprint 0); se
+> usó el test runner nativo de Node 20+/22 (`node:test` + `node:assert/strict`) vía `tsx --test`,
+> sin añadir ninguna dependencia nueva. Script `npm test` agregado a `package.json`.
+> - **7 tests** en `src/metrics/aggregate.test.ts` cubriendo: input vacío, un solo punto, promedio
+>   simple entre varios asesores, varios meses ordenados cronológicamente, las 4 granularidades
+>   agrupadas (bimonthly/quarterly/semiannual/annual), bucketing semanal ISO (lunes-domingo), y
+>   filas con métricas `null` que no contaminan el promedio. `npm test` → `7 pass, 0 fail`.
+> - `npm run type-check` limpio (tuvo que correr `npm install` primero — `node_modules` no estaba
+>   instalado en este sandbox).
+> - `npm run build` limpio.
+> - **Endpoint probado en vivo** (servidor arrancado con variables de entorno dummy, sin
+>   `DATABASE_URL`): `GET /api/metrics?client_id=midstorage&from=...&to=...&granularity=<g>` para
+>   las 6 granularidades → `200` con `{ advisors: [], buckets: [], team: [], by_advisor: {} }` en
+>   cada una (correcto: sin DB, `queryReportMetrics` devuelve `[]` y `aggregateMetrics([])` no
+>   rompe, confirma el caso "0 datos" del Ticket 1.2). Validación de errores confirmada: falta de
+>   parámetros requeridos → `400`; `granularity` inválida → `400` con el mensaje de Zod.
+> - **No probado contra una DB real con datos** (este sandbox no tiene `DATABASE_URL`) — antes de
+>   dar el Sprint 1 por cerrado en producción, correr el mismo `GET` contra un entorno con datos
+>   reales de `midstorage` para confirmar buckets/promedios con filas reales.
 
 ---
 

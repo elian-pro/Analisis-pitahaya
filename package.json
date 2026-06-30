@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "dry-run": "tsx src/cli/dry-run.ts",
     "migrate:db": "tsx src/cli/migrate-to-db.ts",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

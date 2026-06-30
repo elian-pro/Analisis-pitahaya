@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { listSchedules, createSchedule, updateSchedule, deleteSchedule } from '../schedules/store';
-import { runScheduleNow } from '../schedules/runner';
+import { runScheduleNow, runningScheduleIds } from '../schedules/runner';
 
 const router = Router();
 
@@ -53,8 +53,12 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
 const SchedulePatchSchema = ScheduleBaseSchema.partial();
 
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
-  try { res.json(await listSchedules()); }
-  catch (e) { res.status(500).json({ error: (e as Error).message }); }
+  try {
+    const running = runningScheduleIds();
+    // `running` is a transient, in-memory flag (not persisted) so the UI can
+    // animate cards with an in-flight run — manual or automatic alike.
+    res.json((await listSchedules()).map(s => ({ ...s, running: running.has(s.id) })));
+  } catch (e) { res.status(500).json({ error: (e as Error).message }); }
 });
 
 router.post('/', async (req: Request, res: Response): Promise<void> => {

@@ -256,6 +256,25 @@
     .kebab-item.danger i{color:var(--danger);}
     .kebab-item.danger:hover{background:color-mix(in srgb, var(--danger) 10%, var(--surface));}
     .kebab-sep{height:0.5px;background:var(--border);margin:5px 2px;}
+    /* ── "Running" state: animated neon-green gradient border (n8n-style). ──
+       Deliberate DS color exception (ZR-05): a live processing state reads best in
+       n8n's signature neon green; documented here as an intentional exception. */
+    @property --zr-ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    .schedule-card.running{position:relative;border-color:transparent;box-shadow:0 0 18px -4px rgba(57,255,20,.45);}
+    .schedule-card.running.disabled{opacity:1;}  /* keep the animation fully visible even if paused (manual run) */
+    .schedule-card.running::before{
+      content:'';position:absolute;inset:0;border-radius:12px;padding:1.6px;pointer-events:none;z-index:1;
+      background:conic-gradient(from var(--zr-ang),
+        rgba(57,255,20,0) 0deg, rgba(57,255,20,0) 200deg,
+        #39ff14 285deg, #caffb3 320deg, #39ff14 360deg);
+      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite:xor; mask-composite:exclude;
+      animation:zr-rotate 1.4s linear infinite;
+    }
+    @keyframes zr-rotate{ to{ --zr-ang:360deg; } }
+    @media (prefers-reduced-motion: reduce){
+      .schedule-card.running::before{animation:none;background:#39ff14;}
+    }
     .sched-name{font-size:14px;font-weight:500;}
     .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}
     .sched-badge{padding:3px 10px;border-radius:100px;font-size:10px;font-weight:500;letter-spacing:0.12em;background:color-mix(in srgb, var(--accent) 12%, var(--surface));color:var(--accent);border:0.5px solid color-mix(in srgb, var(--accent) 35%, transparent);white-space:nowrap;}
@@ -1983,13 +2002,18 @@
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
   const _APP_TABS = ['reports','settings','automation'];
+  let _currentTab = 'reports';
+  let _schedSig   = '';
+  let _schedPollTimer = null;
+
   function setTab(tab) {
+    _currentTab = tab;
     _APP_TABS.forEach(t => {
       document.getElementById('tab-btn-'+t).classList.toggle('active', t === tab);
       document.getElementById('tab-'+t).classList.toggle('active', t === tab);
     });
     if (tab === 'settings')   renderClientList();
-    if (tab === 'automation') renderScheduleList();
+    if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
   }
 
   // ── Clients CRUD ───────────────────────────────────────────────────────────
@@ -2347,7 +2371,8 @@
       el.innerHTML = '';
       schedules.forEach(s => {
         const card = document.createElement('div');
-        card.className = 'schedule-card' + (s.enabled ? '' : ' disabled');
+        card.id = 'sched-card-' + s.id;
+        card.className = 'schedule-card' + (s.enabled ? '' : ' disabled') + (s.running ? ' running' : '');
         const clientName = cMap[s.client_id] || s.client_id;
         const health = !s.enabled ? 'off' : (s.last_status === 'error' ? 'err' : 'ok');
         const healthTitle = !s.enabled ? 'Pausada'
@@ -2984,6 +3009,31 @@
     renderScheduleList();
     // The report job finishes asynchronously; refresh again so the health dot updates.
     setTimeout(() => { if (document.getElementById('schedule-list')) renderScheduleList(); }, 9000);
+  }
+
+  // ── Live "running" polling ─────────────────────────────────────────────────
+  // While the Automation tab is open, poll for in-flight runs (manual OR
+  // automatic) so the card border animates. Only rebuilds the list when
+  // something actually changed, so a steady "running" state keeps the CSS
+  // animation smooth instead of restarting every tick.
+  function startSchedulePolling() {
+    if (_schedPollTimer) return;
+    _schedPollTimer = setInterval(pollSchedules, 3500);
+  }
+  async function pollSchedules() {
+    if (_currentTab !== 'automation' || document.hidden) return;
+    // Don't disrupt an open kebab menu or a modal mid-interaction.
+    if (document.querySelector('.kebab-menu.show')) return;
+    if (document.querySelector('.form-modal-backdrop.show, .confirm-backdrop.show, .draft-modal-backdrop.show, .modal-backdrop.show')) return;
+    let schedules;
+    try { schedules = await fetch(SCHEDULES_API).then(r => r.json()); } catch { return; }
+    if (!Array.isArray(schedules)) return;
+    const sig = schedules.map(s =>
+      `${s.id}:${s.enabled ? 1 : 0}:${s.running ? 1 : 0}:${s.last_status || ''}:${s.last_run || ''}`
+    ).join('|');
+    if (sig === _schedSig) return;   // nothing changed → keep DOM (animation stays smooth)
+    _schedSig = sig;
+    renderScheduleList();
   }
 </script>
 </body>

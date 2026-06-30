@@ -163,14 +163,23 @@ function isDue(schedule: Schedule): boolean {
 
 // ── Fire a schedule ───────────────────────────────────────────────────────────
 
+// In-memory set of schedule ids with an in-flight run. Exposed via GET
+// /api/schedules as `running: true` so the UI can animate the card for BOTH
+// manual and automatic fires. In-memory on purpose: a process restart clears it,
+// so a crash mid-run can never leave a card stuck "running".
+const _running = new Set<string>();
+export function runningScheduleIds(): Set<string> { return _running; }
+
 async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   console.log(`[scheduler] Firing '${schedule.name}' (${schedule.id})`);
+  _running.add(schedule.id);
 
   const client = (await loadClients()).find(c => c.id === schedule.client_id);
   if (!client) {
     const error = `Cliente '${schedule.client_id}' no encontrado.`;
     console.error(`[scheduler] ${error} — skipping`);
     await markFailed(schedule.id, error);
+    _running.delete(schedule.id);
     return { ok: false, error };
   }
 
@@ -181,6 +190,7 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
     await markRan(schedule.id);
     if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
     await notifyChat(schedule, client.name, getNowInTz(tz).dateStr, '');
+    _running.delete(schedule.id);
     return { ok: true };
   }
 
@@ -238,6 +248,7 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
       const error = `No se pudieron leer los datos de la hoja: ${(e as Error).message}`;
       await markFailed(schedule.id, error);
       await notifyError(schedule, client.name, periodLabel, error);
+      _running.delete(schedule.id);
       return { ok: false, error };
     }
   } else {
@@ -249,6 +260,7 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
     const error = 'No se encontraron asesores con llamadas en el periodo.';
     await markFailed(schedule.id, error);
     await notifyError(schedule, client.name, periodLabel, error);
+    _running.delete(schedule.id);
     return { ok: false, error };
   }
 
@@ -284,7 +296,8 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
       console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message);
       await markFailed(schedule.id, (err as Error).message);
       await notifyError(schedule, client.name, periodLabel, (err as Error).message);
-    });
+    })
+    .finally(() => { _running.delete(schedule.id); });
 
   return { ok: true, job_id: job.id };
 }

@@ -88,6 +88,37 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **DoD:** una nota corta en el ticket con: nombre exacto del patrón de router, ruta y firma del
   helper de DB, y la API pública actual de `metrics/store.ts`.
 
+> **✅ Notas de verificación (cerrado):**
+> - **Montaje de routers** (`src/server.ts:24-31`): cada router es un módulo `Router()` exportado
+>   por defecto desde `src/routes/<nombre>.ts`, importado en `server.ts` y montado con
+>   `app.use('/api/<nombre>', xRouter)`. Patrón nuevo: crear `src/routes/metrics.ts`, importar
+>   `metricsRouter from './routes/metrics'`, añadir `app.use('/api/metrics', metricsRouter);`
+>   junto a las demás líneas (antes del bloque "Static frontend").
+> - **Estilo real de un router** (`src/routes/stats.ts`): usa `Router()` de express, valida query
+>   params con un `z.object({...}).safeParse(req.query)` y responde `400` con
+>   `{ error: '<mensaje>' }` si falla. El handler es `async`, envuelve la llamada a la capa de
+>   datos en `try/catch` y responde `500` con `{ error: (e as Error).message }` en error, o
+>   `res.json(data)` en éxito (sin envoltorio `{data: ...}`). Mismo patrón en `clients.ts`,
+>   `report.ts`, `advisors.ts` — todos usan Zod para body/query y el mismo `try/catch → 500`.
+> - **`src/metrics/store.ts` — discrepancia con el plan:** **NO** tiene modo dual DB/JSON. Es
+>   **DB-only**: cada función empieza con `if (!dbEnabled) return;` (o `return null;`), o sea, sin
+>   `DATABASE_URL` el módulo es un no-op silencioso (no hay fallback a archivo JSON para
+>   `report_metrics`, a diferencia de `clients/manager.ts` o `schedules/store.ts`). El plan dice
+>   "respetando su patrón dual DB/JSON existente" en el Ticket 1.1: **eso es incorrecto**, no
+>   existe tal patrón dual en este módulo — el repo manda. La función nueva de lectura agregada
+>   debe asumir DB-only igual que el resto del módulo (si `!dbEnabled`, devolver array vacío).
+>   - API pública actual: `recordReportMetrics(clientId, advisor, periodKey, avgScore,
+>     pctSiguiente, talkRatio, sidecarText)`, `previousReportTextFromDb(clientId, advisor, month,
+>     periodType, dateFrom?)`, `previousPeriodKeyFromDb(clientId, advisors[], month, periodType,
+>     dateFrom?)`. Ninguna hace SELECT genérico por rango de fechas — hay que añadirla.
+> - **`src/config/db.ts`:** pool real es `pool: Pool | null` (de `pg`), `dbEnabled: boolean`. Para
+>   queries crudas se usa `pool!.query(sql, params)` directamente (ver `metrics/store.ts`), no hay
+>   un wrapper genérico para SQL libre — solo helpers genéricos `dbLoadAll/dbGet/dbUpsert/dbDelete/
+>   dbCount` para tablas `id + data jsonb` (clients, schedules, jobs), que **no aplican** a
+>   `report_metrics` porque esa tabla tiene columnas reales, no jsonb. La tabla ya existe con
+>   `PRIMARY KEY (client_id, advisor, period_key)` y un índice
+>   `report_metrics_lookup_idx (client_id, advisor, period_start)`.
+
 ### Ticket 0.2 `[VERIFY]` Confirmar el formato y la semántica de `period_key` y `period_start`
 - Busca en el código **dónde se escribe** una fila en `report_metrics` (probablemente
   `src/jobs/runner.ts` paso 8, `src/metrics/store.ts`, o `src/claude/individual.ts`).
@@ -102,6 +133,28 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
     de doble conteo (ver Ticket 0.3).
 - **DoD:** nota que responda las 3 preguntas con la línea de código exacta que lo demuestra.
 
+> **✅ Notas de verificación (cerrado):**
+> - **¿Qué se guarda en `period_key`?** Se decide en `currentPeriodKey()` (`src/google/drive.ts:
+>   217-223`): `return periodType === 'weekly' && dateFrom ? dateFrom : month;`. Para periodos
+>   **mensuales** es el string `'YYYY-MM'` (ej. `'2026-06'`) — **sí es un identificador estable de
+>   periodo**, no una fecha. Para periodos **semanales** es literalmente `dateFrom`, una fecha
+>   `'YYYY-MM-DD'`. El riesgo anotado en el Anexo ("`period_key` podría ser una fecha") **se
+>   confirma parcialmente**: es cierto solo para filas semanales (por diseño, no por accidente);
+>   las mensuales sí tienen un identificador estable.
+> - **¿`period_start` es el inicio real del periodo o la fecha de generación?** Es el inicio real.
+>   Se calcula en `recordReportMetrics()` (`src/metrics/store.ts:40`) como
+>   `keyStartDate(periodKey)`, y `keyStartDate()` (`src/google/drive.ts:228-230`) normaliza:
+>   `/^\d{4}-\d{2}$/.test(periodKey) ? periodKey + '-01' : periodKey`. O sea: mensual → primer día
+>   del mes analizado; semanal → la fecha `dateFrom` (inicio real de la semana analizada). **Nunca**
+>   es la fecha en que se generó/corrió el job (`created_at` es esa, columna aparte). Confirma la
+>   decisión firme del plan de agregar sobre `period_start`.
+> - **¿Cómo se distingue una fila semanal de una mensual?** **No hay columna dedicada.** Se infiere
+>   por el **formato** de `period_key`: si matchea `/^\d{4}-\d{2}$/` (7 caracteres) es mensual; si
+>   matchea `/^\d{4}-\d{2}-\d{2}$/` (10 caracteres, fecha completa) es semanal. Este mismo regex ya
+>   se usa en el repo para esa distinción, ej. `src/routes/report.ts:14`
+>   (`periodKeyLabel`) y `src/google/drive.ts:229`. La capa de agregación nueva debe reutilizar
+>   esta misma regla (no inventar una nueva).
+
 ### Ticket 0.3 `[VERIFY]` Evaluar el riesgo de doble conteo (semanal + mensual)
 - Con lo aprendido en 0.2, determina: **¿puede un mismo cliente tener, en el mismo rango de
   fechas, filas semanales Y mensuales que cubran las mismas llamadas?**
@@ -111,6 +164,27 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   **filtrar por un tipo de periodo** para no sumar dos veces. Anota la estrategia elegida.
 - **DoD:** decisión documentada (trivial / requiere filtro), justificada con los datos reales.
 
+> **✅ Decisión (cerrado): requiere filtro, no es trivial.**
+> Nada en el sistema impide correr un reporte semanal y uno mensual para el mismo cliente en el
+> mismo rango de fechas: `period_type` es un parámetro libre por job (`src/routes/report.ts:24`,
+> `z.enum(['monthly', 'weekly'])`), no hay validación que lo impida ni lo haga mutuamente
+> excluyente por cliente. Si ambos se corren, `report_metrics` tendrá filas semanales con
+> `period_start` cayendo *dentro* del rango cubierto por una fila mensual del mismo mes → sumar
+> ambas en un mismo bucket duplicaría las llamadas de esas semanas.
+> **Estrategia elegida:** el endpoint de agregación (Sprint 1) acepta un parámetro de tipo de
+> periodo derivado igual que en el Ticket 0.2 (regex sobre `period_key`: 7 chars = mensual, 10
+> chars = semanal) y por defecto **filtra a un solo tipo por consulta** (mensual, ya que es el caso
+> de uso principal del dashboard: granularidad weekly/monthly/etc. agrupa sobre `period_start` de
+> filas de un mismo "grano base"). Concretamente: la función de lectura agregada (Ticket 1.1) sólo
+> trae filas donde `period_key` matchea el patrón mensual (`^\d{4}-\d{2}$`), descartando las
+> semanales salvo que en el futuro se decida exponer un selector explícito de granularidad base en
+> la UI.
+> **Nota de alcance:** este sandbox no tiene `DATABASE_URL` configurado, así que esta decisión se
+> basa en lectura de código (cómo se escribe `period_key`/`period_type`), no en inspección empírica
+> de filas reales de `report_metrics`. Antes de implementar el Sprint 1 contra la DB real de
+> producción, vale la pena correr `SELECT DISTINCT client_id, period_key FROM report_metrics` para
+> confirmar si en la práctica ya existe mezcla semanal+mensual para algún cliente.
+
 ### Ticket 0.4 `[VERIFY]` Mapear el frontend (`index.html`)
 - Abre `index.html`. Confirma:
   - Cómo funciona el sistema de pestañas (`setTab` u otro). Cómo se añade una pestaña nueva sin
@@ -119,6 +193,30 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   - Si ya hay **alguna librería cargada vía CDN** (para decidir el stack de gráficas en 0.5).
   - Cómo se cargan estilos y si hay un design system / variables CSS a respetar.
 - **DoD:** nota con el mecanismo real de tabs y de fetch, y lista de librerías ya presentes.
+
+> **✅ Notas de verificación (cerrado):**
+> - **Tabs:** array global `_APP_TABS = ['reports','settings','automation']` (línea ~2006) +
+>   función `setTab(tab)` (línea 2011): marca `tab-btn-<tab>` y `tab-<tab>` como `.active` (toggle
+>   de clase) y limpia el resto. Cada botón de la barra es
+>   `<button class="app-tab" id="tab-btn-<id>" onclick="setTab('<id>')">` (líneas 361-363) y cada
+>   panel es `<div id="tab-<id>" class="tab-panel">` (líneas 365, 496, 508). Para añadir
+>   "Dashboard": agregar `'dashboard'` a `_APP_TABS`, un `<button id="tab-btn-dashboard">`, un
+>   `<div id="tab-dashboard" class="tab-panel">`, y opcionalmente un `if (tab === 'dashboard') {...}`
+>   en `setTab()` para disparar la carga inicial (mismo patrón que `settings`/`automation`).
+> - **Fetch:** todo vanilla `fetch('/api/...')` con `await`, sin librería HTTP. Patrón típico
+>   (línea 1212, 2123): `await fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status);
+>   return r.json(); })`, dentro de `try/catch` que llena un `innerHTML` de error. No hay capa de
+>   estado/reactividad — cada función de render hace `el.innerHTML = '...'` directamente con
+>   template strings y un helper `_esc()` (línea ~1999) para escapar HTML.
+> - **Librerías ya cargadas vía CDN:** solo **`@tabler/icons-webfont`** (CSS de iconos, línea 13) y
+>   **Google Fonts (Inter)** (línea 12). **Ningún `<script src="...">` de terceros** — cero JS de
+>   librería cargado hoy (no hay Chart.js, D3, React, ni build tool alguno).
+> - **Design system:** variables CSS por tema en `body[data-theme="dark"|"light"]` (líneas 21-22):
+>   `--bg`, `--surface`, `--surface2`, `--border`, `--border2`, `--fg`, `--muted`, `--faint`,
+>   `--accent`, `--on-accent`, `--danger`, `--success`, más `--motif-*` para el watermark
+>   diagonal. Hay también un kit de diseño más completo en
+>   `zebra-design-system-kit/01-design-system/` (`DESIGN-SYSTEM.md`, `tokens.css`) que documenta
+>   estas variables con más detalle — respetarlas para que la pestaña nueva no desentone.
 
 ### Ticket 0.5 `[VERIFY]` Evaluar y RECOMENDAR el stack de gráficas
 - Con base en lo visto en 0.4, **evalúa** entre dos opciones y **recomienda una**, dejando la
@@ -134,6 +232,21 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **DoD:** una sección "Decisión de stack" con la opción elegida y 2-3 razones. **El resto de los
   tickets de frontend asumen la opción elegida aquí.**
 
+> **✅ Decisión de stack (cerrado): Opción A — Vanilla JS + Chart.js vía CDN.**
+> Razones:
+> 1. `index.html` es confirmadamente vanilla sin build (Ticket 0.4): un solo archivo HTML servido
+>    estático por Express, sin `package.json` de frontend, sin bundler, sin framework. Montar Vite
+>    solo para esta sección rompería la premisa "un solo archivo" del resto del SPA y obligaría a
+>    tocar el `Dockerfile` (build step adicional, copiar `dist/` del frontend) sin necesidad.
+> 2. El criterio guía del propio plan ("minimizar cambios al pipeline de deploy") apunta
+>    directamente a A: el `Dockerfile` ya copia `index.html` tal cual (línea 24) — añadir un
+>    `<script src="https://cdn.jsdelivr.net/npm/chart.js">` no cambia ni el build ni el deploy.
+> 3. El alcance real (líneas/barras simples para 3 métricas, pocos puntos de datos) no necesita el
+>    poder de Recharts/React; Chart.js cubre sobradamente line + bar charts con poco código.
+> **Implicación para el Sprint 2:** la pestaña Dashboard se construye como el resto del SPA — HTML
+> embebido + funciones JS en el mismo `<script>` de `index.html`, con `<canvas>` para cada gráfica
+> y `new Chart(ctx, {...})`. Cargar el script de Chart.js vía CDN en el `<head>` junto a los demás.
+
 ### Ticket 0.6 `[VERIFY]` Mapear el pipeline de PDF
 - Abre `src/pdf/renderer.ts`, `src/pdf/merge.ts` y `src/pdf/templates/*.eta`. Confirma:
   - La firma real de la función que convierte HTML/plantilla → PDF (singleton de browser, args
@@ -142,6 +255,66 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   - Cómo el `Dockerfile` copia las plantillas a `dist/` (para no olvidar copiar la nueva).
 - **DoD:** nota con la firma del renderer, el patrón de plantilla y la línea del Dockerfile que
   copia plantillas.
+
+> **✅ Notas de verificación (cerrado):**
+> - **Firma del renderer** (`src/pdf/renderer.ts:36`):
+>   `renderPdf(template: string, data: Record<string, unknown>): Promise<Buffer>`. Internamente:
+>   `Eta` (instanciada una vez, `views` apuntando a `src/pdf/templates`, `cache: true`,
+>   `autoEscape: true`) renderiza `template` con `{ ...data, _logoB64 }` → HTML string →
+>   `page.setContent(html, { waitUntil: 'networkidle' })` en un singleton de `Browser` de
+>   Playwright (`chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args:
+>   ['--no-sandbox','--disable-setuid-sandbox'] })`) → `page.pdf({ format: 'A4', printBackground:
+>   true, margin: 0 })`. `closeBrowser()` existe para cerrar el singleton (no se usa en
+>   request/response normal, solo para shutdown). `mergePdfs(buffers: Buffer[]): Promise<Buffer>`
+>   en `src/pdf/merge.ts` concatena páginas con `pdf-lib` (si es 1 solo buffer, lo devuelve tal
+>   cual sin pasar por pdf-lib).
+> - **Inyección del logo:** `getLogoB64()` lee `Logo Zebra Blanco.png` desde la raíz del proyecto
+>   (`path.join(__dirname, '..', '..', 'Logo Zebra Blanco.png')`) una sola vez, cachea el base64 en
+>   memoria, y `renderPdf` lo añade automáticamente a los datos como `_logoB64` antes de renderizar
+>   — **cualquier plantilla nueva lo recibe gratis**, solo hay que usarlo igual que
+>   `individual.eta` (línea 88): `<% if (it._logoB64) { %><img src="data:image/png;base64,<%=
+>   it._logoB64 %>" ...><% } %>`.
+> - **Patrón de plantilla:** sintaxis Eta (`<%= %>` escapado, `<% %>` lógica JS embebida, helpers
+>   declarados inline con `const fn = function(...) {...}` dentro de un bloque `<% %>` al inicio
+>   del body). **Importante:** las plantillas existentes (`individual.eta`, `general.eta`) **no
+>   usan `<script>` ni `<canvas>` en absoluto** — todas las "gráficas" (barras de criterios, etc.)
+>   son CSS puro (`<div class="bar-fill" style="width: X%">`), no hay precedente de ejecutar JS de
+>   terceros (ej. Chart.js) dentro del HTML que se pasa a Chromium. Esto es relevante para el
+>   Ticket 3.1 (ver más abajo): no hay garantía documentada de que el contenedor de producción
+>   tenga salida a internet para que un `<script src="cdn...">` cargue dentro del Chromium
+>   headless — `page.setContent` con `waitUntil:'networkidle'` esperaría esa carga y podría colgar
+>   o fallar en silencio si no hay red de salida.
+> - **Dockerfile — línea que copia plantillas:** `Dockerfile:23` →
+>   `COPY src/pdf/templates ./dist/pdf/templates`. Cualquier `.eta` nuevo dentro de
+>   `src/pdf/templates/` se copia automáticamente (es un `COPY` de carpeta completa, no de
+>   archivos individuales), así que **no hace falta tocar el Dockerfile** al añadir
+>   `dashboard.eta` — mitiga el riesgo #4 del Anexo de raíz, ya que el wildcard de carpeta lo cubre
+>   sin intervención manual.
+
+---
+
+### Cierre del Sprint 0 — resumen de hallazgos para los siguientes sprints
+
+- **Sprint 0 completo.** Los 6 tickets (`0.1`–`0.6`) quedaron verificados con notas inline arriba.
+  No se escribió código de features, solo investigación, tal como pide el objetivo del sprint.
+- **Discrepancias confirmadas vs el handoff/plan original:**
+  - `src/metrics/store.ts` **no** tiene modo dual DB/JSON (es DB-only); el Ticket 1.1 debe
+    corregirse mentalmente para asumir esto.
+  - `period_key` mensual **sí** es un identificador estable (`'YYYY-MM'`); solo el semanal es una
+    fecha. El riesgo del Anexo aplica parcialmente, no en general.
+- **Decisiones que quedan firmes para Sprint 1 y 2:**
+  - Filtrar por tipo de periodo (regex sobre `period_key`) para evitar doble conteo — por defecto
+    solo mensuales, ver nota del Ticket 0.3.
+  - Stack de frontend: **Chart.js vía CDN**, vanilla, sin build (Ticket 0.5).
+  - Plantillas `.eta` nuevas no requieren tocar el `Dockerfile` (`COPY` de carpeta completa).
+- **Riesgo nuevo detectado, no estaba en el plan original:** no hay framework de testing instalado
+  (`package.json` no tiene `jest`/`vitest`/etc., solo `tsc`). El Ticket 1.4 pide "tests unitarios"
+  para `aggregate.ts` — al llegar a ese ticket habrá que decidir explícitamente cómo correrlos
+  (instalar un test runner liviano, o un script `tsx` con `assert` nativo de Node sin dependencia
+  nueva). Se deja anotado aquí para no sorprenderse en el Sprint 1.
+- **Nota de alcance:** este sandbox no tiene `DATABASE_URL` configurado, así que todo lo anterior
+  se verificó leyendo código fuente, no consultando la base de datos real en vivo. El Sprint 1
+  debe correr contra un entorno con `DATABASE_URL` real antes de dar por buena la query.
 
 ---
 

@@ -256,37 +256,26 @@
     .kebab-item.danger i{color:var(--danger);}
     .kebab-item.danger:hover{background:color-mix(in srgb, var(--danger) 10%, var(--surface));}
     .kebab-sep{height:0.5px;background:var(--border);margin:5px 2px;}
-    /* ── "Running" state: animated monochrome gradient border (--accent sweep). ──
-       On-brand (ZR-05): white in dark, black in light. Light gets a thicker, more
-       contrasted sweep so the black reads with enough presence on a white card. */
-    @property --zr-ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    /* ── "Running" state: SVG stroke-dash border. The light travels by TRACK
+       LENGTH (stroke-dashoffset), so it moves at CONSTANT speed around the whole
+       perimeter — unlike a rotating conic gradient, which speeds up/slows down at
+       corners on a wide card. Monochrome --accent (white in dark / black in light);
+       light gets a thicker, stronger stroke for presence on white.
+       pathLength=100 normalises the dash math to 0–100 at any card size. */
     .schedule-card.running{position:relative;border-color:transparent;box-shadow:0 0 16px -5px color-mix(in srgb, var(--accent) 42%, transparent);}
     .schedule-card.running.disabled{opacity:1;}  /* keep the animation fully visible even if paused (manual run) */
-    .schedule-card.running::before{
-      content:'';position:absolute;inset:0;border-radius:12px;padding:1.6px;pointer-events:none;z-index:1;
-      background:conic-gradient(from var(--zr-ang),
-        transparent 0deg, transparent 205deg,
-        color-mix(in srgb, var(--accent) 45%, transparent) 265deg,
-        var(--accent) 322deg,
-        color-mix(in srgb, var(--accent) 45%, transparent) 355deg,
-        transparent 360deg);
-      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite:xor; mask-composite:exclude;
-      animation:zr-rotate 1.4s linear infinite;
-    }
-    /* Light: black needs more mass + contrast to read on white. */
-    body[data-theme="light"] .schedule-card.running{box-shadow:0 0 18px -3px color-mix(in srgb, var(--accent) 62%, transparent);}
-    body[data-theme="light"] .schedule-card.running::before{
-      padding:2.5px;
-      background:conic-gradient(from var(--zr-ang),
-        transparent 0deg, transparent 170deg,
-        color-mix(in srgb, var(--accent) 72%, transparent) 235deg,
-        var(--accent) 295deg, var(--accent) 342deg,
-        color-mix(in srgb, var(--accent) 72%, transparent) 360deg);
-    }
-    @keyframes zr-rotate{ to{ --zr-ang:360deg; } }
+    .zr-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible;}
+    .zr-svg rect{x:1px;y:1px;width:calc(100% - 2px);height:calc(100% - 2px);rx:11px;ry:11px;
+      fill:none;stroke:var(--accent);vector-effect:non-scaling-stroke;stroke-linecap:round;}
+    .zr-svg .zr-trail{stroke-width:2;opacity:.28;stroke-dasharray:30 70;animation:zr-dash 2.2s linear infinite;}
+    .zr-svg .zr-head {stroke-width:2;opacity:1; stroke-dasharray:9 91; animation:zr-dash 2.2s linear infinite;}
+    body[data-theme="light"] .schedule-card.running{box-shadow:0 0 18px -3px color-mix(in srgb, var(--accent) 60%, transparent);}
+    body[data-theme="light"] .zr-svg .zr-trail{stroke-width:3;opacity:.4;}
+    body[data-theme="light"] .zr-svg .zr-head {stroke-width:3;}
+    @keyframes zr-dash{ to{ stroke-dashoffset:-100; } }
     @media (prefers-reduced-motion: reduce){
-      .schedule-card.running::before{animation:none;background:var(--accent);}
+      .zr-svg .zr-trail{display:none;}
+      .zr-svg .zr-head{animation:none;stroke-dasharray:none;opacity:1;}  /* static accent ring */
     }
     .sched-name{font-size:14px;font-weight:500;}
     .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}
@@ -2394,7 +2383,14 @@
         const errNote = (s.enabled && s.last_status === 'error')
           ? `<div class="sched-desc" style="color:var(--danger);margin-top:3px;">Último intento falló: ${_esc((s.last_error || '').slice(0,140))}</div>`
           : '';
+        const runOverlay = s.running
+          ? `<svg class="zr-svg" preserveAspectRatio="none" aria-hidden="true">` +
+              `<rect class="zr-trail" pathLength="100"></rect>` +
+              `<rect class="zr-head" pathLength="100"></rect>` +
+            `</svg>`
+          : '';
         card.innerHTML =
+          runOverlay +
           `<div class="sched-dot ${health}" title="${_esc(healthTitle)}"></div>` +
           `<div style="flex:1;min-width:0;">` +
             `<div class="sched-name">${_esc(s.name)}</div>` +

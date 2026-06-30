@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;transition:background .25s,color .25s;}
@@ -97,6 +98,8 @@
     .result-link:hover{border-color:var(--accent);background:var(--surface);}
     .result-arrow{color:var(--muted);font-size:16px;}
     .error-box{padding:12px 15px;background:rgba(226,75,74,0.08);border:0.5px solid rgba(226,75,74,0.25);border-radius:8px;font-size:13px;color:var(--danger);line-height:1.5;}
+    .delta-pos{color:var(--success);font-weight:600;}
+    .delta-neg{color:var(--danger);font-weight:600;}
     /* ── Modal de progreso ── */
     .modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:16px;}
     .modal-backdrop.show{display:flex !important;}
@@ -359,6 +362,7 @@
 <main class="main">
   <nav class="app-nav">
     <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')"><i class="ti ti-chart-bar"></i>REPORTES</button>
+    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
     <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
     <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
   </nav>
@@ -491,6 +495,53 @@
     </div>
   </div>
   </div><!-- /tab-reports -->
+
+  <!-- ── Dashboard de métricas ── -->
+  <div id="tab-dashboard" class="tab-panel">
+    <div class="config-row">
+      <div class="field field-wide">
+        <div class="field-label">Cliente</div>
+        <select id="dash-client-select" onchange="onDashClientChange()">
+          <option value="">Selecciona un cliente</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Desde</div>
+        <input type="date" id="dash-from" class="token-date-input" onchange="loadDashboard()">
+      </div>
+      <div class="field">
+        <div class="field-label">Hasta</div>
+        <input type="date" id="dash-to" class="token-date-input" onchange="loadDashboard()">
+      </div>
+      <div class="field">
+        <div class="field-label">Granularidad</div>
+        <select id="dash-granularity" onchange="loadDashboard()" style="min-width:150px;">
+          <option value="weekly">Semanal</option>
+          <option value="monthly" selected>Mensual</option>
+          <option value="bimonthly">Bimestral</option>
+          <option value="quarterly">Trimestral</option>
+          <option value="semiannual">Semestral</option>
+          <option value="annual">Anual</option>
+        </select>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="field">
+        <div class="field-label">Vista</div>
+        <div class="period-toggle" style="min-width:230px;">
+          <button class="period-btn active" id="dash-view-team" onclick="setDashView('team')">Equipo</button>
+          <button class="period-btn" id="dash-view-advisor" onclick="setDashView('advisor')">Asesor individual</button>
+        </div>
+      </div>
+      <div class="field field-grow" id="dash-advisor-field" style="display:none;">
+        <div class="field-label">Asesor</div>
+        <select id="dash-advisor-select" onchange="renderDashboard()"></select>
+      </div>
+    </div>
+    <div id="dash-body">
+      <div class="token-empty">Selecciona un cliente para ver sus métricas.</div>
+    </div>
+  </div><!-- /tab-dashboard -->
 
   <!-- ── Settings panel ── -->
   <div id="tab-settings" class="tab-panel">
@@ -958,6 +1009,7 @@
     body.setAttribute('data-theme', isDark ? 'light' : 'dark');
     const lbl = document.getElementById('theme-label');
     if (lbl) lbl.textContent = isDark ? 'LIGHT' : 'DARK';
+    if (_currentTab === 'dashboard' && dashData) renderDashboard();
   }
 
   const PC=[
@@ -1220,6 +1272,7 @@
         sel.appendChild(o);
       });
       populateTokenClientFilter();
+      populateDashClientSelect();
     }catch(e){
       console.error('Error cargando clientes:',e);
     }
@@ -1995,6 +2048,272 @@
     loadTokenStats();
   })();
 
+  // ── Dashboard de métricas ────────────────────────────────────────────────────
+  const METRICS_API = '/api/metrics';
+  const GRANULARITY_LABELS = {
+    weekly: 'Semanal', monthly: 'Mensual', bimonthly: 'Bimestral',
+    quarterly: 'Trimestral', semiannual: 'Semestral', annual: 'Anual',
+  };
+  let dashData    = null; // last successful /api/metrics response
+  let _dashView   = 'team';
+  let _dashCharts = [];   // Chart.js instances currently on screen, destroyed before each re-render
+
+  function populateDashClientSelect() {
+    const sel = document.getElementById('dash-client-select');
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Selecciona un cliente</option>';
+    allClients.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.name;
+      sel.appendChild(o);
+    });
+    sel.value = allClients.some(c => c.id === prev) ? prev : '';
+  }
+
+  function onDashClientChange() {
+    loadDashboard();
+  }
+
+  function setDashView(v) {
+    _dashView = v;
+    document.getElementById('dash-view-team').classList.toggle('active', v === 'team');
+    document.getElementById('dash-view-advisor').classList.toggle('active', v === 'advisor');
+    document.getElementById('dash-advisor-field').style.display = v === 'advisor' ? 'flex' : 'none';
+    renderDashboard();
+  }
+
+  function populateDashAdvisorSelect() {
+    const sel = document.getElementById('dash-advisor-select');
+    if (!sel || !dashData) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
+    dashData.advisors.forEach(a => {
+      const o = document.createElement('option');
+      o.value = a;
+      o.textContent = a;
+      sel.appendChild(o);
+    });
+    if (dashData.advisors.includes(prev)) sel.value = prev;
+  }
+
+  // Default range when the user hasn't picked dates yet: last 12 months up to today.
+  function _dashDefaultRange() {
+    const today = new Date();
+    const from  = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return { from: fmt(from), to: _isoToday() };
+  }
+
+  async function loadDashboard() {
+    const clientId = document.getElementById('dash-client-select').value;
+    const body = document.getElementById('dash-body');
+    dashData = null;
+    _destroyDashCharts();
+
+    if (!clientId) {
+      body.innerHTML = '<div class="token-empty">Selecciona un cliente para ver sus métricas.</div>';
+      return;
+    }
+
+    const fromInput = document.getElementById('dash-from');
+    const toInput   = document.getElementById('dash-to');
+    if (!fromInput.value || !toInput.value) {
+      const def = _dashDefaultRange();
+      if (!fromInput.value) fromInput.value = def.from;
+      if (!toInput.value)   toInput.value   = def.to;
+    }
+    const from = fromInput.value;
+    const to   = toInput.value;
+    const granularity = document.getElementById('dash-granularity').value;
+
+    body.innerHTML = `<div class="token-empty" style="padding:40px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>`;
+    try {
+      const params = new URLSearchParams({ client_id: clientId, from, to, granularity });
+      const res = await fetch(`${METRICS_API}?${params.toString()}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      dashData = json;
+      populateDashAdvisorSelect();
+      renderDashboard();
+    } catch (e) {
+      dashData = null;
+      body.innerHTML = `<div class="error-box">⚠️ ${_esc(e.message)}</div>`;
+    }
+  }
+
+  function _destroyDashCharts() {
+    _dashCharts.forEach(c => c.destroy());
+    _dashCharts = [];
+  }
+
+  // Reads the live --fg/--border CSS variables so charts match the active theme.
+  function _dashChartColors() {
+    const cs = getComputedStyle(document.body);
+    return {
+      fg:     cs.getPropertyValue('--fg').trim()     || '#000',
+      muted:  cs.getPropertyValue('--muted').trim()  || '#888',
+      border: cs.getPropertyValue('--border').trim() || '#ccc',
+    };
+  }
+
+  function _chartOptions(extra) {
+    const c = _dashChartColors();
+    return Object.assign({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: c.fg, font: { family: 'Inter', size: 11 } } },
+      },
+      scales: {
+        x: { ticks: { color: c.muted }, grid: { color: c.border } },
+        y: { ticks: { color: c.muted }, grid: { color: c.border }, beginAtZero: true },
+      },
+    }, extra || {});
+  }
+
+  function _lineDataset(label, data, color) {
+    return {
+      label, data, borderColor: color, backgroundColor: color,
+      tension: 0.25, spanGaps: true, pointRadius: data.length === 1 ? 4 : 2,
+    };
+  }
+
+  function _barDataset(label, data, color) {
+    return { label, data, backgroundColor: color, borderRadius: 4 };
+  }
+
+  function renderDashboard() {
+    const body = document.getElementById('dash-body');
+    if (!dashData) return;
+    _destroyDashCharts();
+
+    if (dashData.buckets.length === 0) {
+      body.innerHTML = '<div class="token-empty">Aún no hay datos para este rango. Genera reportes para este cliente y vuelve a intentarlo.</div>';
+      return;
+    }
+
+    if (_dashView === 'advisor' && !document.getElementById('dash-advisor-select').value) {
+      body.innerHTML = '<div class="token-empty">Este cliente no tiene asesores con datos en el rango seleccionado.</div>';
+      return;
+    }
+
+    if (_dashView === 'team') renderDashTeamView(body);
+    else renderDashAdvisorView(body);
+  }
+
+  function renderDashTeamView(body) {
+    const lastBucket = dashData.buckets[dashData.buckets.length - 1];
+    body.innerHTML = `
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Tendencia del equipo</div>
+          <div class="card-desc">Promedio simple de todos los asesores por periodo (${_esc(GRANULARITY_LABELS[dashData.granularity] || dashData.granularity)}).</div>
+          <div style="height:260px;"><canvas id="dash-team-trend"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ranking de asesores</div>
+          <div class="card-desc">Puntaje promedio en ${_esc(lastBucket.label)} (último periodo del rango).</div>
+          <div style="height:260px;"><canvas id="dash-ranking"></canvas></div>
+        </div>
+      </div>`;
+
+    const labels = dashData.buckets.map(b => b.label);
+    _dashCharts.push(new Chart(document.getElementById('dash-team-trend'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          _lineDataset('Puntaje promedio',         dashData.team.map(p => p.avg_score),     '#0a6cff'),
+          _lineDataset('% logra siguiente paso',   dashData.team.map(p => p.pct_siguiente), '#d4af37'),
+          _lineDataset('Talk ratio',               dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+        ],
+      },
+      options: _chartOptions(),
+    }));
+
+    const rankingRows = dashData.advisors
+      .map(a => ({
+        advisor: a,
+        value: (dashData.by_advisor[a] || []).find(p => p.bucket === lastBucket.key)?.avg_score ?? null,
+      }))
+      .filter(r => r.value !== null)
+      .sort((a, b) => b.value - a.value);
+
+    if (rankingRows.length === 0) {
+      document.getElementById('dash-ranking').replaceWith(
+        Object.assign(document.createElement('div'), { className: 'token-empty', textContent: 'Sin datos de asesores para este periodo.' }),
+      );
+    } else {
+      _dashCharts.push(new Chart(document.getElementById('dash-ranking'), {
+        type: 'bar',
+        data: {
+          labels: rankingRows.map(r => r.advisor),
+          datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+        },
+        options: _chartOptions({ plugins: { legend: { display: false } } }),
+      }));
+    }
+  }
+
+  function renderDashAdvisorView(body) {
+    const advisor = document.getElementById('dash-advisor-select').value;
+    const series = dashData.by_advisor[advisor] || [];
+    const bucketByKey = Object.fromEntries(dashData.buckets.map(b => [b.key, b]));
+    const labels = series.map(p => bucketByKey[p.bucket]?.label || p.bucket);
+
+    // Delta vs the previous point in this advisor's own series: same logic the
+    // rest of the system uses for period-over-period comparison (simple
+    // subtraction between the current and the immediately previous value,
+    // see delta_score / delta_siguiente_paso in src/claude/individual.ts).
+    let deltaHtml = '<span style="color:var(--faint);">Primer periodo en el rango, sin comparativo.</span>';
+    if (series.length >= 2) {
+      const curr = series[series.length - 1];
+      const prev = series[series.length - 2];
+      const fmtDelta = (a, b) => {
+        if (a == null || b == null) return null;
+        const d = Math.round((a - b) * 100) / 100;
+        return { d, cls: d >= 0 ? 'delta-pos' : 'delta-neg', txt: (d >= 0 ? '+' : '') + d };
+      };
+      const ds = fmtDelta(curr.avg_score, prev.avg_score);
+      const dp = fmtDelta(curr.pct_siguiente, prev.pct_siguiente);
+      const dt = fmtDelta(curr.talk_ratio, prev.talk_ratio);
+      deltaHtml = [
+        ds ? `<span class="${ds.cls}">${ds.txt} pts</span> puntaje` : '',
+        dp ? `<span class="${dp.cls}">${dp.txt} pp</span> siguiente paso` : '',
+        dt ? `<span class="${dt.cls}">${dt.txt} pp</span> talk ratio` : '',
+      ].filter(Boolean).join(' &nbsp;·&nbsp; ') + ` vs ${_esc(bucketByKey[prev.bucket]?.label || prev.bucket)}`;
+    }
+
+    body.innerHTML = `
+      <div class="card">
+        <div class="card-title">${_esc(advisor)} · Serie histórica</div>
+        <div class="card-desc">Línea punteada: promedio del equipo (puntaje) en el mismo periodo.</div>
+        <div style="height:300px;"><canvas id="dash-advisor-trend"></canvas></div>
+        <div style="margin-top:14px;padding-top:14px;border-top:0.5px solid var(--border);font-size:13px;">${deltaHtml}</div>
+      </div>`;
+
+    const teamByBucket = Object.fromEntries(dashData.team.map(p => [p.bucket, p]));
+    _dashCharts.push(new Chart(document.getElementById('dash-advisor-trend'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          _lineDataset('Puntaje promedio',       series.map(p => p.avg_score),     '#0a6cff'),
+          _lineDataset('% logra siguiente paso', series.map(p => p.pct_siguiente), '#d4af37'),
+          _lineDataset('Talk ratio',             series.map(p => p.talk_ratio),    '#2e7d32'),
+          Object.assign(
+            _lineDataset('Promedio del equipo (puntaje)', series.map(p => teamByBucket[p.bucket]?.avg_score ?? null), '#8A8A8A'),
+            { borderDash: [6, 4], pointRadius: 0 },
+          ),
+        ],
+      },
+      options: _chartOptions(),
+    }));
+  }
+
   // ── HTML escape helper ─────────────────────────────────────────────────────
   function _esc(s) {
     return String(s == null ? '' : s)
@@ -2003,7 +2322,7 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','settings','automation'];
+  const _APP_TABS = ['reports','dashboard','settings','automation'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -2016,6 +2335,7 @@
     });
     if (tab === 'settings')   renderClientList();
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
+    if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
   }
 
   // ── Clients CRUD ───────────────────────────────────────────────────────────

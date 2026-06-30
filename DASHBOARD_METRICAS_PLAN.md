@@ -435,6 +435,22 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
 - **DoD:** la pestaña aparece, los controles se renderizan, cambiar un control dispara un fetch a
   `/api/metrics` (aún sin gráficas).
 
+> **✅ Cerrado.** Pestaña "DASHBOARD" añadida entre Reportes y Ajustes, mismo mecanismo de
+> `_APP_TABS` / `setTab()` confirmado en el Ticket 0.4. Controles: cliente (`#dash-client-select`),
+> rango de fechas (`#dash-from`/`#dash-to`, con default de los últimos 12 meses si quedan vacíos),
+> granularidad (`#dash-granularity`, las 6 opciones), y toggle Equipo/Asesor
+> (`#dash-view-team`/`#dash-view-advisor`, reutilizando la clase `.period-toggle` ya existente)
+> con un selector de asesor que solo aparece en vista "Asesor individual".
+> **Decisión de implementación (no estaba explícito en el ticket):** el selector de cliente
+> reutiliza la variable global `allClients` ya cargada por `loadClients()` (mismo patrón que el
+> filtro de tokens, `populateTokenClientFilter()`) en vez de volver a pedir `/api/clients`. El
+> selector de **asesor** se llena con el campo `advisors` que ya devuelve `/api/metrics` (los
+> asesores que de verdad tienen filas en el rango elegido), **no** con `/api/advisors`: ese
+> endpoint exige un `month` y lee de Google Sheets (lista de asesores configurados, no de
+> `report_metrics`), por lo que mezclaría dos fuentes de verdad distintas para un control que debe
+> reflejar exactamente lo que el dashboard puede graficar. Cualquier control dispara
+> `loadDashboard()`, que llama a `/api/metrics` y revalida.
+
 ### Ticket 2.2 `[IMPL]` Vista de cliente
 - Renderiza con el stack elegido:
   - **Tendencia del equipo:** línea(s) de `avg_score` (y opcionalmente `pct_siguiente` /
@@ -444,6 +460,15 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
   **0 datos** (mensaje claro tipo "Aún no hay datos para este rango").
 - **DoD:** vista de cliente funcional contra datos reales de `midstorage`.
 
+> **✅ Cerrado.** `renderDashTeamView()` en `index.html`: gráfica de línea (Chart.js) con las 3
+> métricas del equipo por bucket, y gráfica de barras con el `avg_score` de cada asesor **en el
+> último bucket del rango** (documentado en el `card-desc` visible: "Puntaje promedio en \<label\>
+> (último periodo del rango)"). Con 1 solo bucket, la línea muestra un único punto (`pointRadius`
+> más grande para que no parezca un error) y la barra se ve normal con una sola categoría por
+> asesor. Con 0 buckets, no se renderiza ninguna gráfica (ver Ticket 2.4). Verificado visualmente
+> con Playwright + datos simulados (1 y 2 buckets, 1 y 2 asesores): ambas gráficas renderizan
+> correctamente en tema oscuro y claro.
+
 ### Ticket 2.3 `[IMPL]` Vista de asesor individual
 - Para el asesor seleccionado:
   - **Su serie histórica** de las 3 métricas.
@@ -452,10 +477,42 @@ Construir un **dashboard de métricas** dentro del panel interno (`index.html`) 
     el sistema; confírmalo en el repo antes de recalcular nada).
 - **DoD:** vista de asesor funcional; el delta coincide con la lógica existente del sistema.
 
+> **✅ Cerrado.** `renderDashAdvisorView()`: línea con las 3 métricas del asesor seleccionado más
+> una **línea punteada de referencia** con `avg_score` del equipo en los mismos buckets. El delta
+> se confirmó contra el repo (Ticket 2.3 pedía no inventar la lógica): en
+> `src/claude/individual.ts:371-372`, `delta_score = avg_score_actual - avg_score_anterior` y
+> `delta_siguiente_paso = pct_actual - pct_anterior`, **resta simple entre el periodo actual y el
+> inmediato anterior**, sin ponderar. Esa lógica opera sobre el contexto de un job puntual (compara
+> contra el sidecar/fila más reciente antes del periodo que se está generando) y no es una función
+> reutilizable para un rango arbitrario de fechas, así que el dashboard recalcula el mismo cálculo
+> (resta simple) sobre los **dos últimos puntos de la propia serie del asesor** que ya devuelve
+> `/api/metrics` — mismos campos (`avg_score`, `pct_siguiente`, `talk_ratio`), misma semántica de
+> "vs el periodo inmediatamente anterior", sin duplicar acceso a DB ni a Drive. Con un solo punto
+> en el rango se muestra "Primer periodo en el rango, sin comparativo." en vez de un delta.
+
 ### Ticket 2.4 `[IMPL]` Estados de carga, error y vacío
 - Spinner/skeleton mientras carga, mensaje de error si el fetch falla, y estado vacío explícito.
 - Respeta el design system / variables CSS detectadas en 0.4. **Sin em dash en textos visibles.**
 - **DoD:** los 3 estados se ven correctos y consistentes con el resto del SPA.
+
+> **✅ Cerrado.** Reutiliza clases ya existentes en `index.html` en vez de crear nuevas:
+> `.spin-xs` dentro de `.token-empty` para el spinner de carga, `.error-box` (mismo estilo rojo que
+> usa el resto del SPA) si el fetch falla, y `.token-empty` para los 3 casos de "vacío": sin
+> cliente seleccionado, rango sin datos (`buckets.length === 0`), y vista de asesor sin asesores
+> con datos en el rango. Únicas clases nuevas: `.delta-pos`/`.delta-neg` (no existían en
+> `index.html`, solo en la plantilla de PDF; se añadieron usando las mismas variables de tema
+> `--success`/`--danger`). **Sin em dash:** se revisó el texto añadido y se corrigieron 2 casos
+> donde se había copiado el patrón pre-existente `"— Selecciona un cliente —"` del select de
+> Reportes (que sí usa em dash, pre-existente en el repo) — los nuevos selects y textos del
+> dashboard usan punto, coma o `·` en su lugar, según la regla ZR-02 del
+> `zebra-design-system-kit/03-reglas-de-construccion/REGLAS.md`.
+> **Verificación real en navegador:** como el CDN de Chart.js no es alcanzable desde este sandbox
+> (proxy de red restringido, igual que `cdn.jsdelivr.net` para los iconos Tabler y Google Fonts que
+> ya usaba el SPA antes de este cambio), se verificó con Playwright sirviendo Chart.js localmente
+> vía interceptación de la petición de red (solo para esta prueba, no se cambió la decisión de
+> stack ni se agregó Chart.js como dependencia npm). Con eso confirmado: pestaña visible, ambas
+> vistas renderizan, toggle de tema no rompe los charts (se destruyen y re-crean con los colores
+> del tema activo), y los 3 estados (carga/error/vacío) se ven correctos en oscuro y claro.
 
 ---
 

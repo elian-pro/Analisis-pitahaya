@@ -124,6 +124,47 @@ export async function getAdvisorsForMonth(
     .sort((a, b) => a.asesor.localeCompare(b.asesor, 'es'));
 }
 
+/**
+ * Names of advisors with at least one row (by date only, no duration/exclusion
+ * filtering) in the given period, monthly or weekly. Used to flag advisors
+ * with zero calls in the currently selected period in the UI — a lighter,
+ * unambiguous signal than getCallData()'s full filtering (which also drops
+ * short calls and excluded phrases: a "0 calls" flag driven by that would
+ * conflate "no calls at all" with "calls filtered out", a different situation).
+ */
+export async function getAdvisorNamesWithCalls(
+  spreadsheetId: string,
+  dataSheetName: string,
+  colFecha: string,
+  colAsesor: string,
+  month: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<Set<string>> {
+  const rows = await readSheet(spreadsheetId, dataSheetName);
+  if (rows.length < 2) return new Set();
+
+  const headers   = rows[0].map(String);
+  const fechaIdx  = headerIndex(headers, colFecha);
+  const asesorIdx = headerIndex(headers, colAsesor);
+  if (asesorIdx === -1) return new Set();
+
+  const names = new Set<string>();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+
+    const date = fechaIdx >= 0 ? parseSheetDate(row[fechaIdx]) : null;
+    const dateOk = dateFrom && dateTo
+      ? (date !== null && inDateRange(date, dateFrom, dateTo))
+      : (date !== null && matchesMonth(date, month));
+    if (!dateOk) continue;
+
+    const name = String(row[asesorIdx] ?? '').trim();
+    if (name) names.add(name);
+  }
+  return names;
+}
+
 export async function getAdvisors(
   spreadsheetId: string,
   sheetName: string,

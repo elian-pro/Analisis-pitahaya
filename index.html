@@ -59,6 +59,10 @@
     .advisor-check.checked .check-box{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
     .avatar{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
     .advisor-name{font-size:13px;font-weight:400;flex:1;}
+    .advisor-name-col{display:flex;flex-direction:column;flex:1;min-width:0;gap:1px;}
+    .advisor-warn{font-size:10px;color:var(--danger);font-weight:500;}
+    .inactive-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;color:var(--muted);}
+    .inactive-row .link-btn{margin-left:auto;}
     .remove-btn{font-size:16px;color:var(--faint);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;}
     .advisor-check:hover .remove-btn{opacity:1;}
     .remove-btn:hover{color:var(--danger);}
@@ -419,7 +423,7 @@
         <span style="color:var(--faint)">·</span>
         <button class="link-btn" onclick="toggleAll(false)">Ninguno</button>
         <span style="color:var(--faint)">·</span>
-        <button class="link-btn" onclick="restoreDefaults()">Restaurar</button>
+        <button class="link-btn" id="inactive-toggle-btn" onclick="toggleInactivePanel()">Inactivos</button>
         <span style="flex:1"></span>
         <button class="link-btn" style="color:var(--accent)" onclick="toggleAddForm()">+ Agregar asesor</button>
       </div>
@@ -440,6 +444,10 @@
           <button class="btn-sm btn-sm-green" onclick="saveAdvisor()">Guardar</button>
           <button class="btn-sm btn-sm-cancel" onclick="toggleAddForm()">Cancelar</button>
         </div>
+      </div>
+      <div class="add-advisor-form" id="inactive-panel">
+        <div style="font-size:10px;font-weight:500;letter-spacing:0.15em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Asesores inactivos</div>
+        <div id="inactive-list"></div>
       </div>
       <div class="advisor-grid" id="advisor-grid"></div>
       <div class="selected-summary"><span id="selected-count">0</span> asesor(es) seleccionado(s) → <span id="selected-count2">0</span> reporte(s) individual(es) + 1 reporte general</div>
@@ -1052,7 +1060,7 @@
   ];
 
   let currentClient     = null;
-  let webhookAdvisors   = [];
+  let advisorRoster     = [];
   let allClients        = [];
   let sci               = 0;
   let currentPeriodType = 'monthly';
@@ -1070,6 +1078,7 @@
       wf.style.display = 'none';
       closeCalPopup();
     }
+    if (currentClient) loadAdvisorRoster();
   }
 
   function getWeeksInMonth(yearMonth) {
@@ -1183,6 +1192,7 @@
           document.getElementById('week-select').selectedIndex = wIdx;
           updateWeekDisplay();
           closeCalPopup();
+          if (currentClient) loadAdvisorRoster();
         });
       }
 
@@ -1269,22 +1279,20 @@
     ms.appendChild(o);
   }
 
-  // ── LocalStorage con scope por cliente ──
-  function clientKey(k){ return currentClient ? `${k}_${currentClient.id}` : k; }
-  function gc(){try{return JSON.parse(localStorage.getItem(clientKey('custom_advisors'))||'[]');}catch{return[];}}
-  function sc(a){localStorage.setItem(clientKey('custom_advisors'),JSON.stringify(a));}
-  function ghd(){try{return JSON.parse(localStorage.getItem(clientKey('hidden_advisors'))||'[]');}catch{return[];}}
-  function shd(h){localStorage.setItem(clientKey('hidden_advisors'),JSON.stringify(h));}
-
-  function ga(){
-    const hd=ghd();
-    return[...webhookAdvisors.filter(a=>!hd.includes(a.name)),...gc()];
-  }
-
   function makeInitials(name){
     const parts=name.trim().split(/\s+/);
     return((parts[0]?.[0]||'')+(parts[1]?.[0]||'')).toUpperCase()||'?';
   }
+
+  // ── Roster de asesores (DB, ver src/routes/advisors.ts) ──
+  // Ya no vive en localStorage: el roster (nombre, iniciales, color, activo)
+  // se administra en Postgres/JSON por cliente. Sheets solo se usa (a) una vez,
+  // para importar el roster inicial si el cliente no tiene asesores en DB
+  // todavia, y (b) para saber qué asesores tuvieron llamadas en el periodo
+  // seleccionado (has_calls), mostrado como aviso, no como filtro.
+  let inactiveAdvisors = [];
+
+  function ga(){ return advisorRoster; }
 
   // ── Carga clientes desde la API ──
   async function loadClients(){
@@ -1312,7 +1320,7 @@
     const clientId=sel.value;
     if(!clientId){
       currentClient=null;
-      webhookAdvisors=[];
+      advisorRoster=[];
       render();
       lock(true);
       document.getElementById('drive-link-wrap').style.display='none';
@@ -1341,30 +1349,37 @@
       dlw.style.display='none';
     }
 
+    document.getElementById('inactive-panel').classList.remove('show');
+    await loadAdvisorRoster();
+  }
+
+  // Construye los mismos query params que usa el resto de Reportes para el
+  // periodo seleccionado (mensual o la semana elegida en el mini-calendario).
+  function _advisorPeriodParams(){
+    const month=document.getElementById('month-select').value;
+    const params=new URLSearchParams({client_id:currentClient.id,month,period_type:currentPeriodType});
+    if(currentPeriodType==='weekly'){
+      try{
+        const wData=JSON.parse(document.getElementById('week-select').value||'{}');
+        if(wData.start) params.set('date_from',wData.start);
+        if(wData.end)   params.set('date_to',wData.end);
+      }catch(e){}
+    }
+    return params;
+  }
+
+  // Recarga el roster (y el aviso de "sin llamadas") para el cliente y periodo
+  // actuales. Se llama al cambiar cliente, mes, tipo de periodo o semana.
+  async function loadAdvisorRoster(){
+    if(!currentClient) return;
     const g=document.getElementById('advisor-grid');
     g.innerHTML='<div class="advisors-loading"><div class="spin-xs"></div>Cargando asesores del cliente…</div>';
     lock(true);
-
     try{
-      const month=document.getElementById('month-select').value;
-      const res=await fetch(`${ADVISORS_API}?client_id=${encodeURIComponent(currentClient.id)}&month=${encodeURIComponent(month)}`);
+      const params=_advisorPeriodParams();
+      const res=await fetch(`${ADVISORS_API}?${params.toString()}`);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data=await res.json();
-
-      let names=[];
-      if(Array.isArray(data)){
-        names=data.map(a=>typeof a==='string'?a:(a.asesor||a.name||''));
-      } else if(data.advisors){
-        const arr=Array.isArray(data.advisors)?data.advisors:[data.advisors];
-        names=arr.map(a=>typeof a==='string'?a:(a.asesor||a.name||''));
-      }
-      names=names.filter(Boolean);
-
-      webhookAdvisors=names.map((name,i)=>{
-        const c=PC[i%PC.length];
-        return{name,initials:makeInitials(name),bg:c.bg,color:c.color};
-      });
-
+      advisorRoster=await res.json();
       render();
       lock(false);
     }catch(e){
@@ -1387,16 +1402,15 @@
     }
     const list=ga();
     if(!list.length){
-      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente.</div>';
+      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente. Agrega el primero con "+ Agregar asesor".</div>';
       uc(); return;
     }
-    const baseCount=webhookAdvisors.filter(x=>!ghd().includes(x.name)).length;
-    list.forEach((a,gi)=>{
-      const isCustom=gi>=baseCount;
+    list.forEach(a=>{
       const r=document.createElement('label');
       r.className='advisor-check checked';
       r.dataset.name=a.name;
-      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><span class="advisor-name">${a.name}</span><button class="remove-btn" onclick="rm('${a.name.replace(/'/g,"\\'")}',${!isCustom},event)">×</button>`;
+      const warn=a.has_calls===false?'<div class="advisor-warn">Sin llamadas en este periodo</div>':'';
+      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><div class="advisor-name-col"><span class="advisor-name">${_esc(a.name)}</span>${warn}</div><button class="remove-btn" onclick="rm('${a.id}',event)">×</button>`;
       r.addEventListener('click',e=>{if(e.target.closest('.remove-btn'))return;e.preventDefault();ta(r);});
       g.appendChild(r);
     });
@@ -1430,35 +1444,100 @@
     if(f.classList.contains('show')) document.getElementById('new-name').focus();
   }
 
-  function saveAdvisor(){
+  async function saveAdvisor(){
+    if(!currentClient){alert('Primero selecciona un cliente.');return;}
     const n=document.getElementById('new-name').value.trim();
     const ini=document.getElementById('new-initials').value.trim().toUpperCase();
     if(!n||!ini){alert('Ingresa nombre e iniciales.');return;}
     if(ga().some(a=>a.name.toLowerCase()===n.toLowerCase())){alert('Ya existe un asesor con ese nombre.');return;}
     const c=PC[sci];
-    const cu=gc();
-    cu.push({name:n,initials:ini,bg:c.bg,color:c.color});
-    sc(cu);
-    document.getElementById('new-name').value='';
-    document.getElementById('new-initials').value='';
-    document.getElementById('add-form').classList.remove('show');
-    render();
-  }
-
-  function rm(name,isWebhook,e){
-    e.stopPropagation();
-    if(!confirm(`¿Eliminar a ${name}?`))return;
-    if(isWebhook){
-      const hd=ghd();
-      if(!hd.includes(name)) hd.push(name);
-      shd(hd);
-    } else {
-      sc(gc().filter(a=>a.name!==name));
+    const saveBtn=document.querySelector('#add-form .btn-sm-green');
+    saveBtn.disabled=true;
+    try{
+      const res=await fetch(ADVISORS_API,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({client_id:currentClient.id,name:n,initials:ini,bg:c.bg,color:c.color}),
+      });
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
+      document.getElementById('new-name').value='';
+      document.getElementById('new-initials').value='';
+      document.getElementById('add-form').classList.remove('show');
+      await loadAdvisorRoster();
+    }catch(e){
+      alert('No se pudo agregar el asesor: '+e.message);
+    }finally{
+      saveBtn.disabled=false;
     }
-    render();
   }
 
-  function restoreDefaults(){shd([]);render();}
+  // Desactiva un asesor (no lo borra: sus reportes/metricas historicas siguen
+  // intactos). Reaparece en "Inactivos" para reactivarlo si fue un error.
+  async function rm(id,e){
+    e.stopPropagation();
+    const a=advisorRoster.find(x=>x.id===id);
+    const name=a?a.name:id;
+    if(!confirm(`¿Quitar a ${name} del roster? Su historial de reportes no se ve afectado; puedes reactivarlo despues desde "Inactivos".`))return;
+    try{
+      const res=await fetch(`${ADVISORS_API}/${encodeURIComponent(id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({active:false}),
+      });
+      if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.error||`HTTP ${res.status}`);}
+      await loadAdvisorRoster();
+    }catch(e){
+      alert('No se pudo quitar el asesor: '+e.message);
+    }
+  }
+
+  async function toggleInactivePanel(){
+    if(!currentClient){alert('Primero selecciona un cliente.');return;}
+    const panel=document.getElementById('inactive-panel');
+    if(panel.classList.contains('show')){
+      panel.classList.remove('show');
+      return;
+    }
+    const list=document.getElementById('inactive-list');
+    list.innerHTML='<div class="advisors-loading"><div class="spin-xs"></div>Cargando…</div>';
+    panel.classList.add('show');
+    try{
+      const params=new URLSearchParams({client_id:currentClient.id,include_inactive:'true'});
+      const res=await fetch(`${ADVISORS_API}?${params.toString()}`);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const all=await res.json();
+      inactiveAdvisors=all.filter(a=>!a.active);
+      if(!inactiveAdvisors.length){
+        list.innerHTML='<div class="advisors-empty">No hay asesores inactivos.</div>';
+        return;
+      }
+      list.innerHTML='';
+      inactiveAdvisors.forEach(a=>{
+        const row=document.createElement('div');
+        row.className='inactive-row';
+        row.innerHTML=`<div class="avatar" style="background:${a.bg};color:${a.color};width:22px;height:22px;font-size:8px;">${a.initials}</div><span>${_esc(a.name)}</span><button class="link-btn" style="color:var(--accent)" onclick="reactivateAdvisor('${a.id}')">Reactivar</button>`;
+        list.appendChild(row);
+      });
+    }catch(e){
+      list.innerHTML=`<div class="advisors-loading" style="color:var(--danger);">Error: ${e.message}</div>`;
+    }
+  }
+
+  async function reactivateAdvisor(id){
+    try{
+      const res=await fetch(`${ADVISORS_API}/${encodeURIComponent(id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({active:true}),
+      });
+      if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.error||`HTTP ${res.status}`);}
+      document.getElementById('inactive-panel').classList.remove('show');
+      await loadAdvisorRoster();
+    }catch(e){
+      alert('No se pudo reactivar: '+e.message);
+    }
+  }
 
   // Init
   let busy=false;
@@ -1704,7 +1783,7 @@
     const ca=document.getElementById('conf-advisors');
     ca.innerHTML='';
     try{
-      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'var(--surface2)',color:'var(--fg)'});
+      const list=mode==='general'?ga():names.map(n=>advisorRoster.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'var(--surface2)',color:'var(--fg)'});
       if(list.length){
         list.forEach(a=>{
           const d=document.createElement('div');

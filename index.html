@@ -38,6 +38,7 @@
     .field-label{font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);}
     .field select{font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--fg);}
     .field select:focus{outline:none;border-color:var(--accent);}
+    .field select:disabled{opacity:0.45;cursor:not-allowed;}
     .field select option{background:var(--surface);}
     .advisors-loading{display:flex;align-items:center;gap:8px;padding:12px 0;font-size:12px;color:var(--faint);}
     .advisors-empty{padding:12px 0;font-size:12px;color:var(--faint);text-align:center;}
@@ -2315,6 +2316,15 @@
     if (!sel || !dashData) return;
     const prev = sel.value;
     sel.innerHTML = '';
+    if (dashData.advisors.length === 0) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Sin asesores en este rango';
+      sel.appendChild(o);
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
     dashData.advisors.forEach(a => {
       const o = document.createElement('option');
       o.value = a;

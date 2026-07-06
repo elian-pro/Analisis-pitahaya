@@ -49,6 +49,7 @@ export const SCHEDULES_TABLE = 'schedules';
 export const JOBS_TABLE = 'jobs';
 export const TOKEN_LOG_TABLE = 'token_log';
 export const REPORT_METRICS_TABLE = 'report_metrics';
+export const ADVISORS_TABLE = 'advisors';
 
 /**
  * Creates the tables if they don't exist. Safe to run on every boot.
@@ -56,7 +57,7 @@ export const REPORT_METRICS_TABLE = 'report_metrics';
 export async function ensureSchema(): Promise<void> {
   if (!pool) return;
   // Config + job tables: full object stored per row in a jsonb column.
-  for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE, JOBS_TABLE]) {
+  for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE, JOBS_TABLE, ADVISORS_TABLE]) {
     await pool.query(
       `CREATE TABLE IF NOT EXISTS ${table} (
          id         TEXT PRIMARY KEY,
@@ -101,7 +102,15 @@ export async function ensureSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS report_metrics_lookup_idx
        ON ${REPORT_METRICS_TABLE} (client_id, advisor, period_start)`,
   );
-  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics)');
+  // Dashboard aggregation (queryReportMetrics in metrics/store.ts) filters by
+  // client_id + a period_start range, usually WITHOUT an advisor (team view).
+  // The lookup index above leads with advisor, so it can't range-scan
+  // period_start without one; this index serves that access pattern directly.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS report_metrics_client_period_idx
+       ON ${REPORT_METRICS_TABLE} (client_id, period_start)`,
+  );
+  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

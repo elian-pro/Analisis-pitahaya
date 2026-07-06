@@ -30,6 +30,11 @@ export interface ClientConfig {
   transcripcion_max_chars: number;
   prompt_individual:       string;
   prompt_general:          string;
+  // Internal bookkeeping (not part of the public CRUD form, set by
+  // advisors/store.ts): true once this client's advisor roster has been
+  // imported from Sheets into the `advisors` table, so the one-time import
+  // never runs again even if it found zero advisors that first time.
+  advisors_seeded?:        boolean;
 }
 
 // ── File fallback (used only when DATABASE_URL is not set) ───────────────────

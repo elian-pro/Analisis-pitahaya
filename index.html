@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;transition:background .25s,color .25s;}
@@ -37,6 +38,7 @@
     .field-label{font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);}
     .field select{font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--fg);}
     .field select:focus{outline:none;border-color:var(--accent);}
+    .field select:disabled{opacity:0.45;cursor:not-allowed;}
     .field select option{background:var(--surface);}
     .advisors-loading{display:flex;align-items:center;gap:8px;padding:12px 0;font-size:12px;color:var(--faint);}
     .advisors-empty{padding:12px 0;font-size:12px;color:var(--faint);text-align:center;}
@@ -58,6 +60,10 @@
     .advisor-check.checked .check-box{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
     .avatar{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
     .advisor-name{font-size:13px;font-weight:400;flex:1;}
+    .advisor-name-col{display:flex;flex-direction:column;flex:1;min-width:0;gap:1px;}
+    .advisor-warn{font-size:10px;color:var(--danger);font-weight:500;}
+    .inactive-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;color:var(--muted);}
+    .inactive-row .link-btn{margin-left:auto;}
     .remove-btn{font-size:16px;color:var(--faint);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;}
     .advisor-check:hover .remove-btn{opacity:1;}
     .remove-btn:hover{color:var(--danger);}
@@ -97,6 +103,8 @@
     .result-link:hover{border-color:var(--accent);background:var(--surface);}
     .result-arrow{color:var(--muted);font-size:16px;}
     .error-box{padding:12px 15px;background:rgba(226,75,74,0.08);border:0.5px solid rgba(226,75,74,0.25);border-radius:8px;font-size:13px;color:var(--danger);line-height:1.5;}
+    .delta-pos{color:var(--success);font-weight:600;}
+    .delta-neg{color:var(--danger);font-weight:600;}
     /* ── Modal de progreso ── */
     .modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:16px;}
     .modal-backdrop.show{display:flex !important;}
@@ -359,6 +367,7 @@
 <main class="main">
   <nav class="app-nav">
     <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')"><i class="ti ti-chart-bar"></i>REPORTES</button>
+    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
     <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
     <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
   </nav>
@@ -415,7 +424,7 @@
         <span style="color:var(--faint)">·</span>
         <button class="link-btn" onclick="toggleAll(false)">Ninguno</button>
         <span style="color:var(--faint)">·</span>
-        <button class="link-btn" onclick="restoreDefaults()">Restaurar</button>
+        <button class="link-btn" id="inactive-toggle-btn" onclick="toggleInactivePanel()">Inactivos</button>
         <span style="flex:1"></span>
         <button class="link-btn" style="color:var(--accent)" onclick="toggleAddForm()">+ Agregar asesor</button>
       </div>
@@ -436,6 +445,10 @@
           <button class="btn-sm btn-sm-green" onclick="saveAdvisor()">Guardar</button>
           <button class="btn-sm btn-sm-cancel" onclick="toggleAddForm()">Cancelar</button>
         </div>
+      </div>
+      <div class="add-advisor-form" id="inactive-panel">
+        <div style="font-size:10px;font-weight:500;letter-spacing:0.15em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;">Asesores inactivos</div>
+        <div id="inactive-list"></div>
       </div>
       <div class="advisor-grid" id="advisor-grid"></div>
       <div class="selected-summary"><span id="selected-count">0</span> asesor(es) seleccionado(s) → <span id="selected-count2">0</span> reporte(s) individual(es) + 1 reporte general</div>
@@ -482,15 +495,116 @@
         </select>
       </div>
       <div class="token-range-row" id="token-range-row" style="display:none;">
-        <input type="date" class="token-date-input" id="range-from">
-        <span class="token-range-sep">—</span>
-        <input type="date" class="token-date-input" id="range-to">
+        <div class="field" id="tok-from-field" style="position:relative;">
+          <input type="hidden" id="tok-from">
+          <div id="tok-from-display" onclick="toggleDateCal('tok','from',event)" class="token-date-input" style="display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;min-width:130px;">
+            <span id="tok-from-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+          </div>
+          <div id="tok-from-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+            <div class="inline-cal-head">
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('tok','from',-1,event)">‹</button>
+              <div class="mini-cal-title" id="tok-from-cal-title" style="margin-bottom:0;"></div>
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('tok','from',1,event)">›</button>
+            </div>
+            <div class="cal-rows" id="tok-from-cal-rows"></div>
+          </div>
+        </div>
+        <span class="token-range-sep">a</span>
+        <div class="field" id="tok-to-field" style="position:relative;">
+          <input type="hidden" id="tok-to">
+          <div id="tok-to-display" onclick="toggleDateCal('tok','to',event)" class="token-date-input" style="display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;min-width:130px;">
+            <span id="tok-to-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+          </div>
+          <div id="tok-to-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+            <div class="inline-cal-head">
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('tok','to',-1,event)">‹</button>
+              <div class="mini-cal-title" id="tok-to-cal-title" style="margin-bottom:0;"></div>
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('tok','to',1,event)">›</button>
+            </div>
+            <div class="cal-rows" id="tok-to-cal-rows"></div>
+          </div>
+        </div>
         <button class="token-apply-btn" onclick="loadTokenStats()">APLICAR</button>
       </div>
       <div id="token-body"></div>
     </div>
   </div>
   </div><!-- /tab-reports -->
+
+  <!-- ── Dashboard de métricas ── -->
+  <div id="tab-dashboard" class="tab-panel">
+    <div class="config-row">
+      <div class="field field-wide">
+        <div class="field-label">Cliente</div>
+        <select id="dash-client-select" onchange="onDashClientChange()">
+          <option value="">Selecciona un cliente</option>
+        </select>
+      </div>
+      <div class="field" id="dash-from-field" style="position:relative;">
+        <div class="field-label">Desde</div>
+        <input type="hidden" id="dash-from">
+        <div id="dash-from-display" onclick="toggleDateCal('dash','from',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+          <span id="dash-from-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+        </div>
+        <div id="dash-from-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+          <div class="inline-cal-head">
+            <button type="button" class="cal-nav-btn" onclick="dateCalNav('dash','from',-1,event)">‹</button>
+            <div class="mini-cal-title" id="dash-from-cal-title" style="margin-bottom:0;"></div>
+            <button type="button" class="cal-nav-btn" onclick="dateCalNav('dash','from',1,event)">›</button>
+          </div>
+          <div class="cal-rows" id="dash-from-cal-rows"></div>
+        </div>
+      </div>
+      <div class="field" id="dash-to-field" style="position:relative;">
+        <div class="field-label">Hasta</div>
+        <input type="hidden" id="dash-to">
+        <div id="dash-to-display" onclick="toggleDateCal('dash','to',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:150px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+          <span id="dash-to-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+        </div>
+        <div id="dash-to-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+          <div class="inline-cal-head">
+            <button type="button" class="cal-nav-btn" onclick="dateCalNav('dash','to',-1,event)">‹</button>
+            <div class="mini-cal-title" id="dash-to-cal-title" style="margin-bottom:0;"></div>
+            <button type="button" class="cal-nav-btn" onclick="dateCalNav('dash','to',1,event)">›</button>
+          </div>
+          <div class="cal-rows" id="dash-to-cal-rows"></div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Granularidad</div>
+        <select id="dash-granularity" onchange="loadDashboard()" style="min-width:150px;">
+          <option value="weekly">Semanal</option>
+          <option value="monthly" selected>Mensual</option>
+          <option value="bimonthly">Bimestral</option>
+          <option value="quarterly">Trimestral</option>
+          <option value="semiannual">Semestral</option>
+          <option value="annual">Anual</option>
+        </select>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="field">
+        <div class="field-label">Vista</div>
+        <div class="period-toggle" style="min-width:230px;">
+          <button class="period-btn active" id="dash-view-team" onclick="setDashView('team')">Equipo</button>
+          <button class="period-btn" id="dash-view-advisor" onclick="setDashView('advisor')">Asesor individual</button>
+        </div>
+      </div>
+      <div class="field field-grow" id="dash-advisor-field" style="display:none;">
+        <div class="field-label">Asesor</div>
+        <select id="dash-advisor-select" onchange="renderDashboard()"></select>
+      </div>
+      <div class="field" style="margin-left:auto;">
+        <div class="field-label">&nbsp;</div>
+        <button class="btn-secondary" id="dash-pdf-btn" style="width:auto;padding:11px 22px;" onclick="generateDashboardPdf()">
+          <i class="ti ti-file-type-pdf"></i>Generar PDF
+        </button>
+      </div>
+    </div>
+    <div id="dash-body">
+      <div class="token-empty">Selecciona un cliente para ver sus métricas.</div>
+    </div>
+  </div><!-- /tab-dashboard -->
 
   <!-- ── Settings panel ── -->
   <div id="tab-settings" class="tab-panel">
@@ -958,6 +1072,7 @@
     body.setAttribute('data-theme', isDark ? 'light' : 'dark');
     const lbl = document.getElementById('theme-label');
     if (lbl) lbl.textContent = isDark ? 'LIGHT' : 'DARK';
+    if (_currentTab === 'dashboard' && dashData) renderDashboard();
   }
 
   const PC=[
@@ -972,7 +1087,7 @@
   ];
 
   let currentClient     = null;
-  let webhookAdvisors   = [];
+  let advisorRoster     = [];
   let allClients        = [];
   let sci               = 0;
   let currentPeriodType = 'monthly';
@@ -990,6 +1105,7 @@
       wf.style.display = 'none';
       closeCalPopup();
     }
+    if (currentClient) loadAdvisorRoster();
   }
 
   function getWeeksInMonth(yearMonth) {
@@ -1103,6 +1219,7 @@
           document.getElementById('week-select').selectedIndex = wIdx;
           updateWeekDisplay();
           closeCalPopup();
+          if (currentClient) loadAdvisorRoster();
         });
       }
 
@@ -1189,22 +1306,20 @@
     ms.appendChild(o);
   }
 
-  // ── LocalStorage con scope por cliente ──
-  function clientKey(k){ return currentClient ? `${k}_${currentClient.id}` : k; }
-  function gc(){try{return JSON.parse(localStorage.getItem(clientKey('custom_advisors'))||'[]');}catch{return[];}}
-  function sc(a){localStorage.setItem(clientKey('custom_advisors'),JSON.stringify(a));}
-  function ghd(){try{return JSON.parse(localStorage.getItem(clientKey('hidden_advisors'))||'[]');}catch{return[];}}
-  function shd(h){localStorage.setItem(clientKey('hidden_advisors'),JSON.stringify(h));}
-
-  function ga(){
-    const hd=ghd();
-    return[...webhookAdvisors.filter(a=>!hd.includes(a.name)),...gc()];
-  }
-
   function makeInitials(name){
     const parts=name.trim().split(/\s+/);
     return((parts[0]?.[0]||'')+(parts[1]?.[0]||'')).toUpperCase()||'?';
   }
+
+  // ── Roster de asesores (DB, ver src/routes/advisors.ts) ──
+  // Ya no vive en localStorage: el roster (nombre, iniciales, color, activo)
+  // se administra en Postgres/JSON por cliente. Sheets solo se usa (a) una vez,
+  // para importar el roster inicial si el cliente no tiene asesores en DB
+  // todavia, y (b) para saber qué asesores tuvieron llamadas en el periodo
+  // seleccionado (has_calls), mostrado como aviso, no como filtro.
+  let inactiveAdvisors = [];
+
+  function ga(){ return advisorRoster; }
 
   // ── Carga clientes desde la API ──
   async function loadClients(){
@@ -1220,6 +1335,7 @@
         sel.appendChild(o);
       });
       populateTokenClientFilter();
+      populateDashClientSelect();
     }catch(e){
       console.error('Error cargando clientes:',e);
     }
@@ -1231,7 +1347,7 @@
     const clientId=sel.value;
     if(!clientId){
       currentClient=null;
-      webhookAdvisors=[];
+      advisorRoster=[];
       render();
       lock(true);
       document.getElementById('drive-link-wrap').style.display='none';
@@ -1260,30 +1376,37 @@
       dlw.style.display='none';
     }
 
+    document.getElementById('inactive-panel').classList.remove('show');
+    await loadAdvisorRoster();
+  }
+
+  // Construye los mismos query params que usa el resto de Reportes para el
+  // periodo seleccionado (mensual o la semana elegida en el mini-calendario).
+  function _advisorPeriodParams(){
+    const month=document.getElementById('month-select').value;
+    const params=new URLSearchParams({client_id:currentClient.id,month,period_type:currentPeriodType});
+    if(currentPeriodType==='weekly'){
+      try{
+        const wData=JSON.parse(document.getElementById('week-select').value||'{}');
+        if(wData.start) params.set('date_from',wData.start);
+        if(wData.end)   params.set('date_to',wData.end);
+      }catch(e){}
+    }
+    return params;
+  }
+
+  // Recarga el roster (y el aviso de "sin llamadas") para el cliente y periodo
+  // actuales. Se llama al cambiar cliente, mes, tipo de periodo o semana.
+  async function loadAdvisorRoster(){
+    if(!currentClient) return;
     const g=document.getElementById('advisor-grid');
     g.innerHTML='<div class="advisors-loading"><div class="spin-xs"></div>Cargando asesores del cliente…</div>';
     lock(true);
-
     try{
-      const month=document.getElementById('month-select').value;
-      const res=await fetch(`${ADVISORS_API}?client_id=${encodeURIComponent(currentClient.id)}&month=${encodeURIComponent(month)}`);
+      const params=_advisorPeriodParams();
+      const res=await fetch(`${ADVISORS_API}?${params.toString()}`);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data=await res.json();
-
-      let names=[];
-      if(Array.isArray(data)){
-        names=data.map(a=>typeof a==='string'?a:(a.asesor||a.name||''));
-      } else if(data.advisors){
-        const arr=Array.isArray(data.advisors)?data.advisors:[data.advisors];
-        names=arr.map(a=>typeof a==='string'?a:(a.asesor||a.name||''));
-      }
-      names=names.filter(Boolean);
-
-      webhookAdvisors=names.map((name,i)=>{
-        const c=PC[i%PC.length];
-        return{name,initials:makeInitials(name),bg:c.bg,color:c.color};
-      });
-
+      advisorRoster=await res.json();
       render();
       lock(false);
     }catch(e){
@@ -1306,16 +1429,15 @@
     }
     const list=ga();
     if(!list.length){
-      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente.</div>';
+      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente. Agrega el primero con "+ Agregar asesor".</div>';
       uc(); return;
     }
-    const baseCount=webhookAdvisors.filter(x=>!ghd().includes(x.name)).length;
-    list.forEach((a,gi)=>{
-      const isCustom=gi>=baseCount;
+    list.forEach(a=>{
       const r=document.createElement('label');
       r.className='advisor-check checked';
       r.dataset.name=a.name;
-      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><span class="advisor-name">${a.name}</span><button class="remove-btn" onclick="rm('${a.name.replace(/'/g,"\\'")}',${!isCustom},event)">×</button>`;
+      const warn=a.has_calls===false?'<div class="advisor-warn">Sin llamadas en este periodo</div>':'';
+      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><div class="advisor-name-col"><span class="advisor-name">${_esc(a.name)}</span>${warn}</div><button class="remove-btn" onclick="rm('${a.id}',event)">×</button>`;
       r.addEventListener('click',e=>{if(e.target.closest('.remove-btn'))return;e.preventDefault();ta(r);});
       g.appendChild(r);
     });
@@ -1349,35 +1471,100 @@
     if(f.classList.contains('show')) document.getElementById('new-name').focus();
   }
 
-  function saveAdvisor(){
+  async function saveAdvisor(){
+    if(!currentClient){alert('Primero selecciona un cliente.');return;}
     const n=document.getElementById('new-name').value.trim();
     const ini=document.getElementById('new-initials').value.trim().toUpperCase();
     if(!n||!ini){alert('Ingresa nombre e iniciales.');return;}
     if(ga().some(a=>a.name.toLowerCase()===n.toLowerCase())){alert('Ya existe un asesor con ese nombre.');return;}
     const c=PC[sci];
-    const cu=gc();
-    cu.push({name:n,initials:ini,bg:c.bg,color:c.color});
-    sc(cu);
-    document.getElementById('new-name').value='';
-    document.getElementById('new-initials').value='';
-    document.getElementById('add-form').classList.remove('show');
-    render();
-  }
-
-  function rm(name,isWebhook,e){
-    e.stopPropagation();
-    if(!confirm(`¿Eliminar a ${name}?`))return;
-    if(isWebhook){
-      const hd=ghd();
-      if(!hd.includes(name)) hd.push(name);
-      shd(hd);
-    } else {
-      sc(gc().filter(a=>a.name!==name));
+    const saveBtn=document.querySelector('#add-form .btn-sm-green');
+    saveBtn.disabled=true;
+    try{
+      const res=await fetch(ADVISORS_API,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({client_id:currentClient.id,name:n,initials:ini,bg:c.bg,color:c.color}),
+      });
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
+      document.getElementById('new-name').value='';
+      document.getElementById('new-initials').value='';
+      document.getElementById('add-form').classList.remove('show');
+      await loadAdvisorRoster();
+    }catch(e){
+      alert('No se pudo agregar el asesor: '+e.message);
+    }finally{
+      saveBtn.disabled=false;
     }
-    render();
   }
 
-  function restoreDefaults(){shd([]);render();}
+  // Desactiva un asesor (no lo borra: sus reportes/metricas historicas siguen
+  // intactos). Reaparece en "Inactivos" para reactivarlo si fue un error.
+  async function rm(id,e){
+    e.stopPropagation();
+    const a=advisorRoster.find(x=>x.id===id);
+    const name=a?a.name:id;
+    if(!confirm(`¿Quitar a ${name} del roster? Su historial de reportes no se ve afectado; puedes reactivarlo despues desde "Inactivos".`))return;
+    try{
+      const res=await fetch(`${ADVISORS_API}/${encodeURIComponent(id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({active:false}),
+      });
+      if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.error||`HTTP ${res.status}`);}
+      await loadAdvisorRoster();
+    }catch(e){
+      alert('No se pudo quitar el asesor: '+e.message);
+    }
+  }
+
+  async function toggleInactivePanel(){
+    if(!currentClient){alert('Primero selecciona un cliente.');return;}
+    const panel=document.getElementById('inactive-panel');
+    if(panel.classList.contains('show')){
+      panel.classList.remove('show');
+      return;
+    }
+    const list=document.getElementById('inactive-list');
+    list.innerHTML='<div class="advisors-loading"><div class="spin-xs"></div>Cargando…</div>';
+    panel.classList.add('show');
+    try{
+      const params=new URLSearchParams({client_id:currentClient.id,include_inactive:'true'});
+      const res=await fetch(`${ADVISORS_API}?${params.toString()}`);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const all=await res.json();
+      inactiveAdvisors=all.filter(a=>!a.active);
+      if(!inactiveAdvisors.length){
+        list.innerHTML='<div class="advisors-empty">No hay asesores inactivos.</div>';
+        return;
+      }
+      list.innerHTML='';
+      inactiveAdvisors.forEach(a=>{
+        const row=document.createElement('div');
+        row.className='inactive-row';
+        row.innerHTML=`<div class="avatar" style="background:${a.bg};color:${a.color};width:22px;height:22px;font-size:8px;">${a.initials}</div><span>${_esc(a.name)}</span><button class="link-btn" style="color:var(--accent)" onclick="reactivateAdvisor('${a.id}')">Reactivar</button>`;
+        list.appendChild(row);
+      });
+    }catch(e){
+      list.innerHTML=`<div class="advisors-loading" style="color:var(--danger);">Error: ${e.message}</div>`;
+    }
+  }
+
+  async function reactivateAdvisor(id){
+    try{
+      const res=await fetch(`${ADVISORS_API}/${encodeURIComponent(id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({active:true}),
+      });
+      if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.error||`HTTP ${res.status}`);}
+      document.getElementById('inactive-panel').classList.remove('show');
+      await loadAdvisorRoster();
+    }catch(e){
+      alert('No se pudo reactivar: '+e.message);
+    }
+  }
 
   // Init
   let busy=false;
@@ -1623,7 +1810,7 @@
     const ca=document.getElementById('conf-advisors');
     ca.innerHTML='';
     try{
-      const list=mode==='general'?ga():names.map(n=>webhookAdvisors.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'var(--surface2)',color:'var(--fg)'});
+      const list=mode==='general'?ga():names.map(n=>advisorRoster.find(a=>a.name===n)||{name:n,initials:makeInitials(n),bg:'var(--surface2)',color:'var(--fg)'});
       if(list.length){
         list.forEach(a=>{
           const d=document.createElement('div');
@@ -1843,6 +2030,137 @@
     _tokenClient = sel.value;
   }
 
+  // ── Selector de fecha con calendario inline, reutilizable ──────────────────
+  // Mismo patrón visual que la fecha de ejecución de Automatización (input
+  // oculto + display clicable + calendario navegable por mes), pero sin
+  // deshabilitar fechas pasadas: tanto el Dashboard como el rango de tokens
+  // analizan periodos históricos. Parametrizado por `prefix` para poder tener
+  // varias instancias independientes en la misma página (hoy: 'dash' para el
+  // Dashboard de métricas, 'tok' para el rango personalizado de tokens), cada
+  // una operando sobre sus propios elementos `#${prefix}-${which}...`.
+  const _DATE_MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  let _dateCalState = {};
+  // Qué hacer justo después de que el usuario elige un día, por prefijo.
+  const _DATE_PICKER_ON_PICK = { dash: () => loadDashboard(), tok: () => loadTokenStats() };
+
+  function _dateISO(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function _dateLabel(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${d} de ${_DATE_MONTHS[m-1].toLowerCase()} de ${y}`;
+  }
+
+  function _updatePickerDisplay(prefix, which) {
+    const iso  = document.getElementById(`${prefix}-${which}`).value;
+    const disp = document.getElementById(`${prefix}-${which}-display-text`);
+    if (iso) { disp.textContent = _dateLabel(iso); disp.style.color = 'var(--fg)'; }
+    else     { disp.textContent = 'Selecciona fecha'; disp.style.color = 'var(--muted)'; }
+  }
+
+  function _setPickerDate(prefix, which, iso) {
+    document.getElementById(`${prefix}-${which}`).value = iso;
+    _updatePickerDisplay(prefix, which);
+  }
+
+  function toggleDateCal(prefix, which, e) {
+    if (e) e.stopPropagation();
+    const cal = document.getElementById(`${prefix}-${which}-cal`);
+    const isOpen = cal.style.display !== 'none' && cal.style.display !== '';
+    ['from', 'to'].forEach(w => {
+      if (w !== which) {
+        const other = document.getElementById(`${prefix}-${w}-cal`);
+        if (other) other.style.display = 'none';
+      }
+    });
+    if (isOpen) { cal.style.display = 'none'; return; }
+    const cur = document.getElementById(`${prefix}-${which}`).value;
+    const ref = cur ? new Date(`${cur}T00:00:00`) : new Date();
+    _dateCalState[`${prefix}-${which}`] = { year: ref.getFullYear(), month: ref.getMonth() + 1 };
+    renderDateCal(prefix, which);
+    cal.style.display = 'block';
+  }
+
+  function dateCalNav(prefix, which, delta, e) {
+    if (e) e.stopPropagation();
+    const st = _dateCalState[`${prefix}-${which}`];
+    st.month += delta;
+    if (st.month < 1)  { st.month = 12; st.year--; }
+    if (st.month > 12) { st.month = 1;  st.year++; }
+    renderDateCal(prefix, which);
+  }
+
+  function renderDateCal(prefix, which) {
+    const st = _dateCalState[`${prefix}-${which}`];
+    const year = st.year, mon = st.month;
+    const todayISO = _isoToday();
+    const selISO   = document.getElementById(`${prefix}-${which}`).value;
+    document.getElementById(`${prefix}-${which}-cal-title`).textContent = `${_DATE_MONTHS[mon-1]} ${year}`;
+
+    const firstDay = new Date(year, mon - 1, 1);
+    const lastDay  = new Date(year, mon, 0);
+    const calStart = new Date(firstDay);
+    const fdow = calStart.getDay();
+    calStart.setDate(calStart.getDate() - (fdow === 0 ? 6 : fdow - 1));
+
+    const rowsEl = document.getElementById(`${prefix}-${which}-cal-rows`);
+    rowsEl.innerHTML = '';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'cal-row cal-hdr-row';
+    ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach(h => {
+      const c = document.createElement('div');
+      c.className = 'cal-cell';
+      c.textContent = h;
+      hdr.appendChild(c);
+    });
+    rowsEl.appendChild(hdr);
+
+    const day = new Date(calStart);
+    let rowCount = 0;
+    while (day <= lastDay && rowCount < 6) {
+      const row = document.createElement('div');
+      row.className = 'cal-row';
+      for (let d = 0; d < 7; d++) {
+        const cellDate = new Date(day);
+        const iso      = _dateISO(cellDate);
+        const inMonth  = cellDate.getMonth() + 1 === mon && cellDate.getFullYear() === year;
+        const isToday  = iso === todayISO;
+        const isSel    = iso === selISO;
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell cal-day-cell'
+          + (!inMonth ? ' out-mo' : '')
+          + (isToday ? ' is-today' : '')
+          + (isSel ? ' cal-day-sel' : '');
+        cell.textContent = cellDate.getDate();
+        cell.addEventListener('click', ev => {
+          ev.stopPropagation();
+          _setPickerDate(prefix, which, iso);
+          document.getElementById(`${prefix}-${which}-cal`).style.display = 'none';
+          const onPick = _DATE_PICKER_ON_PICK[prefix];
+          if (onPick) onPick();
+        });
+        row.appendChild(cell);
+        day.setDate(day.getDate() + 1);
+      }
+      rowsEl.appendChild(row);
+      rowCount++;
+    }
+  }
+
+  // Cierra cualquier calendario inline al hacer clic fuera de su campo.
+  document.addEventListener('click', e => {
+    Object.keys(_DATE_PICKER_ON_PICK).forEach(prefix => {
+      ['from', 'to'].forEach(which => {
+        if (!e.target.closest(`#${prefix}-${which}-field`)) {
+          const cal = document.getElementById(`${prefix}-${which}-cal`);
+          if (cal) cal.style.display = 'none';
+        }
+      });
+    });
+  });
+
   function setTokenClient() {
     _tokenClient = document.getElementById('token-client-filter').value;
     loadTokenStats();
@@ -1967,9 +2285,9 @@
     if (_tokenPeriod === 'week')  { from = _isoWeekStart();  to = today; label = 'esta semana'; }
     if (_tokenPeriod === 'month') { from = _isoMonthStart(); to = today; label = 'este mes'; }
     if (_tokenPeriod === 'range') {
-      from  = document.getElementById('range-from').value;
-      to    = document.getElementById('range-to').value;
-      label = from && to ? `${from} — ${to}` : 'rango seleccionado';
+      from  = document.getElementById('tok-from').value;
+      to    = document.getElementById('tok-to').value;
+      label = from && to ? `${from} a ${to}` : 'rango seleccionado';
       if (!from || !to) { body.innerHTML = `<div class="token-empty">Selecciona las fechas del rango.</div>`; return; }
     }
 
@@ -1987,13 +2305,379 @@
 
   // Init token section and pre-populate range inputs
   (function initTokenSection() {
-    const today = _isoToday();
-    const rf = document.getElementById('range-from');
-    const rt = document.getElementById('range-to');
-    if (rf) rf.value = _isoMonthStart();
-    if (rt) rt.value = today;
+    if (document.getElementById('tok-from')) _setPickerDate('tok', 'from', _isoMonthStart());
+    if (document.getElementById('tok-to'))   _setPickerDate('tok', 'to', _isoToday());
     loadTokenStats();
   })();
+
+  // ── Dashboard de métricas ────────────────────────────────────────────────────
+  const METRICS_API = '/api/metrics';
+  const GRANULARITY_LABELS = {
+    weekly: 'Semanal', monthly: 'Mensual', bimonthly: 'Bimestral',
+    quarterly: 'Trimestral', semiannual: 'Semestral', annual: 'Anual',
+  };
+  let dashData    = null; // last successful /api/metrics response
+  let _dashView   = 'team';
+  let _dashCharts = [];   // Chart.js instances currently on screen, destroyed before each re-render
+
+  function populateDashClientSelect() {
+    const sel = document.getElementById('dash-client-select');
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Selecciona un cliente</option>';
+    allClients.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.name;
+      sel.appendChild(o);
+    });
+    sel.value = allClients.some(c => c.id === prev) ? prev : '';
+  }
+
+  function onDashClientChange() {
+    loadDashboard();
+  }
+
+  function setDashView(v) {
+    _dashView = v;
+    document.getElementById('dash-view-team').classList.toggle('active', v === 'team');
+    document.getElementById('dash-view-advisor').classList.toggle('active', v === 'advisor');
+    document.getElementById('dash-advisor-field').style.display = v === 'advisor' ? 'flex' : 'none';
+    renderDashboard();
+  }
+
+  function populateDashAdvisorSelect() {
+    const sel = document.getElementById('dash-advisor-select');
+    if (!sel || !dashData) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (dashData.advisors.length === 0) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Sin asesores en este rango';
+      sel.appendChild(o);
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    dashData.advisors.forEach(a => {
+      const o = document.createElement('option');
+      o.value = a;
+      o.textContent = a;
+      sel.appendChild(o);
+    });
+    if (dashData.advisors.includes(prev)) sel.value = prev;
+  }
+
+  // Default range when the user hasn't picked dates yet: last 12 months up to today.
+  function _dashDefaultRange() {
+    const today = new Date();
+    const from  = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return { from: fmt(from), to: _isoToday() };
+  }
+
+  async function loadDashboard() {
+    const clientId = document.getElementById('dash-client-select').value;
+    const body = document.getElementById('dash-body');
+    dashData = null;
+    _destroyDashCharts();
+
+    if (!clientId) {
+      body.innerHTML = '<div class="token-empty">Selecciona un cliente para ver sus métricas.</div>';
+      return;
+    }
+
+    const fromInput = document.getElementById('dash-from');
+    const toInput   = document.getElementById('dash-to');
+    if (!fromInput.value || !toInput.value) {
+      const def = _dashDefaultRange();
+      if (!fromInput.value) _setPickerDate('dash', 'from', def.from);
+      if (!toInput.value)   _setPickerDate('dash', 'to', def.to);
+    }
+    const from = fromInput.value;
+    const to   = toInput.value;
+    const granularity = document.getElementById('dash-granularity').value;
+
+    body.innerHTML = `<div class="token-empty" style="padding:40px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>`;
+    try {
+      const params = new URLSearchParams({ client_id: clientId, from, to, granularity });
+      const res = await fetch(`${METRICS_API}?${params.toString()}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      dashData = json;
+      populateDashAdvisorSelect();
+      renderDashboard();
+    } catch (e) {
+      dashData = null;
+      body.innerHTML = `<div class="error-box">⚠️ ${_esc(e.message)}</div>`;
+    }
+  }
+
+  function _destroyDashCharts() {
+    _dashCharts.forEach(c => c.destroy());
+    _dashCharts = [];
+  }
+
+  // Reads the live --fg/--border CSS variables so charts match the active theme.
+  function _dashChartColors() {
+    const cs = getComputedStyle(document.body);
+    return {
+      fg:     cs.getPropertyValue('--fg').trim()     || '#000',
+      muted:  cs.getPropertyValue('--muted').trim()  || '#888',
+      border: cs.getPropertyValue('--border').trim() || '#ccc',
+    };
+  }
+
+  function _chartOptions(extra) {
+    const c = _dashChartColors();
+    return Object.assign({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: c.fg, font: { family: 'Inter', size: 11 } } },
+      },
+      scales: {
+        x: { ticks: { color: c.muted }, grid: { color: c.border } },
+        y: { ticks: { color: c.muted }, grid: { color: c.border }, beginAtZero: true },
+      },
+    }, extra || {});
+  }
+
+  function _lineDataset(label, data, color) {
+    return {
+      label, data, borderColor: color, backgroundColor: color,
+      tension: 0.25, spanGaps: true, pointRadius: data.length === 1 ? 4 : 2,
+    };
+  }
+
+  function _barDataset(label, data, color) {
+    return { label, data, backgroundColor: color, borderRadius: 4 };
+  }
+
+  function renderDashboard() {
+    const body = document.getElementById('dash-body');
+    if (!dashData) return;
+    _destroyDashCharts();
+
+    if (dashData.buckets.length === 0) {
+      body.innerHTML = '<div class="token-empty">Aún no hay datos para este rango. Genera reportes para este cliente y vuelve a intentarlo.</div>';
+      return;
+    }
+
+    if (_dashView === 'advisor' && !document.getElementById('dash-advisor-select').value) {
+      body.innerHTML = '<div class="token-empty">Este cliente no tiene asesores con datos en el rango seleccionado.</div>';
+      return;
+    }
+
+    if (_dashView === 'team') renderDashTeamView(body);
+    else renderDashAdvisorView(body);
+  }
+
+  function renderDashTeamView(body) {
+    const lastBucket = dashData.buckets[dashData.buckets.length - 1];
+    body.innerHTML = `
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Tendencia del equipo</div>
+          <div class="card-desc">Promedio simple de todos los asesores por periodo (${_esc(GRANULARITY_LABELS[dashData.granularity] || dashData.granularity)}).</div>
+          <div style="height:260px;"><canvas id="dash-team-trend"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ranking de asesores</div>
+          <div class="card-desc">Puntaje promedio en ${_esc(lastBucket.label)} (último periodo del rango).</div>
+          <div style="height:260px;"><canvas id="dash-ranking"></canvas></div>
+        </div>
+      </div>`;
+
+    const labels = dashData.buckets.map(b => b.label);
+    _dashCharts.push(new Chart(document.getElementById('dash-team-trend'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          _lineDataset('Puntaje promedio',         dashData.team.map(p => p.avg_score),     '#0a6cff'),
+          _lineDataset('% logra siguiente paso',   dashData.team.map(p => p.pct_siguiente), '#d4af37'),
+          _lineDataset('Talk ratio',               dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+        ],
+      },
+      options: _chartOptions(),
+    }));
+
+    const rankingRows = dashData.advisors
+      .map(a => ({
+        advisor: a,
+        value: (dashData.by_advisor[a] || []).find(p => p.bucket === lastBucket.key)?.avg_score ?? null,
+      }))
+      .filter(r => r.value !== null)
+      .sort((a, b) => b.value - a.value);
+
+    if (rankingRows.length === 0) {
+      document.getElementById('dash-ranking').replaceWith(
+        Object.assign(document.createElement('div'), { className: 'token-empty', textContent: 'Sin datos de asesores para este periodo.' }),
+      );
+    } else {
+      _dashCharts.push(new Chart(document.getElementById('dash-ranking'), {
+        type: 'bar',
+        data: {
+          labels: rankingRows.map(r => r.advisor),
+          datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+        },
+        options: _chartOptions({ plugins: { legend: { display: false } } }),
+      }));
+    }
+  }
+
+  function renderDashAdvisorView(body) {
+    const advisor = document.getElementById('dash-advisor-select').value;
+    const series = dashData.by_advisor[advisor] || [];
+    const bucketByKey = Object.fromEntries(dashData.buckets.map(b => [b.key, b]));
+    const labels = series.map(p => bucketByKey[p.bucket]?.label || p.bucket);
+
+    // Delta vs the previous point in this advisor's own series: same logic the
+    // rest of the system uses for period-over-period comparison (simple
+    // subtraction between the current and the immediately previous value,
+    // see delta_score / delta_siguiente_paso in src/claude/individual.ts).
+    let deltaHtml = '<span style="color:var(--faint);">Primer periodo en el rango, sin comparativo.</span>';
+    if (series.length >= 2) {
+      const curr = series[series.length - 1];
+      const prev = series[series.length - 2];
+      const fmtDelta = (a, b) => {
+        if (a == null || b == null) return null;
+        const d = Math.round((a - b) * 100) / 100;
+        return { d, cls: d >= 0 ? 'delta-pos' : 'delta-neg', txt: (d >= 0 ? '+' : '') + d };
+      };
+      const ds = fmtDelta(curr.avg_score, prev.avg_score);
+      const dp = fmtDelta(curr.pct_siguiente, prev.pct_siguiente);
+      const dt = fmtDelta(curr.talk_ratio, prev.talk_ratio);
+      deltaHtml = [
+        ds ? `<span class="${ds.cls}">${ds.txt} pts</span> puntaje` : '',
+        dp ? `<span class="${dp.cls}">${dp.txt} pp</span> siguiente paso` : '',
+        dt ? `<span class="${dt.cls}">${dt.txt} pp</span> talk ratio` : '',
+      ].filter(Boolean).join(' &nbsp;·&nbsp; ') + ` vs ${_esc(bucketByKey[prev.bucket]?.label || prev.bucket)}`;
+    }
+
+    body.innerHTML = `
+      <div class="card">
+        <div class="card-title">${_esc(advisor)} · Serie histórica</div>
+        <div class="card-desc">Línea punteada: promedio del equipo (puntaje) en el mismo periodo.</div>
+        <div style="height:300px;"><canvas id="dash-advisor-trend"></canvas></div>
+        <div style="margin-top:14px;padding-top:14px;border-top:0.5px solid var(--border);font-size:13px;">${deltaHtml}</div>
+      </div>`;
+
+    const teamByBucket = Object.fromEntries(dashData.team.map(p => [p.bucket, p]));
+    _dashCharts.push(new Chart(document.getElementById('dash-advisor-trend'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          _lineDataset('Puntaje promedio',       series.map(p => p.avg_score),     '#0a6cff'),
+          _lineDataset('% logra siguiente paso', series.map(p => p.pct_siguiente), '#d4af37'),
+          _lineDataset('Talk ratio',             series.map(p => p.talk_ratio),    '#2e7d32'),
+          Object.assign(
+            _lineDataset('Promedio del equipo (puntaje)', series.map(p => teamByBucket[p.bucket]?.avg_score ?? null), '#8A8A8A'),
+            { borderDash: [6, 4], pointRadius: 0 },
+          ),
+        ],
+      },
+      options: _chartOptions(),
+    }));
+  }
+
+  // ── Dashboard: exportar a PDF ────────────────────────────────────────────────
+  // The PDF always shows the team-level overview (trend + ranking), regardless
+  // of which view (Equipo/Asesor) is currently on screen — built fresh here so
+  // the export works even when the user is looking at the advisor view.
+  function _pdfChartOptions(extra) {
+    return Object.assign({
+      responsive: false,
+      animation: false,
+      plugins: { legend: { labels: { color: '#1a1a1a', font: { family: 'Helvetica', size: 13 } } } },
+      scales: {
+        x: { ticks: { color: '#444' }, grid: { color: '#e3e0d6' } },
+        y: { ticks: { color: '#444' }, grid: { color: '#e3e0d6' }, beginAtZero: true },
+      },
+    }, extra || {});
+  }
+
+  // Renders a one-off Chart.js chart on a detached canvas and returns it as a
+  // PNG data URL, then discards the chart instance. Used only for PDF export,
+  // independent of whatever is currently shown on screen.
+  function _buildExportImage(type, data, options, width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const chart = new Chart(canvas, { type, data, options: Object.assign({ responsive: false, animation: false }, options) });
+    const img = chart.toBase64Image('image/png', 1);
+    chart.destroy();
+    return img;
+  }
+
+  async function generateDashboardPdf() {
+    if (!dashData || dashData.buckets.length === 0) {
+      alert('No hay datos para exportar en este rango.');
+      return;
+    }
+    const btn = document.getElementById('dash-pdf-btn');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spin-xs"></div> Generando...';
+    try {
+      const labels = dashData.buckets.map(b => b.label);
+      const teamTrendImage = _buildExportImage('line', {
+        labels,
+        datasets: [
+          _lineDataset('Puntaje promedio',       dashData.team.map(p => p.avg_score),     '#0a6cff'),
+          _lineDataset('% logra siguiente paso', dashData.team.map(p => p.pct_siguiente), '#d4af37'),
+          _lineDataset('Talk ratio',             dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+        ],
+      }, _pdfChartOptions(), 900, 420);
+
+      const lastBucket = dashData.buckets[dashData.buckets.length - 1];
+      const rankingRows = dashData.advisors
+        .map(a => ({ advisor: a, value: (dashData.by_advisor[a] || []).find(p => p.bucket === lastBucket.key)?.avg_score ?? null }))
+        .filter(r => r.value !== null)
+        .sort((a, b) => b.value - a.value);
+      const rankingImage = rankingRows.length > 0
+        ? _buildExportImage('bar', {
+            labels: rankingRows.map(r => r.advisor),
+            datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+          }, _pdfChartOptions({ plugins: { legend: { display: false } } }), 900, 420)
+        : null;
+
+      const res = await fetch(`${METRICS_API}/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: dashData.client_id,
+          from: dashData.from,
+          to: dashData.to,
+          granularity: dashData.granularity,
+          team_trend_image: teamTrendImage,
+          ranking_image: rankingImage,
+        }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dashboard_${dashData.client_id}_${dashData.from}_${dashData.to}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Error generando el PDF: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
 
   // ── HTML escape helper ─────────────────────────────────────────────────────
   function _esc(s) {
@@ -2003,7 +2687,7 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','settings','automation'];
+  const _APP_TABS = ['reports','dashboard','settings','automation'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -2016,6 +2700,7 @@
     });
     if (tab === 'settings')   renderClientList();
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
+    if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
   }
 
   // ── Clients CRUD ───────────────────────────────────────────────────────────

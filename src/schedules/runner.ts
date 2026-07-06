@@ -5,7 +5,7 @@ import { listSchedules, getSchedule, markRan, markFailed, updateSchedule, type S
 // is reflected later via the schedule's health status, not this return value.
 export interface FireResult { ok: boolean; job_id?: string; error?: string }
 import { loadClients } from '../clients/manager';
-import { getCallData } from '../google/sheets';
+import { listAdvisors, seedAdvisorsFromSheetIfNeeded } from '../advisors/store';
 import { createJob, getJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { sendChatMessage } from '../google/chat';
@@ -229,23 +229,21 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   }
 
   // ── Resolve advisor list ──────────────────────────────────────────────────
+  // 'all' means "every advisor in the client's CONFIGURED roster" (the
+  // advisors table managed from the Reportes tab) — NOT every name that
+  // happens to appear in the sheet's call data for the period. Reading names
+  // from the sheet used to pull in advisors the team never enrolled (leads
+  // misfiled in the advisor column, staff from other teams, etc.). The job
+  // runner already skips roster advisors with no calls in the period, so no
+  // call-data pre-check is needed here.
   let advisors: string[];
   if (schedule.advisors === 'all') {
     try {
-      const cols = {
-        fecha: client.col_fecha, asesor: client.col_asesor, calif: client.col_calif,
-        analisis: client.col_analisis, transcripcion: client.col_transcripcion,
-        duracion: client.col_duracion,
-      };
-      const calls = await getCallData(
-        client.spreadsheet_id, client.data_sheet_name, cols,
-        month, client.excluded_phrases, client.transcripcion_max_chars,
-        dateFrom, dateTo,
-      );
-      advisors = [...new Set(calls.map(c => c.asesor))].filter(Boolean);
+      await seedAdvisorsFromSheetIfNeeded(client);
+      advisors = (await listAdvisors(client.id)).map(a => a.name);
     } catch (e) {
-      console.error(`[scheduler] Failed to fetch advisors for '${schedule.name}':`, (e as Error).message);
-      const error = `No se pudieron leer los datos de la hoja: ${(e as Error).message}`;
+      console.error(`[scheduler] Failed to load advisor roster for '${schedule.name}':`, (e as Error).message);
+      const error = `No se pudo leer el roster de asesores: ${(e as Error).message}`;
       await markFailed(schedule.id, error);
       await notifyError(schedule, client.name, periodLabel, error);
       _running.delete(schedule.id);
@@ -256,8 +254,8 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   }
 
   if (advisors.length === 0) {
-    console.warn(`[scheduler] No advisors in period for '${schedule.name}' — skipping`);
-    const error = 'No se encontraron asesores con llamadas en el periodo.';
+    console.warn(`[scheduler] Empty advisor roster for '${schedule.name}' — skipping`);
+    const error = 'El cliente no tiene asesores activos configurados. Agregalos en la pestana Reportes, seccion "Seleccionar asesores".';
     await markFailed(schedule.id, error);
     await notifyError(schedule, client.name, periodLabel, error);
     _running.delete(schedule.id);

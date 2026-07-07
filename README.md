@@ -273,7 +273,10 @@ npm run dry-run -- pitahaya-investments 2026-05 Felipe
 ```
 
 > Para el dry-run local, Playwright descargará Chromium automáticamente la primera vez.  
-> En producción (Docker), se usa el Chromium del sistema (`/usr/bin/chromium`).
+> En producción (Docker) se usa el Chromium propio de Playwright (instalado con
+> `npx playwright install --with-deps chromium`), cuya versión coincide siempre con
+> la librería. Se dejó de usar el Chromium del sistema (`/usr/bin/chromium`) porque
+> tras un rebuild podía quedar desfasado y crashear al arrancar (SIGTRAP).
 
 ---
 

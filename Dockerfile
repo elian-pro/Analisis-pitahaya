@@ -6,18 +6,22 @@ RUN npm ci
 COPY src/ ./src/
 RUN npm run build
 
-# ── Stage 2: runtime with system Chromium ─────────────────────────────────────
+# ── Stage 2: runtime with Playwright-managed Chromium ─────────────────────────
 FROM node:20-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium fonts-liberation ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    CHROMIUM_PATH=/usr/bin/chromium
-
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
+
+# Use Playwright's OWN Chromium build (the one that matches this Playwright
+# version) instead of the distro's `chromium` package. The system package tracks
+# the latest Debian Chromium, and after an image rebuild it can drift ahead of
+# what Playwright speaks (CDP protocol mismatch) — the browser then crashes on
+# launch with SIGTRAP ("Target page, context or browser has been closed").
+# `--with-deps` also pulls the shared libraries Chromium needs.
+RUN npx playwright install --with-deps chromium \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends fonts-liberation ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/dist ./dist
 COPY src/pdf/templates ./dist/pdf/templates

@@ -10,6 +10,7 @@ const eta = new Eta({
 });
 
 let _browser: Browser | null = null;
+let _launching: Promise<Browser> | null = null;
 let _logoB64: string | null = null;
 
 function getLogoB64(): string {
@@ -23,14 +24,45 @@ function getLogoB64(): string {
   return _logoB64;
 }
 
-async function getBrowser(): Promise<Browser> {
-  if (!_browser || !_browser.isConnected()) {
-    _browser = await chromium.launch({
-      executablePath: process.env.CHROMIUM_PATH,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+async function launchBrowser(): Promise<Browser> {
+  // CHROMIUM_PATH overrides the executable only when explicitly set. Left unset
+  // (the default in production now), Playwright uses its own bundled Chromium,
+  // whose version is guaranteed to match the client library.
+  const executablePath = process.env.CHROMIUM_PATH || undefined;
+  let lastErr: unknown;
+
+  // Chromium can die on launch for transient reasons (memory pressure, a slow
+  // cold start). A couple of retries turns a one-off SIGTRAP into a hiccup
+  // instead of failing every advisor in the batch.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await chromium.launch({
+        executablePath,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      });
+    } catch (err) {
+      lastErr = err;
+      console.error(`[renderer] chromium.launch attempt ${attempt}/3 failed: ${(err as Error).message}`);
+      if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+    }
   }
-  return _browser;
+  throw lastErr;
+}
+
+async function getBrowser(): Promise<Browser> {
+  if (_browser && _browser.isConnected()) return _browser;
+  _browser = null;
+
+  // Coalesce concurrent callers onto a single launch. The job runner analyses up
+  // to 5 advisors in parallel, so without this lock the first batch would fire
+  // several chromium.launch calls at once — wasting memory and raising the odds
+  // that one of them crashes and takes the shared browser down with it.
+  if (!_launching) {
+    _launching = launchBrowser()
+      .then(b => { _browser = b; return b; })
+      .finally(() => { _launching = null; });
+  }
+  return _launching;
 }
 
 export async function renderPdf(template: string, data: Record<string, unknown>): Promise<Buffer> {

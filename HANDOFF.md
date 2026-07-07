@@ -90,7 +90,7 @@ Validadas con Zod en `src/config/env.ts`. **Faltar una requerida aborta el arran
 | `DATABASE_URL` | Recomendada | URL de PostgreSQL. Si está, persiste en Postgres; si no, usa archivos JSON. |
 | `DATABASE_SSL` | No | `true` solo para conexiones externas que requieren SSL. |
 | `DATA_DIR` | No | Carpeta de los JSON (modo sin DB). Default `./data`. Montar volumen en prod. |
-| `CHROMIUM_PATH` | En Docker | Ruta al Chromium del sistema (`/usr/bin/chromium`). Lo usa Playwright. |
+| `CHROMIUM_PATH` | No | Override opcional del ejecutable de Chromium. Sin definir, Playwright usa su Chromium propio (recomendado). El Dockerfile ya no lo define. |
 
 Variables de override de rutas de archivo (opcionales): `SCHEDULES_FILE`, `JOBS_FILE`,
 `TOKEN_LOG_FILE`, `CLIENTS_FILE` (ver `src/config/paths.ts`).

@@ -2,6 +2,10 @@
 
 Genera reportes PDF de desempeño de asesores a partir de transcripciones de llamadas almacenadas en Google Sheets, usando Claude (Anthropic) para el análisis cualitativo y Google Drive para la entrega.
 
+> ¿Qué es y cómo funciona esta herramienta, en lenguaje no técnico?
+> Ver **[docs/QUE-ES-ZEBRA-REPORTS.md](docs/QUE-ES-ZEBRA-REPORTS.md)**. Ese documento
+> se regenera solo con IA en cada cambio de código (ver `.github/workflows/update-doc.yml`).
+
 ## Arquitectura
 
 ```

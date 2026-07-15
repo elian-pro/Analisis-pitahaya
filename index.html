@@ -731,7 +731,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Máx. caracteres de transcripción</label>
-          <input class="form-control" id="cf-max-chars" type="number" placeholder="80000" min="1000" max="200000">
+          <input class="form-control" id="cf-max-chars" type="number" placeholder="3000" min="1000" max="200000">
         </div>
       </div>
       <div class="form-section">
@@ -2755,7 +2755,7 @@
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
       'cf-prompt-individual','cf-prompt-general'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
-    document.getElementById('cf-max-chars').value = '80000';
+    document.getElementById('cf-max-chars').value = '3000';
 
     // Reset del selector de pestañas (se llena al pulsar "Cargar pestañas")
     const _tabsSel = document.getElementById('cf-sheet-name-select');
@@ -2792,7 +2792,7 @@
         document.getElementById('cf-col-duracion').value     = c.col_duracion || '';
         document.getElementById('cf-col-record').value       = c.col_record || '';
         document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
-        document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 80000;
+        document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 3000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
         document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
       } catch(e) {
@@ -2972,7 +2972,7 @@
       col_duracion:            document.getElementById('cf-col-duracion').value.trim() || undefined,
       col_record:              document.getElementById('cf-col-record').value.trim() || undefined,
       excluded_phrases:        rawPhrases.split(',').map(s => s.trim()).filter(Boolean),
-      transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 80000,
+      transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 3000,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
     };
@@ -3128,7 +3128,7 @@
       const el = document.getElementById(id);
       if (el && id !== 'cf-max-chars') el.value = '';
     });
-    document.getElementById('cf-max-chars').value = '80000';
+    document.getElementById('cf-max-chars').value = '3000';
   }
 
   function closeDraftModal() {

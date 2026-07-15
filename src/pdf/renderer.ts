@@ -12,6 +12,8 @@ const eta = new Eta({
 let _browser: Browser | null = null;
 let _launching: Promise<Browser> | null = null;
 let _logoB64: string | null = null;
+let _fontsCss: string | null = null;
+let _motifB64: string | null = null;
 
 function getLogoB64(): string {
   if (_logoB64 !== null) return _logoB64;
@@ -22,6 +24,44 @@ function getLogoB64(): string {
     _logoB64 = '';
   }
   return _logoB64;
+}
+
+// Zebra brand fonts embedded as base64 @font-face rules, so the PDF renders with
+// Inter + JetBrains Mono without any network fetch at render time (the container
+// has no guaranteed outbound access, and Google Fonts would bloat the PDF). Read
+// once and cached. Missing files degrade gracefully to the system font stack.
+function getFontsCss(): string {
+  if (_fontsCss !== null) return _fontsCss;
+  const fontsDir = path.join(__dirname, 'assets', 'fonts');
+  const faces: Array<{ family: string; weight: number; file: string }> = [
+    { family: 'Inter',          weight: 400, file: 'Inter-400.woff2' },
+    { family: 'Inter',          weight: 600, file: 'Inter-600.woff2' },
+    { family: 'Inter',          weight: 700, file: 'Inter-700.woff2' },
+    { family: 'JetBrains Mono', weight: 500, file: 'JetBrainsMono-500.woff2' },
+    { family: 'JetBrains Mono', weight: 700, file: 'JetBrainsMono-700.woff2' },
+  ];
+  try {
+    _fontsCss = faces.map(f => {
+      const b64 = fs.readFileSync(path.join(fontsDir, f.file)).toString('base64');
+      return `@font-face{font-family:'${f.family}';font-style:normal;font-weight:${f.weight};` +
+        `font-display:swap;src:url(data:font/woff2;base64,${b64}) format('woff2');}`;
+    }).join('\n');
+  } catch {
+    _fontsCss = '';
+  }
+  return _fontsCss;
+}
+
+// Zebra "stripes" brand motif (white lines on transparent), embedded as base64
+// for the dark report header band. Read once and cached.
+function getMotifB64(): string {
+  if (_motifB64 !== null) return _motifB64;
+  try {
+    _motifB64 = fs.readFileSync(path.join(__dirname, 'assets', 'motif-stripes-dark.png')).toString('base64');
+  } catch {
+    _motifB64 = '';
+  }
+  return _motifB64;
 }
 
 async function launchBrowser(): Promise<Browser> {
@@ -66,7 +106,12 @@ async function getBrowser(): Promise<Browser> {
 }
 
 export async function renderPdf(template: string, data: Record<string, unknown>): Promise<Buffer> {
-  const enriched = { ...data, _logoB64: getLogoB64() };
+  const enriched = {
+    ...data,
+    _logoB64:  getLogoB64(),
+    _fontsCss: getFontsCss(),
+    _motifB64: getMotifB64(),
+  };
   const html = eta.render(template, enriched);
   if (!html) throw new Error(`Template '${template}' rendered empty`);
 
@@ -75,6 +120,10 @@ export async function renderPdf(template: string, data: Record<string, unknown>)
 
   try {
     await page.setContent(html, { waitUntil: 'networkidle' });
+    // The embedded @font-face fonts are data URIs, but decoding is async — wait
+    // for them so the first page never rasterises with a fallback font. Passed as
+    // a string so the browser-only `document` global isn't type-checked in Node.
+    await page.evaluate('document.fonts && document.fonts.ready.then(() => true)');
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,

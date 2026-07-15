@@ -25,6 +25,7 @@ RUN npx playwright install --with-deps chromium \
 
 COPY --from=builder /app/dist ./dist
 COPY src/pdf/templates ./dist/pdf/templates
+COPY src/pdf/assets ./dist/pdf/assets
 COPY index.html clients.json ./
 COPY favicon.svg favicon-32.png favicon-64.png ./
 COPY ["Logo Zebra Blanco.png", "./"]

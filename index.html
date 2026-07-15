@@ -2497,9 +2497,9 @@
       data: {
         labels,
         datasets: [
-          _lineDataset('Puntaje promedio',         dashData.team.map(p => p.avg_score),     '#0a6cff'),
-          _lineDataset('% logra siguiente paso',   dashData.team.map(p => p.pct_siguiente), '#d4af37'),
-          _lineDataset('Talk ratio',               dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+          _lineDataset('Puntaje promedio',         dashData.team.map(p => p.avg_score),     '#0a0a0a'),
+          _lineDataset('% logra siguiente paso',   dashData.team.map(p => p.pct_siguiente), '#1e6b30'),
+          _lineDataset('Talk ratio',               dashData.team.map(p => p.talk_ratio),    '#8a6300'),
         ],
       },
       options: _chartOptions(),
@@ -2522,7 +2522,7 @@
         type: 'bar',
         data: {
           labels: rankingRows.map(r => r.advisor),
-          datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+          datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a0a0a')],
         },
         options: _chartOptions({ plugins: { legend: { display: false } } }),
       }));
@@ -2572,9 +2572,9 @@
       data: {
         labels,
         datasets: [
-          _lineDataset('Puntaje promedio',       series.map(p => p.avg_score),     '#0a6cff'),
-          _lineDataset('% logra siguiente paso', series.map(p => p.pct_siguiente), '#d4af37'),
-          _lineDataset('Talk ratio',             series.map(p => p.talk_ratio),    '#2e7d32'),
+          _lineDataset('Puntaje promedio',       series.map(p => p.avg_score),     '#0a0a0a'),
+          _lineDataset('% logra siguiente paso', series.map(p => p.pct_siguiente), '#1e6b30'),
+          _lineDataset('Talk ratio',             series.map(p => p.talk_ratio),    '#8a6300'),
           Object.assign(
             _lineDataset('Promedio del equipo (puntaje)', series.map(p => teamByBucket[p.bucket]?.avg_score ?? null), '#8A8A8A'),
             { borderDash: [6, 4], pointRadius: 0 },
@@ -2628,9 +2628,9 @@
       const teamTrendImage = _buildExportImage('line', {
         labels,
         datasets: [
-          _lineDataset('Puntaje promedio',       dashData.team.map(p => p.avg_score),     '#0a6cff'),
-          _lineDataset('% logra siguiente paso', dashData.team.map(p => p.pct_siguiente), '#d4af37'),
-          _lineDataset('Talk ratio',             dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+          _lineDataset('Puntaje promedio',       dashData.team.map(p => p.avg_score),     '#0a0a0a'),
+          _lineDataset('% logra siguiente paso', dashData.team.map(p => p.pct_siguiente), '#1e6b30'),
+          _lineDataset('Talk ratio',             dashData.team.map(p => p.talk_ratio),    '#8a6300'),
         ],
       }, _pdfChartOptions(), 900, 420);
 
@@ -2642,7 +2642,7 @@
       const rankingImage = rankingRows.length > 0
         ? _buildExportImage('bar', {
             labels: rankingRows.map(r => r.advisor),
-            datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+            datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a0a0a')],
           }, _pdfChartOptions({ plugins: { legend: { display: false } } }), 900, 420)
         : null;
 

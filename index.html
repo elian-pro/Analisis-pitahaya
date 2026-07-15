@@ -3730,5 +3730,58 @@
     renderScheduleList();
   }
 </script>
+
+<!-- ── Sesión (login con Google) ──────────────────────────────────────────────
+     Autocontenido: si la auth está activa, muestra un chip con el correo y un
+     botón de salir, y redirige a /login si una llamada a la API devuelve 401
+     (por ejemplo, sesión expirada). Si la auth está desactivada, no hace nada. -->
+<style>
+  #zr-session {
+    position: fixed; bottom: 14px; right: 14px; z-index: 2147483000;
+    display: none; align-items: center; gap: 8px;
+    background: rgba(10,10,10,.9); color: #fff; border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px; padding: 5px 6px 5px 12px;
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px;
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,.45); backdrop-filter: blur(4px);
+  }
+  #zr-session .email { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .02em; }
+  #zr-session button {
+    cursor: pointer; border: none; background: #fff; color: #0A0A0A; font: inherit; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .06em; border-radius: 999px; padding: 4px 10px;
+  }
+  #zr-session button:hover { background: #e5e5e5; }
+</style>
+<div id="zr-session"><span class="email"></span><button type="button">Salir</button></div>
+<script>
+  (function () {
+    // Redirige a /login cuando cualquier fetch a la API devuelve 401.
+    const _fetch = window.fetch;
+    window.fetch = function (...args) {
+      return _fetch.apply(this, args).then((res) => {
+        try {
+          const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+          if (res.status === 401 && url.indexOf('/auth/') === -1) {
+            window.location.replace('/login');
+          }
+        } catch (_) {}
+        return res;
+      });
+    };
+
+    fetch('/auth/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (!me || !me.email) return; // auth desactivada o sin sesión → sin chip
+        const box = document.getElementById('zr-session');
+        box.querySelector('.email').textContent = me.email;
+        box.style.display = 'flex';
+        box.querySelector('button').addEventListener('click', async () => {
+          try { await _fetch('/auth/logout', { method: 'POST' }); } catch (_) {}
+          window.location.replace('/login');
+        });
+      })
+      .catch(() => {});
+  })();
+</script>
 </body>
 </html>

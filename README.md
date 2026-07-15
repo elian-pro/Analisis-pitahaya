@@ -77,6 +77,31 @@ Debe responder:
 
 ---
 
+## Autenticación (Login con Google)
+
+El acceso a la app puede restringirse a los correos de tu organización mediante
+"Sign in with Google". Es **opcional y no rompe nada**: mientras
+`GOOGLE_OAUTH_CLIENT_ID` esté vacío la app corre abierta (como siempre); al
+definirlo, el login pasa a ser **obligatorio** y solo entran los dominios
+permitidos (`ALLOWED_EMAIL_DOMAINS`, por defecto `zebradigital.marketing`).
+
+**Cómo activarlo:**
+1. En [Google Cloud Console](https://console.cloud.google.com) → *Pantalla de
+   consentimiento OAuth* (tipo **Interno** si usas Google Workspace) → crea un
+   **ID de cliente de OAuth** de tipo *Aplicación web*.
+2. En **Orígenes de JavaScript autorizados** agrega la URL exacta de tu app
+   (p. ej. `https://analisis-estrategicos-asesores.zebra-ecosystem.cloud`, y
+   `http://localhost:3000` si pruebas en local).
+3. En EasyPanel define las variables `GOOGLE_OAUTH_CLIENT_ID`,
+   `AUTH_SESSION_SECRET` (usa `openssl rand -hex 32`) y, si aplica,
+   `ALLOWED_EMAIL_DOMAINS`. Redeploy.
+
+Detalle de cada variable en `.env.example`. La verificación del token y el filtro
+de dominio ocurren en el servidor (`src/auth/`); la sesión es una cookie httpOnly
+firmada, así que la API y la SPA quedan protegidas.
+
+---
+
 ## Base de datos PostgreSQL (persistencia que sobrevive a redeploys)
 
 Por defecto, los **clientes** y las **automatizaciones** se guardan en archivos JSON

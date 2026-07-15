@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Acceso · Zebra Reports</title>
+<link rel="icon" href="/favicon.svg">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --bg: #0A0A0A; --surface: #161616; --text: #FFFFFF; --muted: rgba(255,255,255,.6);
+    --border: rgba(255,255,255,.12); --danger: #F1928C;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; font-family: var(--sans); background: var(--bg); color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .card {
+    width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 34px 30px 30px; text-align: center;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,.6);
+  }
+  .logo { height: 26px; margin: 0 auto 22px; display: block; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 10px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: .22em; color: var(--muted); margin: 0 0 8px;
+  }
+  h1 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 6px; }
+  p.sub { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 24px; }
+  .gbtn { display: flex; justify-content: center; min-height: 44px; }
+  .hint {
+    margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted);
+  }
+  .hint b { color: var(--text); font-weight: 600; }
+  .error {
+    display: none; margin-top: 18px; font-size: 12.5px; line-height: 1.5; color: var(--danger);
+    background: rgba(241,146,140,.08); border: 1px solid rgba(241,146,140,.25);
+    border-radius: 10px; padding: 10px 12px; text-align: left;
+  }
+  .error.show { display: block; }
+  .loading { font-size: 12px; color: var(--muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <img class="logo" src="/Logo Zebra Blanco.png" alt="ZEBRA">
+    <p class="eyebrow">Inteligencia Comercial</p>
+    <h1>Zebra Reports</h1>
+    <p class="sub">Acceso exclusivo del equipo. Inicia sesión con tu cuenta de Google corporativa.</p>
+
+    <div class="gbtn" id="gbtn"></div>
+    <div class="loading" id="loading">Cargando acceso…</div>
+    <div class="error" id="error"></div>
+
+    <div class="hint" id="hint">Solo cuentas <b>@zebradigital.marketing</b></div>
+  </div>
+
+  <script>
+    const $err = document.getElementById('error');
+    const $loading = document.getElementById('loading');
+    const showError = (msg) => { $err.textContent = msg; $err.classList.add('show'); };
+
+    async function onCredential(response) {
+      $err.classList.remove('show');
+      try {
+        const r = await fetch('/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential }),
+        });
+        if (r.ok) { window.location.replace('/'); return; }
+        const data = await r.json().catch(() => ({}));
+        showError(data.error || 'No se pudo iniciar sesión.');
+        // Permite reintentar con otra cuenta.
+        if (window.google) google.accounts.id.disableAutoSelect();
+      } catch {
+        showError('Error de red al iniciar sesión. Intenta de nuevo.');
+      }
+    }
+
+    async function init() {
+      let cfg;
+      try {
+        cfg = await fetch('/auth/config').then(r => r.json());
+      } catch {
+        $loading.textContent = 'No se pudo cargar la configuración de acceso.';
+        return;
+      }
+      if (!cfg.enabled || !cfg.clientId) {
+        $loading.textContent = 'La autenticación no está configurada en el servidor.';
+        return;
+      }
+      if (Array.isArray(cfg.domains) && cfg.domains.length) {
+        document.getElementById('hint').innerHTML =
+          'Solo cuentas ' + cfg.domains.map(d => '<b>@' + d + '</b>').join(' o ');
+      }
+
+      const start = () => {
+        if (!window.google || !google.accounts || !google.accounts.id) {
+          return setTimeout(start, 150);
+        }
+        $loading.style.display = 'none';
+        google.accounts.id.initialize({
+          client_id: cfg.clientId,
+          callback: onCredential,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+        google.accounts.id.renderButton(document.getElementById('gbtn'), {
+          theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 300,
+        });
+      };
+      start();
+    }
+
+    init();
+  </script>
+</body>
+</html>

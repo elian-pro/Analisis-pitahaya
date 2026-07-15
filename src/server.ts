@@ -15,15 +15,27 @@ import metricsRouter from './routes/metrics';
 import clientsRouter from './routes/clients';
 import schedulesRouter from './routes/schedules';
 import chatRouter from './routes/chat';
+import authRouter from './auth/router';
+import { requireApiAuth, requirePage } from './auth/middleware';
 import { startScheduler } from './schedules/runner';
 
 const app = express();
 
+// Behind EasyPanel's reverse proxy: trust X-Forwarded-Proto so secure cookies work.
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// API routes
-app.use('/api/health', healthRouter);
+const staticDir = path.join(__dirname, '..');
+
+// ── Public endpoints (no auth) ────────────────────────────────────────────────
+app.use('/api/health', healthRouter);          // Docker healthcheck
+app.use('/auth', authRouter);                  // login / logout / config / me
+app.get('/login', (_req, res) => res.sendFile(path.join(staticDir, 'login.html')));
+
+// ── Protected API (401 JSON when unauthenticated; no-op when auth disabled) ────
+app.use('/api', requireApiAuth);
 app.use('/api/advisors', advisorsRouter);
 app.use('/api/report', reportRouter);
 app.use('/api/stats', statsRouter);
@@ -32,8 +44,8 @@ app.use('/api/clients', clientsRouter);
 app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
 
-// Static frontend
-const staticDir = path.join(__dirname, '..');
+// ── Protected frontend (redirect to /login when unauthenticated) ──────────────
+app.use(requirePage);
 app.use(express.static(staticDir, { index: 'index.html' }));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(staticDir, 'index.html'));

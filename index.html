@@ -679,13 +679,19 @@
           <div class="form-hint">Pega el link completo de la hoja. Detectamos el ID automáticamente.</div>
         </div>
         <div class="form-group">
-          <label class="form-label">Pestaña (hoja de datos) *</label>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <select class="form-control" id="cf-sheet-name-select" style="display:none; flex:1 1 180px;" onchange="_onTabSelect()"></select>
-            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas" style="flex:1 1 180px;" onchange="loadColumnsForTab()">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
+            <label class="form-label" style="margin:0;">Pestaña (hoja de datos) *</label>
+            <span class="mode-toggle">
+              <button type="button" id="tab-mode-list" class="mode-btn active" onclick="setTabMode('list')">Lista</button>
+              <button type="button" id="tab-mode-text" class="mode-btn" onclick="setTabMode('text')">Escribir</button>
+            </span>
+          </div>
+          <div id="tab-mode-list-wrap" style="display:flex; gap:8px; align-items:center;">
+            <select class="form-control" id="cf-sheet-name-select" style="flex:1 1 180px;" data-placeholder="— Elige una pestaña —" onchange="_onTabSelect()"></select>
             <button type="button" class="btn-sm btn-sm-cancel" id="cf-load-tabs" onclick="loadSheetTabs()" style="white-space:nowrap;">Cargar pestañas</button>
           </div>
-          <div class="form-hint" id="cf-tabs-hint">Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.</div>
+          <input class="form-control" id="cf-sheet-name" placeholder="Escribe el nombre exacto de la pestaña" style="display:none;" onchange="loadColumnsForTab()">
+          <div class="form-hint" id="cf-tabs-hint">En “Lista”, pega el link y pulsa “Cargar pestañas”. En “Escribir”, teclea el nombre exacto.</div>
         </div>
       </div>
       <div class="form-section">
@@ -2764,6 +2770,7 @@
     if (_tabsHint) { _tabsHint.style.color = ''; _tabsHint.textContent = 'Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.'; }
     // Reset de los menús de columnas (se llenan al elegir la pestaña)
     populateColumnOptions([]);
+    setTabMode('list');   // por defecto: elegir de la lista (cliente nuevo)
 
     // Show restore banner only for new clients with a saved draft
     const banner = document.getElementById('draft-banner');
@@ -2784,6 +2791,7 @@
         document.getElementById('cf-sidecar-folder-id').value= c.sidecar_folder_id || '';
         document.getElementById('cf-spreadsheet-id').value   = c.spreadsheet_id || '';
         document.getElementById('cf-sheet-name').value       = c.data_sheet_name || '';
+        if (c.data_sheet_name) setTabMode('text');   // al editar, muestra el nombre guardado
         document.getElementById('cf-col-fecha').value        = c.col_fecha || '';
         document.getElementById('cf-col-asesor').value       = c.col_asesor || '';
         document.getElementById('cf-col-calif').value        = c.col_calif || '';
@@ -2838,6 +2846,30 @@
     if (!s) return '';
     const m = s.match(/\/folders\/([a-zA-Z0-9-_]+)/) || s.match(/[?&]id=([a-zA-Z0-9-_]+)/) || s.match(/\/d\/([a-zA-Z0-9-_]+)/);
     return m ? m[1] : s.split(/[/?#]/)[0];
+  }
+
+  // Alterna entre elegir la pestaña de una lista precargada ('list') o teclear el
+  // nombre a mano ('text'), estilo n8n (fixed / expression). Solo se muestra un
+  // control a la vez; el campo de texto cf-sheet-name es siempre la fuente de verdad.
+  function setTabMode(mode) {
+    const isList = mode === 'list';
+    const listWrap = document.getElementById('tab-mode-list-wrap');
+    const textInput = document.getElementById('cf-sheet-name');
+    if (listWrap)  listWrap.style.display  = isList ? 'flex' : 'none';
+    if (textInput) textInput.style.display = isList ? 'none' : 'block';
+    document.getElementById('tab-mode-list')?.classList.toggle('active', isList);
+    document.getElementById('tab-mode-text')?.classList.toggle('active', !isList);
+    if (isList) {
+      // Refleja el valor actual en el menú (aunque no se hayan cargado las pestañas).
+      const sel = document.getElementById('cf-sheet-name-select');
+      const cur = (textInput?.value || '').trim();
+      if (sel && cur) {
+        if (!Array.from(sel.options).some(o => o.value === cur)) sel.appendChild(new Option(cur, cur));
+        sel.value = cur;
+      }
+    } else if (textInput) {
+      textInput.focus();
+    }
   }
 
   // Copia la pestaña elegida del menú al campo de texto (fuente de verdad) y
@@ -3909,6 +3941,12 @@
   .zs-opt.zs-sel::after { content: '✓'; margin-left: auto; color: var(--accent); font-size: 11px; }
   .zs-opt.zs-free { color: var(--muted); font-style: italic; }
   .zs-empty { padding: 10px; font-size: 12px; color: var(--faint); text-align: center; }
+
+  /* Toggle Lista / Escribir (estilo n8n: fixed / expression) */
+  .mode-toggle { display: inline-flex; border: 0.5px solid var(--border2); border-radius: 7px; overflow: hidden; flex-shrink: 0; }
+  .mode-btn { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 3px 10px; background: transparent; color: var(--muted); border: none; cursor: pointer; transition: background .15s, color .15s; }
+  .mode-btn.active { background: var(--accent); color: var(--on-accent); }
+  .mode-btn:not(.active):hover { color: var(--fg); }
 </style>
 <script>
 (function () {

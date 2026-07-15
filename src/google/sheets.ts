@@ -90,6 +90,24 @@ async function readSheet(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+// Lista los títulos de las pestañas (hojas) de un spreadsheet, para poder
+// elegirlos en un menú al configurar un cliente en vez de escribirlos a mano.
+export async function listSheetTabs(
+  spreadsheetId: string,
+): Promise<{ title: string; tabs: string[] }> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'properties.title,sheets.properties.title',
+  });
+  const title = res.data.properties?.title ?? '';
+  const tabs = (res.data.sheets ?? [])
+    .map(s => s.properties?.title)
+    .filter((t): t is string => typeof t === 'string' && t.length > 0);
+  return { title, tabs };
+}
+
 export async function getAdvisorsForMonth(
   spreadsheetId: string,
   dataSheetName: string,

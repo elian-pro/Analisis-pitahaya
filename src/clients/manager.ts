@@ -1,6 +1,7 @@
 import fs from 'fs';
 import crypto from 'crypto';
 import { CLIENTS_FILE } from '../config/paths';
+import { extractSpreadsheetId, extractDriveFolderId } from '../google/urls';
 import {
   dbEnabled,
   CLIENTS_TABLE,
@@ -37,6 +38,19 @@ export interface ClientConfig {
   advisors_seeded?:        boolean;
 }
 
+// Normaliza los campos que pueden llegar como link pegado (o como ID): extrae el
+// ID real de la hoja y de las carpetas de Drive. Red de seguridad del servidor,
+// para que el equipo solo tenga que copiar el link sin buscar el ID.
+function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
+  const out = { ...data };
+  if (typeof out.spreadsheet_id === 'string')    out.spreadsheet_id = extractSpreadsheetId(out.spreadsheet_id);
+  if (typeof out.folder_id === 'string')         out.folder_id = extractDriveFolderId(out.folder_id);
+  if (typeof out.sidecar_folder_id === 'string' && out.sidecar_folder_id) {
+    out.sidecar_folder_id = extractDriveFolderId(out.sidecar_folder_id);
+  }
+  return out;
+}
+
 // ── File fallback (used only when DATABASE_URL is not set) ───────────────────
 function loadFromFile(): ClientConfig[] {
   try { return JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf-8')); }
@@ -60,6 +74,7 @@ export async function getClient(id: string): Promise<ClientConfig | undefined> {
 }
 
 export async function createClient(data: Omit<ClientConfig, 'id'>): Promise<ClientConfig> {
+  data = normalizeIds(data);
   const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 28);
   const id   = `${slug}_${crypto.randomBytes(3).toString('hex')}`;
   const client: ClientConfig = { id, ...data };
@@ -77,6 +92,7 @@ export async function updateClient(
   id: string,
   patch: Partial<Omit<ClientConfig, 'id'>>,
 ): Promise<ClientConfig> {
+  patch = normalizeIds(patch);
   if (dbEnabled) {
     const existing = await dbGet<ClientConfig>(CLIENTS_TABLE, id);
     if (!existing) throw new Error(`Client '${id}' not found`);

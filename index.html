@@ -660,28 +660,32 @@
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Carpeta de reportes (Drive ID) *</label>
-            <input class="form-control" id="cf-folder-id" placeholder="ID de la carpeta en Google Drive">
-            <div class="form-hint">Carpeta donde se guardan los reportes generados</div>
+            <label class="form-label">Carpeta de reportes (link de Drive) *</label>
+            <input class="form-control" id="cf-folder-id" placeholder="Pega el link de la carpeta de Google Drive">
+            <div class="form-hint">Pega el link de la carpeta donde se guardan los reportes. Detectamos el ID solo.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Carpeta de PDFs (Drive ID)</label>
-            <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional">
-            <div class="form-hint">Carpeta alternativa para los PDFs</div>
+            <label class="form-label">Carpeta de PDFs (link de Drive)</label>
+            <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional — pega el link">
+            <div class="form-hint">Carpeta alternativa para los PDFs (opcional)</div>
           </div>
         </div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Google Sheets</div>
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label">ID del spreadsheet *</label>
-            <input class="form-control" id="cf-spreadsheet-id" placeholder="ID de Google Sheets">
+        <div class="form-group">
+          <label class="form-label">Hoja de Google (pega el link) *</label>
+          <input class="form-control" id="cf-spreadsheet-id" placeholder="Pega el link de Google Sheets (o el ID)">
+          <div class="form-hint">Pega el link completo de la hoja. Detectamos el ID automáticamente.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pestaña (hoja de datos) *</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <select class="form-control" id="cf-sheet-name-select" style="display:none; flex:1 1 180px;" onchange="_onTabSelect()"></select>
+            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas" style="flex:1 1 180px;">
+            <button type="button" class="btn-sm btn-sm-cancel" id="cf-load-tabs" onclick="loadSheetTabs()" style="white-space:nowrap;">Cargar pestañas</button>
           </div>
-          <div class="form-group">
-            <label class="form-label">Nombre de la pestaña *</label>
-            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas">
-          </div>
+          <div class="form-hint" id="cf-tabs-hint">Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.</div>
         </div>
       </div>
       <div class="form-section">
@@ -2752,6 +2756,12 @@
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '80000';
 
+    // Reset del selector de pestañas (se llena al pulsar "Cargar pestañas")
+    const _tabsSel = document.getElementById('cf-sheet-name-select');
+    if (_tabsSel) { _tabsSel.innerHTML = ''; _tabsSel.style.display = 'none'; }
+    const _tabsHint = document.getElementById('cf-tabs-hint');
+    if (_tabsHint) { _tabsHint.style.color = ''; _tabsHint.textContent = 'Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.'; }
+
     // Show restore banner only for new clients with a saved draft
     const banner = document.getElementById('draft-banner');
     if (!id && _hasDraft()) {
@@ -2813,6 +2823,70 @@
     return spaces;
   }
 
+  // ── Links → IDs (para que el equipo solo pegue el link) ───────────────────
+  function _extractSpreadsheetId(input) {
+    const s = (input || '').trim();
+    if (!s) return '';
+    const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/) || s.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return m ? m[1] : s.split(/[/?#]/)[0];
+  }
+  function _extractDriveFolderId(input) {
+    const s = (input || '').trim();
+    if (!s) return '';
+    const m = s.match(/\/folders\/([a-zA-Z0-9-_]+)/) || s.match(/[?&]id=([a-zA-Z0-9-_]+)/) || s.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return m ? m[1] : s.split(/[/?#]/)[0];
+  }
+
+  // Copia la pestaña elegida del menú al campo de texto (fuente de verdad).
+  function _onTabSelect() {
+    const sel = document.getElementById('cf-sheet-name-select');
+    if (sel.value) document.getElementById('cf-sheet-name').value = sel.value;
+  }
+
+  // Consulta las pestañas de la hoja pegada y las muestra en un menú.
+  async function loadSheetTabs() {
+    const raw  = document.getElementById('cf-spreadsheet-id').value.trim();
+    const hint = document.getElementById('cf-tabs-hint');
+    const sel  = document.getElementById('cf-sheet-name-select');
+    const btn  = document.getElementById('cf-load-tabs');
+    hint.style.color = '';
+    if (!raw) { hint.style.color = '#b4231c'; hint.textContent = 'Primero pega el link de la hoja arriba.'; return; }
+
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Cargando…';
+    hint.textContent = 'Consultando la hoja…';
+    try {
+      const r = await fetch(`/api/sheets/tabs?spreadsheet=${encodeURIComponent(raw)}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'No se pudieron cargar las pestañas.');
+
+      sel.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = '— Elige una pestaña —';
+      sel.appendChild(ph);
+      (data.tabs || []).forEach(t => {
+        const o = document.createElement('option');
+        o.value = t; o.textContent = t;
+        sel.appendChild(o);
+      });
+      sel.style.display = 'block';
+
+      const current = document.getElementById('cf-sheet-name').value.trim();
+      if (current && (data.tabs || []).includes(current)) sel.value = current;
+
+      const n = (data.tabs || []).length;
+      hint.textContent = n
+        ? `${n} pestaña${n === 1 ? '' : 's'} en “${data.title || 'la hoja'}”. Elige una del menú.`
+        : 'La hoja no tiene pestañas legibles.';
+    } catch (e) {
+      sel.style.display = 'none';
+      hint.style.color = '#b4231c';
+      hint.textContent = e.message;
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+    }
+  }
+
   async function saveClient() {
     const missing = _validateClientForm();
     if (missing.length) {
@@ -2828,14 +2902,15 @@
     }
 
     const name          = document.getElementById('cf-name').value.trim();
-    const folderId      = document.getElementById('cf-folder-id').value.trim();
-    const spreadsheetId = document.getElementById('cf-spreadsheet-id').value.trim();
+    const folderId      = _extractDriveFolderId(document.getElementById('cf-folder-id').value);
+    const spreadsheetId = _extractSpreadsheetId(document.getElementById('cf-spreadsheet-id').value);
+    const sidecarRaw    = document.getElementById('cf-sidecar-folder-id').value.trim();
     const sheetName     = document.getElementById('cf-sheet-name').value.trim();
     const rawPhrases    = document.getElementById('cf-excluded-phrases').value;
     const payload = {
       name,
       folder_id:               folderId,
-      sidecar_folder_id:       document.getElementById('cf-sidecar-folder-id').value.trim() || undefined,
+      sidecar_folder_id:       sidecarRaw ? _extractDriveFolderId(sidecarRaw) : undefined,
       spreadsheet_id:          spreadsheetId,
       data_sheet_name:         sheetName,
       col_fecha:               document.getElementById('cf-col-fecha').value.trim(),

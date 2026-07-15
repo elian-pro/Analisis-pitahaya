@@ -15,6 +15,7 @@ import metricsRouter from './routes/metrics';
 import clientsRouter from './routes/clients';
 import schedulesRouter from './routes/schedules';
 import chatRouter from './routes/chat';
+import sheetsRouter from './routes/sheets';
 import authRouter from './auth/router';
 import { requireApiAuth, requirePage } from './auth/middleware';
 import { startScheduler } from './schedules/runner';
@@ -43,6 +44,7 @@ app.use('/api/metrics', metricsRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/sheets', sheetsRouter);
 
 // ── Protected frontend (redirect to /login when unauthenticated) ──────────────
 app.use(requirePage);

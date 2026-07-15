@@ -682,7 +682,7 @@
           <label class="form-label">Pestaña (hoja de datos) *</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select class="form-control" id="cf-sheet-name-select" style="display:none; flex:1 1 180px;" onchange="_onTabSelect()"></select>
-            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas" style="flex:1 1 180px;">
+            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas" style="flex:1 1 180px;" onchange="loadColumnsForTab()">
             <button type="button" class="btn-sm btn-sm-cancel" id="cf-load-tabs" onclick="loadSheetTabs()" style="white-space:nowrap;">Cargar pestañas</button>
           </div>
           <div class="form-hint" id="cf-tabs-hint">Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.</div>
@@ -2922,8 +2922,11 @@
       });
       sel.style.display = 'block';
 
+      // Si ya hay una pestaña escrita/elegida, preselecciónala y carga sus
+      // columnas. Ojo: fijar sel.value NO dispara 'change', por eso llamamos a
+      // loadColumnsForTab() a mano (si no, las columnas se quedarían vacías).
       const current = document.getElementById('cf-sheet-name').value.trim();
-      if (current && (data.tabs || []).includes(current)) sel.value = current;
+      if (current && (data.tabs || []).includes(current)) { sel.value = current; loadColumnsForTab(); }
 
       const n = (data.tabs || []).length;
       hint.textContent = n

@@ -108,6 +108,21 @@ export async function listSheetTabs(
   return { title, tabs };
 }
 
+// Lee la primera fila (encabezados) de una pestaña, para ofrecer las columnas en
+// menús al configurar un cliente. Pide solo la fila 1 para no leer toda la hoja.
+export async function getSheetHeaders(spreadsheetId: string, tab: string): Promise<string[]> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const range = `'${tab.replace(/'/g, "''")}'!1:1`;
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const row = (res.data.values && res.data.values[0]) || [];
+  return row.map(h => String(h ?? '').trim()).filter(Boolean);
+}
+
 export async function getAdvisorsForMonth(
   spreadsheetId: string,
   dataSheetName: string,

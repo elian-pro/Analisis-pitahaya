@@ -690,34 +690,35 @@
       </div>
       <div class="form-section">
         <div class="form-section-title">Columnas de la hoja</div>
+        <div class="form-hint" style="margin:-4px 0 12px;">Elige la pestaña arriba y las columnas se llenan solas con los encabezados de la hoja. También puedes escribir el nombre.</div>
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Columna de fecha *</label>
-            <input class="form-control-sm" id="cf-col-fecha" placeholder="Ej. Fecha">
+            <select class="form-control-sm" id="cf-col-fecha" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de asesor *</label>
-            <input class="form-control-sm" id="cf-col-asesor" placeholder="Ej. Asesor">
+            <select class="form-control-sm" id="cf-col-asesor" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de calificación *</label>
-            <input class="form-control-sm" id="cf-col-calif" placeholder="Ej. Calif global">
+            <select class="form-control-sm" id="cf-col-calif" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de análisis *</label>
-            <input class="form-control-sm" id="cf-col-analisis" placeholder="Ej. Analisis">
+            <select class="form-control-sm" id="cf-col-analisis" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de transcripción *</label>
-            <input class="form-control-sm" id="cf-col-transcripcion" placeholder="Ej. Transcripcion">
+            <select class="form-control-sm" id="cf-col-transcripcion" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de duración</label>
-            <input class="form-control-sm" id="cf-col-duracion" placeholder="Ej. Duracion (opcional)">
+            <select class="form-control-sm" id="cf-col-duracion" data-free data-placeholder="Opcional"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de grabación</label>
-            <input class="form-control-sm" id="cf-col-record" placeholder="Ej. Record (opcional, link de la grabación)">
+            <select class="form-control-sm" id="cf-col-record" data-free data-placeholder="Opcional (link de la grabación)"></select>
           </div>
         </div>
       </div>
@@ -2761,6 +2762,8 @@
     if (_tabsSel) { _tabsSel.innerHTML = ''; _tabsSel.style.display = 'none'; }
     const _tabsHint = document.getElementById('cf-tabs-hint');
     if (_tabsHint) { _tabsHint.style.color = ''; _tabsHint.textContent = 'Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.'; }
+    // Reset de los menús de columnas (se llenan al elegir la pestaña)
+    populateColumnOptions([]);
 
     // Show restore banner only for new clients with a saved draft
     const banner = document.getElementById('draft-banner');
@@ -2837,10 +2840,58 @@
     return m ? m[1] : s.split(/[/?#]/)[0];
   }
 
-  // Copia la pestaña elegida del menú al campo de texto (fuente de verdad).
+  // Copia la pestaña elegida del menú al campo de texto (fuente de verdad) y
+  // carga los encabezados de esa pestaña en los menús de columnas.
   function _onTabSelect() {
     const sel = document.getElementById('cf-sheet-name-select');
-    if (sel.value) document.getElementById('cf-sheet-name').value = sel.value;
+    if (sel.value) {
+      document.getElementById('cf-sheet-name').value = sel.value;
+      loadColumnsForTab();
+    }
+  }
+
+  const _COL_FIELDS = [
+    { id: 'cf-col-fecha',        ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-asesor',       ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-calif',        ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-analisis',     ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-transcripcion',ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-duracion',     ph: 'Opcional' },
+    { id: 'cf-col-record',       ph: 'Opcional (link de la grabación)' },
+  ];
+
+  // Rellena los <select> de columnas con los encabezados de la hoja, conservando
+  // el valor actual (para edición) aunque no esté entre los encabezados.
+  function populateColumnOptions(headers) {
+    const seenAll = Array.isArray(headers) ? headers : [];
+    _COL_FIELDS.forEach(({ id, ph }) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = '';
+      sel.appendChild(new Option('— ' + ph + ' —', ''));
+      const seen = new Set();
+      seenAll.forEach(h => { if (h && !seen.has(h)) { seen.add(h); sel.appendChild(new Option(h, h)); } });
+      if (cur && !seen.has(cur)) sel.appendChild(new Option(cur, cur));
+      sel.value = cur;                 // el setter del combobox refresca la etiqueta
+    });
+  }
+
+  // Consulta los encabezados de la pestaña elegida y llena los menús de columnas.
+  async function loadColumnsForTab() {
+    const raw = document.getElementById('cf-spreadsheet-id').value.trim();
+    const tab = document.getElementById('cf-sheet-name').value.trim();
+    const hint = document.getElementById('cf-tabs-hint');
+    if (!raw || !tab) return;
+    try {
+      const r = await fetch(`/api/sheets/headers?spreadsheet=${encodeURIComponent(raw)}&tab=${encodeURIComponent(tab)}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'No se pudieron leer las columnas.');
+      populateColumnOptions(data.headers || []);
+      if (hint) { hint.style.color = ''; hint.textContent = `Pestaña “${tab}”: ${(data.headers || []).length} columna(s) cargadas abajo.`; }
+    } catch (e) {
+      if (hint) { hint.style.color = '#b4231c'; hint.textContent = e.message; }
+    }
   }
 
   // Consulta las pestañas de la hoja pegada y las muestra en un menú.
@@ -3804,6 +3855,216 @@
     _schedSig = sig;
     renderScheduleList();
   }
+</script>
+
+<!-- ── Combobox Zebra (reemplaza los <select> nativos) ────────────────────────
+     Mejora cada <select> a un desplegable con búsqueda, con el sistema de diseño
+     del app (tokens --bg/--surface/--border/--fg/--accent, tema claro/oscuro).
+     El <select> nativo queda oculto como fuente de verdad, así el resto del
+     código (leer/escribir .value, poblar <option>, onchange) sigue funcionando.
+     Marca un select con data-no-zselect para excluirlo, o data-free para permitir
+     texto libre (usado en las columnas). -->
+<style>
+  .zs-wrap { position: relative; display: inline-block; vertical-align: middle; }
+  select.zs-native { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none; }
+  .zs-trigger {
+    font-family: 'Inter', sans-serif; background: var(--bg); color: var(--fg);
+    border: 0.5px solid var(--border2); border-radius: 8px; padding: 9px 12px; font-size: 13px;
+    width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    text-align: left; transition: border-color .15s;
+  }
+  .zs-wrap.zs-sm .zs-trigger { padding: 7px 10px; font-size: 12px; }
+  .zs-trigger:hover { border-color: var(--fg); }
+  .zs-wrap.zs-open .zs-trigger { border-color: var(--accent); }
+  .zs-wrap.zs-error .zs-trigger { border-color: var(--danger); background: rgba(226,75,74,0.04); }
+  .zs-wrap.zs-disabled .zs-trigger { opacity: .5; cursor: not-allowed; }
+  .zs-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zs-label.zs-muted { color: var(--muted); }
+  .zs-chev { flex-shrink: 0; font-size: 10px; color: var(--muted); transition: transform .15s; }
+  .zs-wrap.zs-open .zs-chev { transform: rotate(180deg); }
+
+  .zs-pop {
+    position: fixed; z-index: 2147483200; background: var(--surface);
+    border: 0.5px solid var(--border2); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,.28), 0 0 0 0.5px var(--border);
+    display: flex; flex-direction: column; max-height: 320px; min-width: 180px;
+  }
+  .zs-search { padding: 8px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .zs-input {
+    font-family: 'Inter', sans-serif; width: 100%; box-sizing: border-box; background: var(--bg);
+    border: 0.5px solid var(--border2); border-radius: 7px; padding: 7px 10px; font-size: 12.5px; color: var(--fg);
+  }
+  .zs-input:focus { outline: none; border-color: var(--accent); }
+  .zs-input::placeholder { color: var(--faint); }
+  .zs-list { overflow-y: auto; padding: 5px; }
+  .zs-opt {
+    padding: 8px 10px; font-size: 13px; color: var(--fg); border-radius: 7px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px;
+  }
+  .zs-opt.zs-active { background: var(--surface2); }
+  .zs-opt.zs-sel { font-weight: 600; }
+  .zs-opt.zs-sel::after { content: '✓'; margin-left: auto; color: var(--accent); font-size: 11px; }
+  .zs-opt.zs-free { color: var(--muted); font-style: italic; }
+  .zs-empty { padding: 10px; font-size: 12px; color: var(--faint); text-align: center; }
+</style>
+<script>
+(function () {
+  const NATIVE = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  function enhance(sel) {
+    if (!sel || sel.__zs || sel.multiple || sel.hasAttribute('data-no-zselect')) return;
+    sel.__zs = true;
+    const free = sel.hasAttribute('data-free');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'zs-wrap' + (sel.classList.contains('form-control-sm') ? ' zs-sm' : '');
+    if (sel.classList.contains('form-control') || sel.classList.contains('form-control-sm')) wrap.style.width = '100%';
+    ['minWidth', 'width', 'flex'].forEach(p => { if (sel.style[p]) wrap.style[p] = sel.style[p]; });
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('zs-native');
+
+    const trig = document.createElement('button');
+    trig.type = 'button'; trig.className = 'zs-trigger';
+    trig.innerHTML = '<span class="zs-label"></span><span class="zs-chev">▾</span>';
+    wrap.appendChild(trig);
+
+    const pop = document.createElement('div');
+    pop.className = 'zs-pop';
+    pop.innerHTML = '<div class="zs-search"><input type="text" class="zs-input" placeholder="Buscar…" autocomplete="off" spellcheck="false"></div><div class="zs-list"></div>';
+    const input = pop.querySelector('.zs-input');
+    const list = pop.querySelector('.zs-list');
+
+    let open = false, activeIdx = -1, filtered = [];
+    const opts = () => Array.from(sel.options);
+    const placeholder = () => {
+      const empty = opts().find(o => o.value === '');
+      return sel.getAttribute('data-placeholder') || (empty ? empty.textContent : '') || 'Selecciona…';
+    };
+    function refresh() {
+      const o = sel.options[sel.selectedIndex];
+      const lbl = trig.querySelector('.zs-label');
+      if (!o || o.value === '') { lbl.textContent = placeholder(); lbl.classList.add('zs-muted'); }
+      else { lbl.textContent = o.textContent; lbl.classList.remove('zs-muted'); }
+      wrap.classList.toggle('zs-disabled', sel.disabled);
+      trig.disabled = sel.disabled;
+      wrap.classList.toggle('zs-error', sel.classList.contains('field-error'));
+    }
+    function setActive(i) {
+      activeIdx = i;
+      Array.from(list.children).forEach((el, idx) => {
+        const on = idx === i && el.classList.contains('zs-opt');
+        el.classList.toggle('zs-active', on);
+        if (on) el.scrollIntoView({ block: 'nearest' });
+      });
+    }
+    function build(q) {
+      const nq = norm(q); list.innerHTML = ''; filtered = [];
+      opts().forEach(o => {
+        if (o.value === '' && !norm(o.textContent).includes(nq)) return;
+        if (o.value === '' && q) return;
+        if (nq && !norm(o.textContent).includes(nq)) return;
+        filtered.push(o);
+      });
+      if (!filtered.length && free && q.trim()) {
+        const row = document.createElement('div');
+        row.className = 'zs-opt zs-free'; row.textContent = 'Usar: “' + q.trim() + '”';
+        row.addEventListener('mousedown', e => { e.preventDefault(); commitFree(q.trim()); });
+        list.appendChild(row); return;
+      }
+      if (!filtered.length) {
+        const e = document.createElement('div'); e.className = 'zs-empty'; e.textContent = 'Sin resultados';
+        list.appendChild(e); return;
+      }
+      filtered.forEach((o, i) => {
+        const row = document.createElement('div');
+        row.className = 'zs-opt' + (o.value && o.value === sel.value ? ' zs-sel' : '');
+        row.textContent = o.textContent;
+        row.addEventListener('mousedown', e => { e.preventDefault(); pick(o.value); });
+        row.addEventListener('mousemove', () => setActive(i));
+        list.appendChild(row);
+      });
+      setActive(0);
+    }
+    function commitFree(v) {
+      if (!opts().some(o => o.value === v)) sel.appendChild(new Option(v, v));
+      pick(v);
+    }
+    function pick(v) {
+      if (free && v && !opts().some(o => o.value === v)) sel.appendChild(new Option(v, v));
+      NATIVE.set.call(sel, v); refresh(); close();
+      sel.dispatchEvent(new Event('input', { bubbles: true }));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function position() {
+      const r = trig.getBoundingClientRect();
+      pop.style.minWidth = r.width + 'px';
+      pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - r.width - 8)) + 'px';
+      const spaceBelow = window.innerHeight - r.bottom;
+      const need = Math.min(320, pop.offsetHeight || 320);
+      if (spaceBelow < need + 8 && r.top > spaceBelow) { pop.style.top = 'auto'; pop.style.bottom = (window.innerHeight - r.top + 4) + 'px'; }
+      else { pop.style.bottom = 'auto'; pop.style.top = (r.bottom + 4) + 'px'; }
+    }
+    function openPop() {
+      if (sel.disabled || open) return;
+      open = true; document.body.appendChild(pop); wrap.classList.add('zs-open');
+      input.value = ''; build(''); position();
+      setTimeout(() => input.focus(), 0);
+      document.addEventListener('mousedown', onDocDown, true);
+      window.addEventListener('resize', position); window.addEventListener('scroll', position, true);
+    }
+    function close() {
+      if (!open) return; open = false; wrap.classList.remove('zs-open');
+      if (pop.parentNode) pop.parentNode.removeChild(pop);
+      document.removeEventListener('mousedown', onDocDown, true);
+      window.removeEventListener('resize', position); window.removeEventListener('scroll', position, true);
+    }
+    function onDocDown(e) { if (!pop.contains(e.target) && !wrap.contains(e.target)) close(); }
+
+    trig.addEventListener('click', () => { open ? close() : openPop(); });
+    input.addEventListener('input', () => build(input.value));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(activeIdx + 1, filtered.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(activeIdx - 1, 0)); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (filtered[activeIdx]) pick(filtered[activeIdx].value); else if (free && input.value.trim()) commitFree(input.value.trim()); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(); trig.focus(); }
+    });
+
+    // Reflejar cambios programáticos de .value en la etiqueta (y auto-crear opción en modo libre).
+    Object.defineProperty(sel, 'value', {
+      configurable: true,
+      get() { return NATIVE.get.call(this); },
+      set(v) { if (free && v && !Array.from(this.options).some(o => o.value === v)) this.appendChild(new Option(v, v)); NATIVE.set.call(this, v); refresh(); },
+    });
+
+    new MutationObserver((muts) => {
+      let child = false, style = false;
+      muts.forEach(m => { if (m.type === 'childList') child = true; if (m.attributeName === 'style') style = true; });
+      if (child && open) build(input.value);
+      if (style) { const d = sel.style.display; wrap.style.display = (d === 'none') ? 'none' : ''; }
+      refresh();
+    }).observe(sel, { childList: true, attributes: true, attributeFilter: ['disabled', 'style', 'class'] });
+
+    if (sel.style.display === 'none') wrap.style.display = 'none';
+    refresh();
+  }
+
+  function enhanceAll(root) { (root || document).querySelectorAll('select:not([data-no-zselect])').forEach(enhance); }
+
+  function init() {
+    enhanceAll(document);
+    new MutationObserver((muts) => {
+      muts.forEach(m => m.addedNodes && m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.tagName === 'SELECT') enhance(n);
+        else if (n.querySelectorAll) enhanceAll(n);
+      }));
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
 </script>
 
 <!-- ── Sesión (login con Google) ──────────────────────────────────────────────

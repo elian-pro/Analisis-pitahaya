@@ -118,12 +118,12 @@ const GENERAL_TOOL: Anthropic.Tool = {
       tendencia_equipo:  { type: 'string', enum: ['mejora','estable','mixto','retroceso','primer_mes'] },
       kpi_bullets: {
         type: 'array',
-        description: 'KPIs clave con valor actual, variacion vs periodo anterior y tendencia. Incluir score de cada asesor, score promedio del equipo, y metricas criticas como Fly and Buy. Si es primer periodo, omitir variacion.',
+        description: 'KPIs clave con valor actual, variacion vs periodo anterior y tendencia. Incluir el score de cada asesor, el score promedio del equipo, y una o dos metricas criticas del periodo que se desprendan del analisis de este cliente (por ejemplo cobertura de un elemento del guion, tasa de cierre de microcompromiso, o precalificacion). NO inventes ni menciones programas, herramientas o metricas que no aparezcan en el prompt del cliente ni en los datos. Si es primer periodo, omitir variacion.',
         items: {
           type: 'object',
           required: ['label', 'valor', 'tendencia'],
           properties: {
-            label:     { type: 'string', description: 'Nombre del KPI, ej: "Score equipo", "Melisa Noble", "Fly and Buy (menciones)"' },
+            label:     { type: 'string', description: 'Nombre del KPI, ej: "Score equipo", "Nombre del asesor", "% cierres con siguiente paso". Usa solo conceptos presentes en el prompt del cliente o en los datos.' },
             valor:     { type: 'string', description: 'Valor actual, ej: "53/100", "60/100", "0 de 56 llamadas"' },
             variacion: { type: 'string', description: 'Cambio vs periodo anterior, ej: "+14 pts", "-8 pts". Omitir si primer periodo.' },
             tendencia: { type: 'string', enum: ['mejora', 'baja', 'estable', 'sin_dato'] },

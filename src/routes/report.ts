@@ -1,12 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
 import { getClient } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
-import { findSidecarFolder, findPreviousPeriodKey, monthLabel } from '../google/drive';
+import { findSidecarFolder, findPreviousPeriodKey, monthLabel, uploadPdf } from '../google/drive';
 import { previousPeriodKeyFromDb } from '../metrics/store';
+import { parseRadarMarkdown } from '../ingest/radarMarkdown';
+import { parseRadarSidecar } from '../radar/sidecar';
+import { processRadarReport } from '../radar/process';
+import { resolveRadarPrompt, type RadarPeriodMeta } from '../claude/radar';
 
 const router = Router();
+
+const RADAR_MIN_DURATION_DEFAULT = 200;
+const RADAR_MAX_CHARS_DEFAULT     = 8000;
 
 // Human-friendly label for a sidecar period key: 'YYYY-MM' → "Junio 2026",
 // 'YYYY-MM-DD' → "Semana del 15/06".
@@ -49,6 +57,140 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   );
 
   res.status(202).json({ job_id: job.id });
+});
+
+// ── POST /api/report/radar-upload — Radar de Objeciones desde un archivo .md ──
+// Flujo por archivo (§1.5): recibe un Markdown de llamadas (multipart), lo parsea
+// con los mismos filtros que el flujo desde la base, genera el reporte y lo
+// entrega según `deliver` (descarga en base64 y/o subida a Drive). Funciona con o
+// sin `client_id`.
+const radarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 2 * 1024 * 1024 }, // 2 MB
+}).fields([{ name: 'file', maxCount: 1 }, { name: 'prev_sidecar', maxCount: 1 }]);
+
+function decodeUtf8(buf: Buffer): string | null {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { return null; }
+}
+
+// Periodo por defecto (mes en curso) cuando el archivo/form no lo trae.
+function currentMonthPeriod(): { period_label: string; date_from: string; date_to: string; period_key: string } {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const from = `${y}-${pad(m + 1)}-01`;
+  const to   = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+  return { period_label: monthLabel(`${y}-${pad(m + 1)}`), date_from: from, date_to: to, period_key: `${y}-${pad(m + 1)}` };
+}
+
+router.post('/radar-upload', (req: Request, res: Response): void => {
+  radarUpload(req, res, async (uploadErr: unknown) => {
+    if (uploadErr) {
+      res.status(400).json({ error: `No se pudo subir el archivo: ${(uploadErr as Error).message}` });
+      return;
+    }
+    try {
+      const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+      const mdFile = files?.file?.[0];
+      if (!mdFile) { res.status(400).json({ error: 'Falta el archivo .md (campo "file").' }); return; }
+      if (!/\.md$/i.test(mdFile.originalname)) { res.status(400).json({ error: 'El archivo debe tener extensión .md' }); return; }
+
+      const fileText = decodeUtf8(mdFile.buffer);
+      if (fileText === null) { res.status(422).json({ error: 'El archivo no es UTF-8 válido.' }); return; }
+
+      const body = req.body as Record<string, string>;
+      const clientId = (body.client_id || '').trim();
+      const client   = clientId ? await getClient(clientId) : undefined;
+
+      const minDur = client?.radar_min_duration_seconds    ?? RADAR_MIN_DURATION_DEFAULT;
+      const maxCh  = client?.radar_transcripcion_max_chars ?? RADAR_MAX_CHARS_DEFAULT;
+      const excluded = client?.excluded_phrases ?? [];
+
+      // Parseo del Markdown (overrides del form ganan sobre el frontmatter).
+      let parsed;
+      try {
+        parsed = parseRadarMarkdown(fileText, {
+          client_name:          body.client_name || undefined,
+          period_label:         body.period_label || undefined,
+          date_from:            body.date_from || undefined,
+          date_to:              body.date_to || undefined,
+          contexto_negocio:     body.contexto_negocio || undefined,
+          min_duration_seconds: minDur,
+          max_chars:            maxCh,
+          excluded_phrases:     excluded,
+        });
+      } catch (e) {
+        res.status(422).json({ error: (e as Error).message });
+        return;
+      }
+      if (parsed.calls.length === 0) {
+        res.status(422).json({ error: `No quedaron llamadas tras el filtro (duración > ${minDur}s / frases excluidas). Revisa el archivo.` });
+        return;
+      }
+
+      // Sidecar del periodo anterior (opcional) para el comparativo.
+      let prevSidecar = null;
+      const prevFile = files?.prev_sidecar?.[0];
+      if (prevFile) {
+        const prevText = decodeUtf8(prevFile.buffer);
+        prevSidecar = prevText ? parseRadarSidecar(prevText) : null;
+        if (!prevSidecar) parsed.warnings.push('El prev_sidecar no se pudo leer; el reporte sale como línea base.');
+      }
+
+      // Periodo: usa lo del archivo/form; si falta, el mes en curso.
+      const def = currentMonthPeriod();
+      const date_from = parsed.meta.date_from || def.date_from;
+      const date_to   = parsed.meta.date_to   || def.date_to;
+      const period_label = parsed.meta.period_label || def.period_label;
+      const period_key   = /^\d{4}-\d{2}/.test(date_from) ? date_from.slice(0, 7) : def.period_key;
+
+      const meta: RadarPeriodMeta = {
+        client_name:    client?.name || parsed.meta.client_name,
+        period_label,
+        period_key,
+        date_from,
+        date_to,
+        total_calls:    parsed.meta.total_calls,
+        analyzed_calls: parsed.meta.analyzed_calls,
+        excluded_calls: parsed.meta.excluded_calls,
+        source:         'markdown_upload',
+      };
+
+      const systemPrompt = resolveRadarPrompt(client?.prompt_radar ?? null, parsed.meta.contexto);
+      const result = await processRadarReport(systemPrompt, meta, parsed.calls, prevSidecar);
+
+      // Entrega
+      const deliver = (body.deliver || (clientId ? 'both' : 'download')) as 'download' | 'drive' | 'both';
+      const wantDrive = deliver === 'drive' || deliver === 'both';
+      const wantDownload = deliver === 'download' || deliver === 'both';
+
+      let driveUrl: string | undefined;
+      const stagingFolder = (process.env.RADAR_UPLOAD_STAGING_FOLDER_ID || '').trim();
+      const targetFolder = client?.radar_folder_id || stagingFolder;
+      if (wantDrive) {
+        if (targetFolder) {
+          driveUrl = await uploadPdf(targetFolder, meta.client_name, period_key, result.pdfBuffer,
+            meta.date_from, meta.date_to);
+        } else {
+          parsed.warnings.push('No hay carpeta de Drive (ni del cliente ni de staging): el PDF solo se entrega como descarga.');
+        }
+      }
+
+      res.json({
+        reportData:   result.reportData,
+        warnings:     parsed.warnings,
+        driveUrl,
+        pdfBase64:     wantDownload || !driveUrl ? result.pdfBuffer.toString('base64') : undefined,
+        sidecarBase64: result.sidecarJson ? Buffer.from(result.sidecarJson, 'utf8').toString('base64') : undefined,
+        input_tokens:  result.input_tokens,
+        output_tokens: result.output_tokens,
+      });
+    } catch (e) {
+      console.error('[radar-upload]', (e as Error).message);
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
 });
 
 // POST /api/report/:jobId/cancel — request cancellation of a running job

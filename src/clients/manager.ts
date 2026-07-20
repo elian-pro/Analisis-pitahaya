@@ -31,6 +31,12 @@ export interface ClientConfig {
   transcripcion_max_chars: number;
   prompt_individual:       string;
   prompt_general:          string;
+  // ── Radar de Objeciones (opcionales; el reporte usa defaults si faltan) ──────
+  prompt_radar?:                 string;   // vacío => se usa el prompt default
+  radar_folder_id?:              string;   // carpeta Drive del PDF de Radar
+  radar_sidecar_folder_id?:      string;   // carpeta del sidecar radar-YYYY-MM.json (opcional)
+  radar_min_duration_seconds?:   number;   // filtro de duración del Radar (default 200)
+  radar_transcripcion_max_chars?: number;  // recorte de transcripción del Radar (default 8000)
   // Internal bookkeeping (not part of the public CRUD form, set by
   // advisors/store.ts): true once this client's advisor roster has been
   // imported from Sheets into the `advisors` table, so the one-time import
@@ -47,6 +53,12 @@ function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
   if (typeof out.folder_id === 'string')         out.folder_id = extractDriveFolderId(out.folder_id);
   if (typeof out.sidecar_folder_id === 'string' && out.sidecar_folder_id) {
     out.sidecar_folder_id = extractDriveFolderId(out.sidecar_folder_id);
+  }
+  if (typeof out.radar_folder_id === 'string' && out.radar_folder_id) {
+    out.radar_folder_id = extractDriveFolderId(out.radar_folder_id);
+  }
+  if (typeof out.radar_sidecar_folder_id === 'string' && out.radar_sidecar_folder_id) {
+    out.radar_sidecar_folder_id = extractDriveFolderId(out.radar_sidecar_folder_id);
   }
   return out;
 }

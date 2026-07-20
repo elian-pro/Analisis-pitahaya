@@ -21,6 +21,12 @@ const ClientBodySchema = z.object({
   transcripcion_max_chars: z.number().int().min(100).default(3000),
   prompt_individual:       z.string().min(1),
   prompt_general:          z.string().min(1),
+  // ── Radar de Objeciones (opcionales) ─────────────────────────────────────────
+  prompt_radar:                  z.string().optional(),
+  radar_folder_id:               z.string().optional(),
+  radar_sidecar_folder_id:       z.string().optional(),
+  radar_min_duration_seconds:    z.number().int().min(0).max(3600).optional(),
+  radar_transcripcion_max_chars: z.number().int().min(100).max(50000).optional(),
 });
 
 router.get('/', async (_req: Request, res: Response): Promise<void> => {

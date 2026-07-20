@@ -10,6 +10,7 @@ import { parseRadarMarkdown } from '../ingest/radarMarkdown';
 import { parseRadarSidecar } from '../radar/sidecar';
 import { processRadarReport } from '../radar/process';
 import { resolveRadarPrompt, type RadarPeriodMeta } from '../claude/radar';
+import { runRadarForClient } from '../radar/dbFlow';
 
 const router = Router();
 
@@ -57,6 +58,44 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   );
 
   res.status(202).json({ job_id: job.id });
+});
+
+// ── POST /api/report/radar — Radar de Objeciones desde la base (cliente + mes) ─
+// Flujo manual del botón de la pestaña "Radar". Genera SOLO el Radar (no el
+// reporte de desempeño) para un cliente y un mes, lo sube a su carpeta de Drive y
+// devuelve también el PDF en base64 para descarga inmediata. Es síncrono (una
+// sola llamada a Claude), como el export del dashboard.
+const RadarBodySchema = z.object({
+  client_id: z.string().min(1),
+  month:     z.string().regex(/^\d{4}-\d{2}$/, 'month debe ser YYYY-MM'),
+});
+
+router.post('/radar', async (req: Request, res: Response): Promise<void> => {
+  const parsed = RadarBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
+    return;
+  }
+  const { client_id, month } = parsed.data;
+  try {
+    const client = await getClient(client_id);
+    if (!client) { res.status(404).json({ error: `Cliente '${client_id}' no encontrado` }); return; }
+    if (!client.radar_folder_id) {
+      res.status(400).json({ error: 'El cliente no tiene "Carpeta Drive de Radar" configurada. Agrégala en la pestaña Reportes.' });
+      return;
+    }
+    const result = await runRadarForClient(client, month);
+    res.json({
+      reportData:    result.reportData,
+      driveUrl:      result.driveUrl,
+      pdfBase64:     result.pdfBuffer.toString('base64'),
+      input_tokens:  result.input_tokens,
+      output_tokens: result.output_tokens,
+    });
+  } catch (e) {
+    console.error('[report radar]', (e as Error).message);
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 // ── POST /api/report/radar-upload — Radar de Objeciones desde un archivo .md ──

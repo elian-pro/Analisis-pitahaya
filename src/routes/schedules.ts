@@ -22,6 +22,7 @@ const ScheduleBaseSchema = z.object({
   timezone:        z.string().default('America/Mexico_City'),
   report_type:     z.enum(['selected', 'general']),
   include_general: z.boolean().default(true),
+  include_radar:   z.boolean().default(false),
   advisors:        z.union([z.literal('all'), z.array(z.string().min(1))]).default('all'),
   notify_only:     z.boolean().default(false),
   chat_space_id:   z.string().optional(),
@@ -48,6 +49,9 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
 ).refine(
   d => d.frequency !== 'once' || d.once_mode !== 'monthly' || !!d.once_month,
   { message: 'once_month required for a one-time monthly report' },
+).refine(
+  d => !d.include_radar || d.frequency === 'monthly',
+  { message: 'El Radar de Objeciones es mensual: activa "Incluir Radar" solo en automatizaciones mensuales.' },
 );
 
 const SchedulePatchSchema = ScheduleBaseSchema.partial();

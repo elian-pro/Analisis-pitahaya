@@ -227,6 +227,7 @@ export async function getCallData(
   maxTranscripcionChars: number,
   dateFrom?: string,  // YYYY-MM-DD, activates weekly range filter
   dateTo?: string,    // YYYY-MM-DD
+  minDurationSeconds: number = MIN_CALL_DURATION_SECONDS,  // umbral configurable (Radar usa 0 y filtra aparte)
 ): Promise<CallRow[]> {
   const rows = await readSheet(spreadsheetId, sheetName);
   if (rows.length < 2) return [];
@@ -271,7 +272,7 @@ export async function getCallData(
     const duracionSeg    = rawDuracion !== null ? Number(rawDuracion) : NaN;
     const duracionKnown  = idx.duracion >= 0 && !isNaN(duracionSeg);
 
-    if (duracionKnown && duracionSeg < MIN_CALL_DURATION_SECONDS) {
+    if (duracionKnown && duracionSeg < minDurationSeconds) {
       discardedByDuration++;
       continue;
     }

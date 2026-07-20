@@ -30,6 +30,7 @@ export interface Schedule {
   timezone:      string;
   report_type:   'selected' | 'general';
   include_general: boolean;
+  include_radar?:  boolean;   // genera además el Radar de Objeciones (solo frecuencia mensual)
   advisors:      'all' | string[];
   notify_only?:   boolean;   // skip report, just send Chat message
   chat_space_id?: string;    // Google Chat space, e.g. "spaces/AAAA"

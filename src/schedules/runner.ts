@@ -265,7 +265,9 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   const reportType = schedule.report_type === 'general' ? 'general'
     : (schedule.include_general ? 'general' : 'selected');
 
-  const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo);
+  // El Radar de Objeciones es MENSUAL: solo se propaga en automatizaciones mensuales.
+  const includeRadar = schedule.include_radar === true && schedule.frequency === 'monthly';
+  const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo, includeRadar);
   await markRan(schedule.id);
   if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
 
@@ -289,6 +291,16 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
         ?? done?.results?.individual?.[0]?.driveUrl
         ?? '';
       await notifyChat(schedule, client.name, periodLabel, url);
+
+      // Si se generó el Radar de Objeciones (archivo aparte), avisa su link también.
+      const radarUrl = done?.results?.radar?.driveUrl;
+      if (radarUrl) {
+        try {
+          await sendChatMessage(schedule.chat_space_id, `📡 *Radar de Objeciones*: ${client.name} | ${periodLabel}\n🔗 ${radarUrl}`);
+        } catch (e) {
+          console.error(`[scheduler] Radar chat notification failed for '${schedule.name}':`, (e as Error).message);
+        }
+      }
     })
     .catch(async err => {
       console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message);

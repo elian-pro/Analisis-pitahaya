@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Radar de Objeciones · <%= it.client_name %> · <%= it.period_label %></title>
+<style>
+  <%~ it._fontsCss %>
+
+  :root {
+    --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F9FAFB;
+    --text: #0A0A0A; --text-muted: #737373; --accent: #0A0A0A;
+    --ink-100: #F1F1F1; --ink-200: #E5E5E5; --ink-700: #262626;
+    --border: rgba(10,10,10,.10); --border-strong: rgba(10,10,10,.14);
+    --r-card: 12px; --r-chip: 6px; --r-control: 8px;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    --pos: #1E6B30;      --pos-bg: #E9F3EC;   --pos-bd: #C4E2CD;
+    --danger: #B4231C;   --danger-bg: #FBEBEA; --danger-bd: #F0CFCD;
+    --warn: #8A6300;     --warn-bg: #FBF3DA;   --warn-bd: #ECDDA8;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm 0 16mm 0;
+    @bottom-right { content: counter(page) " / " counter(pages); font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: #9a9a9a; padding: 0 18mm 0 0; }
+    @bottom-left  { content: "ZEBRA · Inteligencia Comercial"; font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: .12em; color: #b4b4b4; padding: 0 0 0 18mm; }
+  }
+  @page :first { margin-top: 0; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: var(--sans); font-size: 10pt; color: var(--text); margin: 0; line-height: 1.5; orphans: 3; widows: 3; font-feature-settings: 'cv05' 1, 'ss01' 1; }
+
+  .eyebrow { font-family: var(--mono); font-size: 7.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: .2em; color: var(--text-muted); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ── Membrete ─────────────────────────────────────────────────────────────── */
+  .membrete { position: relative; overflow: hidden; background: var(--text); color: #fff; padding: 20mm 18mm 14mm 18mm; page-break-after: avoid; isolation: isolate; }
+  .membrete .motif { position: absolute; inset: 0 0 0 auto; width: 42%; height: 100%; background-image: url("data:image/png;base64,<%= it._motifB64 %>"); background-size: cover; background-position: right center; opacity: .10; z-index: -1; }
+  .membrete img.logo { height: 22pt; display: block; margin: 0 0 12pt -1pt; }
+  .membrete .eyebrow { color: rgba(255,255,255,.62); }
+  .membrete .titulo { font-size: 21pt; font-weight: 600; letter-spacing: -.02em; margin: 14pt 0 2pt 0; }
+  .membrete .sub { font-size: 9.5pt; color: rgba(255,255,255,.72); font-family: var(--mono); letter-spacing: .02em; }
+  .membrete .meta { margin-top: 16pt; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10pt; display: flex; gap: 28pt; font-size: 8pt; color: rgba(255,255,255,.6); }
+  .membrete .meta b { color: #fff; font-weight: 600; }
+
+  main { padding: 9mm 18mm 6mm 18mm; }
+  section { margin-top: 15pt; }
+  section > .eyebrow { display: block; margin-bottom: 7pt; }
+  h2.title { font-size: 12.5pt; font-weight: 600; letter-spacing: -.01em; margin: 0 0 7pt 0; page-break-after: avoid; }
+
+  /* ── KPIs + resumen ───────────────────────────────────────────────────────── */
+  .resumen { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 13pt 15pt; page-break-inside: avoid; }
+  .resumen .eyebrow { display: block; margin-bottom: 8pt; }
+  .resumen p { margin: 0 0 11pt 0; font-size: 9.5pt; line-height: 1.6; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; }
+  .kpi { border: 1px solid var(--border); border-radius: var(--r-control); padding: 9pt 10pt; }
+  .kpi .label { display: block; font-family: var(--mono); font-size: 6.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-bottom: 5pt; }
+  .kpi .value { font-family: var(--mono); font-weight: 700; font-size: 17pt; letter-spacing: -.02em; line-height: 1; }
+  .kpi.crit .value { color: var(--danger); }
+
+  /* ── Tablas ──────────────────────────────────────────────────────────────── */
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  thead { display: table-header-group; }
+  th { background: var(--text); color: #fff; text-align: left; vertical-align: middle; font-family: var(--mono); font-weight: 500; font-size: 7pt; text-transform: uppercase; letter-spacing: .09em; padding: 7pt 9pt; }
+  td { padding: 7pt 9pt; border-top: 1px solid var(--border); vertical-align: middle; line-height: 1.45; }
+  tbody tr:nth-child(even) td { background: var(--surface-2); }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+
+  /* ── Barra de frecuencia ──────────────────────────────────────────────────── */
+  .freq { display: flex; align-items: center; gap: 6pt; }
+  .freq .n { font-family: var(--mono); font-weight: 700; font-size: 9pt; min-width: 14pt; }
+  .freq .track { flex: 1; height: 5pt; background: var(--ink-100); border-radius: 999px; overflow: hidden; min-width: 34pt; }
+  .freq .fill { height: 100%; background: var(--text); border-radius: 999px; }
+
+  .delta { font-family: var(--mono); font-size: 8.5pt; }
+  .delta.up { color: var(--text); } .delta.down { color: var(--text); } .delta.flat { color: var(--text-muted); }
+  .badge-nueva { font-family: var(--mono); font-size: 6.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border: 1px solid var(--border-strong); border-radius: var(--r-chip); padding: 1pt 5pt; }
+
+  /* ── Chips de evaluación (semáforo) y prioridad (monocromática) ───────────── */
+  .eval { display: inline-block; font-family: var(--mono); font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2pt 7pt; border-radius: var(--r-chip); white-space: nowrap; border: 1px solid; }
+  .eval-bien      { background: var(--pos-bg);    color: var(--pos);    border-color: var(--pos-bd); }
+  .eval-mejorable { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn-bd); }
+  .eval-critico   { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2pt 8pt; border-radius: var(--r-chip); white-space: nowrap; }
+  .pill.alta  { background: var(--text); color: #fff; border: 1px solid var(--text); }
+  .pill.media { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+  .pill.baja  { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+
+  /* ── Detalle por pregunta ─────────────────────────────────────────────────── */
+  .qcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 11pt 13pt; margin-bottom: 8pt; page-break-inside: avoid; }
+  .qcard .head { display: flex; align-items: baseline; justify-content: space-between; gap: 10pt; margin-bottom: 5pt; }
+  .qcard .q { font-weight: 600; font-size: 10pt; }
+  .qcard .lbl { font-family: var(--mono); font-size: 6.5pt; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); }
+  .qcard p { margin: 3pt 0 0 0; font-size: 8.7pt; line-height: 1.5; }
+  .qcard .cita { margin-top: 6pt; padding: 6pt 10pt; background: var(--surface-2); border-left: 2px solid var(--border-strong); border-radius: 0 var(--r-control) var(--r-control) 0; font-style: italic; font-size: 8.5pt; color: #333; }
+  .qcard .cita .ref { font-style: normal; font-family: var(--mono); font-size: 7pt; color: var(--text-muted); }
+
+  /* ── Paneles ──────────────────────────────────────────────────────────────── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; page-break-inside: avoid; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12pt 13pt; }
+  .panel .eyebrow { display: block; margin-bottom: 9pt; }
+  .panel ul { list-style: none; margin: 0; padding: 0; }
+  .panel li { position: relative; padding-left: 13pt; margin-bottom: 8pt; font-size: 8.7pt; line-height: 1.5; }
+  .panel li:last-child { margin-bottom: 0; }
+  .panel li::before { content: ""; position: absolute; left: 0; top: 5pt; width: 6pt; height: 6pt; border-radius: 1.5px; }
+  .panel li b { font-weight: 600; }
+  .panel.pos { border-top: 2px solid var(--pos); }
+  .panel.pos .eyebrow { color: var(--pos); }
+  .panel.pos li::before { background: var(--pos); }
+  .panel.warn { border-top: 2px solid var(--warn); }
+  .panel.warn .eyebrow { color: var(--warn); }
+  .panel.warn li::before { background: var(--warn); }
+  .panel.neutral li::before { background: var(--text); }
+
+  /* ── Comparativo / línea base ─────────────────────────────────────────────── */
+  .cmp-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; margin-top: 9pt; page-break-inside: avoid; }
+  .cmp { border: 1px solid var(--border); border-radius: var(--r-control); padding: 10pt 11pt; }
+  .cmp .eyebrow { display: block; margin-bottom: 7pt; }
+  .cmp ul { list-style: none; margin: 0; padding: 0; }
+  .cmp li { font-size: 8.5pt; margin-bottom: 4pt; display: flex; justify-content: space-between; gap: 6pt; }
+  .cmp li .d { font-family: var(--mono); font-size: 8pt; color: var(--text-muted); }
+  .cmp li:last-child { margin-bottom: 0; }
+  .baseline { background: var(--surface); border: 1px solid var(--border); border-left: 2px solid var(--text); border-radius: var(--r-card); padding: 12pt 14pt; font-size: 9pt; color: var(--text-muted); }
+  .baseline b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<%
+const evalClass = (e) => e === 'bien' ? 'eval-bien' : e === 'mejorable' ? 'eval-mejorable' : 'eval-critico';
+const maxFreq = Math.max(1, ...it.preguntas.map(q => q.frecuencia));
+const criticas = it.preguntas.filter(q => q.evaluacion === 'critico').length;
+// Mapa de deltas por categoria_id (para la columna "vs anterior")
+const deltaBySlug = {};
+if (it.comparativo) { for (const d of it.comparativo.deltas) deltaBySlug[d.categoria_id] = d; }
+const nuevasSet = {};
+if (it.comparativo) { for (const s of it.comparativo.nuevas) nuevasSet[s] = true; }
+const fmtDelta = (n) => (n > 0 ? '+' : '') + n;
+%>
+
+<header class="membrete">
+  <span class="motif"></span>
+  <% if (it._logoB64) { %>
+    <img class="logo" src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA">
+  <% } %>
+  <span class="eyebrow">Radar de Objeciones · <%= it.period_label %></span>
+  <div class="titulo"><%= it.client_name %></div>
+  <div class="sub"><%= it.date_from %> a <%= it.date_to %> · <%= it.analyzed_calls %> llamadas analizadas</div>
+  <div class="meta">
+    <div><b>Llamadas</b> · <%= it.analyzed_calls %> de <%= it.total_calls %></div>
+    <div><b>Preguntas</b> · <%= it.preguntas.length %></div>
+    <div><b>Generado</b> · <%= it.generated_date %></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Resumen ejecutivo + KPIs ──────────────────────────────────────────── -->
+  <section style="margin-top:0;">
+    <div class="resumen">
+      <span class="eyebrow">Resumen ejecutivo</span>
+      <p><%= it.executive_summary %></p>
+      <div class="kpis">
+        <div class="kpi"><span class="label">Llamadas</span><div class="value"><%= it.analyzed_calls %></div></div>
+        <div class="kpi"><span class="label">Preguntas</span><div class="value"><%= it.preguntas.length %></div></div>
+        <div class="kpi crit"><span class="label">Críticas</span><div class="value"><%= criticas %></div></div>
+        <div class="kpi"><span class="label">Nuevas vs anterior</span><div class="value"><%= it.comparativo ? it.comparativo.nuevas.length : '—' %></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tabla de preguntas frecuentes ─────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Qué preguntan los prospectos</span>
+    <h2 class="title">Preguntas más frecuentes</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:5%;">#</th>
+            <th>Pregunta</th>
+            <th style="width:24%;">Frecuencia</th>
+            <th style="width:13%;">vs anterior</th>
+            <th style="width:15%;">Evaluación</th>
+          </tr>
+        </thead>
+        <tbody>
+        <% for (let i = 0; i < it.preguntas.length; i++) { const q = it.preguntas[i]; const d = deltaBySlug[q.categoria_id]; %>
+          <tr>
+            <td class="num"><b><%= i + 1 %></b></td>
+            <td><b><%= q.pregunta_canonica %></b></td>
+            <td>
+              <div class="freq">
+                <span class="n"><%= q.frecuencia %></span>
+                <span class="track"><span class="fill" style="width: <%= Math.round(q.frecuencia / maxFreq * 100) %>%;"></span></span>
+              </div>
+            </td>
+            <td>
+              <% if (d) { %>
+                <span class="delta <%= d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat' %>"><%= d.delta > 0 ? '↑' : d.delta < 0 ? '↓' : '→' %> <%= fmtDelta(d.delta) %></span>
+              <% } else if (nuevasSet[q.categoria_id]) { %>
+                <span class="badge-nueva">nueva</span>
+              <% } else { %>
+                <span class="delta flat">—</span>
+              <% } %>
+            </td>
+            <td><span class="eval <%= evalClass(q.evaluacion) %>"><%= q.evaluacion %></span></td>
+          </tr>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Detalle por pregunta ──────────────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Cómo responde el equipo</span>
+    <h2 class="title">Detalle por pregunta</h2>
+    <% for (let i = 0; i < it.preguntas.length; i++) { const q = it.preguntas[i]; %>
+      <div class="qcard">
+        <div class="head">
+          <span class="q"><%= i + 1 %>. <%= q.pregunta_canonica %></span>
+          <span class="eval <%= evalClass(q.evaluacion) %>"><%= q.evaluacion %></span>
+        </div>
+        <p><span class="lbl">Respuesta típica ·</span> <%= q.respuesta_tipica %></p>
+        <p><span class="lbl">Observación ·</span> <%= q.observacion %></p>
+        <% if (q.cita) { %>
+          <div class="cita">“<%= q.cita %>” <span class="ref">llamada [<%= q.llamadas[0] %>]</span></div>
+        <% } %>
+      </div>
+    <% } %>
+  </section>
+
+  <!-- ── Patrones ──────────────────────────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Patrones detectados</span>
+    <div class="grid-2">
+      <div class="panel neutral">
+        <span class="eyebrow" style="color:var(--text);">Prospectos</span>
+        <ul>
+        <% for (const p of it.patrones_prospectos) { %>
+          <li><b><%= p.titulo %></b>: <%= p.descripcion %></li>
+        <% } %>
+        <% if (it.patrones_prospectos.length === 0) { %><li style="color:var(--text-muted);">Sin patrones destacados.</li><% } %>
+        </ul>
+      </div>
+      <div class="panel">
+        <span class="eyebrow">Equipo comercial</span>
+        <div class="panel pos" style="border:none;padding:0;margin-bottom:10pt;">
+          <span class="eyebrow">Fortalezas</span>
+          <ul>
+          <% for (const f of it.patrones_equipo.fortalezas) { %><li><b><%= f.titulo %></b>: <%= f.descripcion %></li><% } %>
+          <% if (it.patrones_equipo.fortalezas.length === 0) { %><li style="color:var(--text-muted);">—</li><% } %>
+          </ul>
+        </div>
+        <div class="panel warn" style="border:none;padding:0;">
+          <span class="eyebrow">Áreas de mejora</span>
+          <ul>
+          <% for (const a of it.patrones_equipo.areas_mejora) { %><li><b><%= a.titulo %></b>: <%= a.descripcion %></li><% } %>
+          <% if (it.patrones_equipo.areas_mejora.length === 0) { %><li style="color:var(--text-muted);">—</li><% } %>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Comparativo vs periodo anterior ───────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Evolución</span>
+    <% if (it.is_first_period || !it.comparativo) { %>
+      <h2 class="title">Línea base</h2>
+      <div class="baseline">Este es el <b>primer periodo de evaluación</b> del Radar para <%= it.client_name %>. No hay un periodo anterior con el cual comparar, así que estos datos establecen la <b>línea base</b>. El próximo periodo ya mostrará la evolución de cada pregunta.</div>
+    <% } else { %>
+      <h2 class="title">Comparativo vs <%= it.comparativo.prev_period_label %></h2>
+      <% if (it.analisis_comparativo) { %>
+        <div class="resumen" style="margin-bottom:9pt;"><span class="eyebrow">Análisis</span><p style="margin:0;"><%= it.analisis_comparativo %></p></div>
+      <% } %>
+      <%
+        const subieron = it.comparativo.deltas.filter(d => d.delta > 0).sort((a,b)=>b.delta-a.delta);
+        const bajaron  = it.comparativo.deltas.filter(d => d.delta < 0).sort((a,b)=>a.delta-b.delta);
+      %>
+      <div class="cmp-cols">
+        <div class="cmp">
+          <span class="eyebrow">Subieron</span>
+          <ul>
+          <% for (const d of subieron) { %><li><span><%= d.pregunta %></span><span class="d">+<%= d.delta %></span></li><% } %>
+          <% if (subieron.length === 0) { %><li><span style="color:var(--text-muted);">Ninguna</span></li><% } %>
+          </ul>
+        </div>
+        <div class="cmp">
+          <span class="eyebrow">Bajaron</span>
+          <ul>
+          <% for (const d of bajaron) { %><li><span><%= d.pregunta %></span><span class="d"><%= d.delta %></span></li><% } %>
+          <% if (bajaron.length === 0) { %><li><span style="color:var(--text-muted);">Ninguna</span></li><% } %>
+          </ul>
+        </div>
+        <div class="cmp">
+          <span class="eyebrow">Nuevas / se fueron</span>
+          <ul>
+          <% for (const s of it.comparativo.nuevas) { %><li><span><%= s %></span><span class="d">nueva</span></li><% } %>
+          <% for (const s of it.comparativo.desaparecidas) { %><li><span style="color:var(--text-muted);"><%= s %></span><span class="d">se fue</span></li><% } %>
+          <% if (it.comparativo.nuevas.length === 0 && it.comparativo.desaparecidas.length === 0) { %><li><span style="color:var(--text-muted);">Sin cambios</span></li><% } %>
+          </ul>
+        </div>
+      </div>
+    <% } %>
+  </section>
+
+  <!-- ── Recomendaciones ───────────────────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Plan de acción</span>
+    <h2 class="title">Recomendaciones</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:10%;">Prioridad</th><th style="width:26%;">Área</th><th>Acción</th></tr></thead>
+        <tbody>
+        <% for (const r of it.recomendaciones) { %>
+          <tr>
+            <td><span class="pill <%= r.prioridad %>"><%= r.prioridad %></span></td>
+            <td><b><%= r.titulo %></b></td>
+            <td><%= r.descripcion %></td>
+          </tr>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -309,6 +309,17 @@
     .form-textarea{font-family:'Inter',monospace,sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--fg);width:100%;resize:vertical;line-height:1.55;}
     .form-textarea:focus{outline:none;border-color:var(--accent);}
     .form-hint{font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:0.04em;line-height:1.5;}
+    /* ── Custom file picker (reemplaza el input file default) ── */
+    .file-picker{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
+    .file-picker input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);}
+    .file-picker-btn{display:inline-flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:500;color:var(--fg);background:var(--surface2);border:0.5px solid var(--border2);border-radius:8px;padding:8px 14px;cursor:pointer;transition:border-color .15s,background .15s;white-space:nowrap;}
+    .file-picker-btn:hover{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 8%, var(--surface2));}
+    .file-picker-btn i{font-size:15px;color:var(--accent);transform:rotate(-45deg);}
+    .file-picker-name{font-size:12px;color:var(--muted);letter-spacing:0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+    .file-picker-name.has-file{color:var(--fg);font-weight:500;}
+    .file-picker-clear{border:none;background:none;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;display:none;}
+    .file-picker-clear:hover{color:var(--danger);}
+    .file-picker-name.has-file + .file-picker-clear{display:inline;}
     .form-note{padding:9px 12px;background:color-mix(in srgb, var(--accent) 7%, var(--surface));border:0.5px solid color-mix(in srgb, var(--accent) 28%, transparent);border-radius:7px;font-size:11px;color:var(--muted);line-height:1.5;}
     .form-toggle-row{display:flex;border:0.5px solid var(--border2);border-radius:100px;overflow:hidden;height:34px;width:fit-content;}
     .form-toggle-btn{padding:0 18px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:400;letter-spacing:0.12em;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap;}
@@ -367,10 +378,10 @@
 <main class="main">
   <nav class="app-nav">
     <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')"><i class="ti ti-chart-bar"></i>REPORTES</button>
-    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
-    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
-    <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
     <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')"><i class="ti ti-radar"></i>RADAR</button>
+    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
+    <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
+    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
   </nav>
   <div id="tab-reports" class="tab-panel active">
   <div class="config-row">
@@ -664,7 +675,12 @@
       <p class="card-desc">Sube un Markdown con las transcripciones ya compiladas. Funciona con o sin cliente en la base.</p>
       <div class="form-field" style="margin-bottom:12px;">
         <label>Archivo .md *</label>
-        <input type="file" id="radar-md-file" accept=".md,text/markdown" class="form-control">
+        <div class="file-picker">
+          <input type="file" id="radar-md-file" accept=".md,text/markdown" onchange="_fpUpdate(this)">
+          <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-md-file')"><i class="ti ti-paperclip"></i> Adjuntar .md</button>
+          <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
+          <button type="button" class="file-picker-clear" onclick="_fpClear('radar-md-file')" title="Quitar archivo">✕</button>
+        </div>
       </div>
       <div class="form-grid-2">
         <div class="form-field">
@@ -690,8 +706,13 @@
       </div>
       <div class="form-field" style="margin-top:12px;">
         <label>Sidecar del periodo anterior (.json, opcional)</label>
-        <input type="file" id="radar-prev-sidecar" accept=".json,application/json" class="form-control">
-        <div class="form-hint" style="margin-top:4px;">Adjúntalo para habilitar el comparativo vs. el mes anterior.</div>
+        <div class="file-picker">
+          <input type="file" id="radar-prev-sidecar" accept=".json,application/json" onchange="_fpUpdate(this)">
+          <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-prev-sidecar')"><i class="ti ti-paperclip"></i> Adjuntar .json</button>
+          <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
+          <button type="button" class="file-picker-clear" onclick="_fpClear('radar-prev-sidecar')" title="Quitar archivo">✕</button>
+        </div>
+        <div class="form-hint" style="margin-top:6px;">Adjúntalo para habilitar el comparativo vs. el periodo anterior.</div>
       </div>
       <button class="btn-sm btn-sm-green" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:14px;">Generar desde archivo</button>
       <div id="radar-upload-status" style="margin-top:12px;"></div>
@@ -883,29 +904,51 @@
         </div>
       </div>
 
-      <!-- Modo -->
+      <!-- Tipo de Automatización -->
       <div class="form-section">
-        <div class="form-section-title">Modo</div>
+        <div class="form-section-title">Tipo de automatización</div>
         <div class="form-group">
           <div class="form-toggle-row">
-            <button class="form-toggle-btn active" id="sf-mode-report" onclick="setScheduleMode('report')">Generar reporte</button>
-            <button class="form-toggle-btn" id="sf-mode-notify" onclick="setScheduleMode('notify_only')">Solo mensaje</button>
+            <button class="form-toggle-btn active" id="sf-type-report"  onclick="setScheduleType('report')">Reporte</button>
+            <button class="form-toggle-btn"        id="sf-type-message" onclick="setScheduleType('message')">Mensaje</button>
           </div>
-          <div class="form-hint" style="margin-top:6px;" id="sf-mode-hint">Genera el análisis con IA y sube el reporte a Drive.</div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-type-hint">Genera un reporte con IA y lo sube a Drive.</div>
+        </div>
+      </div>
+
+      <!-- Tipo de reporte (gate): solo visible cuando el tipo es "Reporte" -->
+      <div class="form-section" id="sf-kind-section">
+        <div class="form-section-title">Tipo de reporte</div>
+        <div class="form-group">
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn" id="sf-kind-analisis" onclick="setScheduleReportKind('analisis')">Análisis de Llamadas</button>
+            <button class="form-toggle-btn" id="sf-kind-radar"    onclick="setScheduleReportKind('radar')">Radar de Objeciones</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-kind-hint">Elige el tipo de reporte para continuar.</div>
         </div>
       </div>
 
       <!-- Frecuencia -->
-      <div class="form-section">
+      <div class="form-section" id="sf-freq-section">
         <div class="form-section-title">Frecuencia</div>
         <div class="form-group">
           <label class="form-label">Tipo</label>
-          <div class="form-toggle-row">
-            <button class="form-toggle-btn active" id="sf-freq-weekly"  onclick="setScheduleFreq('weekly')">Semanal</button>
-            <button class="form-toggle-btn"        id="sf-freq-monthly" onclick="setScheduleFreq('monthly')">Mensual</button>
-            <button class="form-toggle-btn"        id="sf-freq-once"    onclick="setScheduleFreq('once')">Una sola vez</button>
+          <div class="form-toggle-row" style="flex-wrap:wrap;">
+            <button class="form-toggle-btn"        id="sf-freq-daily"    onclick="setScheduleFreq('daily')">Diaria</button>
+            <button class="form-toggle-btn active" id="sf-freq-weekly"   onclick="setScheduleFreq('weekly')">Semanal</button>
+            <button class="form-toggle-btn"        id="sf-freq-biweekly" onclick="setScheduleFreq('biweekly')">Quincenal</button>
+            <button class="form-toggle-btn"        id="sf-freq-monthly"  onclick="setScheduleFreq('monthly')">Mensual</button>
+            <button class="form-toggle-btn"        id="sf-freq-once"     onclick="setScheduleFreq('once')">Una sola vez</button>
           </div>
           <div class="form-hint" style="margin-top:6px;" id="sf-freq-hint">Analiza la semana anterior (lun–dom) en el día y hora indicados.</div>
+        </div>
+        <!-- Diaria -->
+        <div id="sf-daily-group" class="form-group" style="display:none;">
+          <div class="form-note">Se ejecutará todos los días a la hora indicada.</div>
+        </div>
+        <!-- Quincenal -->
+        <div id="sf-biweekly-group" class="form-group" style="display:none;">
+          <div class="form-note">Corre dos veces al mes: el día 1 (analiza la 2ª quincena del mes anterior) y el día 16 (analiza la 1ª quincena del mes en curso).</div>
         </div>
         <!-- Semanal -->
         <div id="sf-weekly-group" class="form-group">
@@ -943,11 +986,13 @@
           </div>
           <div class="form-hint">La automatización se ejecutará una vez y luego se desactivará automáticamente.</div>
 
-          <!-- Modalidad del reporte (solo 'una sola vez') -->
-          <label class="form-label" style="margin-top:14px;">Modalidad del reporte *</label>
-          <div class="form-toggle-row">
-            <button type="button" class="form-toggle-btn active" id="sf-once-weekly"  onclick="setOnceMode('weekly')">Semanal</button>
-            <button type="button" class="form-toggle-btn"        id="sf-once-monthly" onclick="setOnceMode('monthly')">Mensual</button>
+          <!-- Modalidad del reporte (solo Análisis 'una sola vez') -->
+          <div id="sf-once-modality">
+            <label class="form-label" style="margin-top:14px;">Modalidad del reporte *</label>
+            <div class="form-toggle-row">
+              <button type="button" class="form-toggle-btn active" id="sf-once-weekly"  onclick="setOnceMode('weekly')">Semanal</button>
+              <button type="button" class="form-toggle-btn"        id="sf-once-monthly" onclick="setOnceMode('monthly')">Mensual</button>
+            </div>
           </div>
 
           <!-- Semanal: semana a analizar -->
@@ -1009,9 +1054,9 @@
         </div>
       </div>
 
-      <!-- Tipo de reporte (oculto en modo Solo mensaje) -->
+      <!-- Configuración del Análisis de Llamadas (solo tipo Reporte → Análisis) -->
       <div class="form-section" id="sf-report-section">
-        <div class="form-section-title">Tipo de reporte</div>
+        <div class="form-section-title">Configuración del análisis</div>
         <div class="form-group">
           <label class="form-label">Asesores a incluir</label>
           <div class="form-toggle-row">
@@ -1027,19 +1072,11 @@
             <button class="form-toggle-btn"        id="sf-gen-no"  onclick="setScheduleGeneral(false)">Solo reportes individuales</button>
           </div>
         </div>
-        <div class="form-group" id="sf-radar-group">
-          <label class="form-label">Radar de Objeciones</label>
-          <div class="form-toggle-row">
-            <button type="button" class="form-toggle-btn" id="sf-radar-yes" onclick="setScheduleRadar(true)">Incluir Radar</button>
-            <button type="button" class="form-toggle-btn active" id="sf-radar-no"  onclick="setScheduleRadar(false)">Sin Radar</button>
-          </div>
-          <div class="form-hint" style="margin-top:6px;" id="sf-radar-hint">El Radar es mensual: solo disponible en automatizaciones con frecuencia mensual.</div>
-        </div>
       </div>
 
-      <!-- Notificación Google Chat -->
-      <div class="form-section">
-        <div class="form-section-title">Notificación por Google Chat</div>
+      <!-- Selección de Espacio (Google Chat) -->
+      <div class="form-section" id="sf-space-section">
+        <div class="form-section-title">Selección de espacio</div>
         <div class="form-group">
           <div class="form-toggle-row">
             <button class="form-toggle-btn active" id="sf-chat-no"  onclick="setScheduleChat(false)">Sin notificación</button>
@@ -1064,7 +1101,7 @@
       </div>
 
       <!-- Notificación de errores -->
-      <div class="form-section">
+      <div class="form-section" id="sf-err-section">
         <div class="form-section-title">Notificación de errores</div>
         <div class="form-group">
           <div class="form-toggle-row">
@@ -1085,7 +1122,7 @@
       </div>
 
       <!-- Estado -->
-      <div class="form-section">
+      <div class="form-section" id="sf-state-section">
         <div class="form-section-title">Estado</div>
         <div class="form-group">
           <div class="form-toggle-row">
@@ -2804,7 +2841,7 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','dashboard','settings','automation','radar'];
+  const _APP_TABS = ['reports','radar','dashboard','automation','settings'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -2819,6 +2856,21 @@
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
+  }
+
+  // ── File picker ad-hoc (botón + nombre de archivo) ─────────────────────────
+  function _fpOpen(id){ document.getElementById(id).click(); }
+  function _fpUpdate(input){
+    const name = input.parentElement.querySelector('.file-picker-name');
+    if (!name) return;
+    const f = input.files && input.files[0];
+    if (f) { name.textContent = f.name; name.classList.add('has-file'); }
+    else   { name.textContent = name.dataset.empty || 'Ningún archivo seleccionado'; name.classList.remove('has-file'); }
+  }
+  function _fpClear(id){
+    const input = document.getElementById(id);
+    input.value = '';
+    _fpUpdate(input);
   }
 
   // ── Radar de Objeciones ────────────────────────────────────────────────────
@@ -3417,15 +3469,19 @@
   const _DOW = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
   function _describeSchedule(s) {
-    const freq = s.frequency === 'weekly'  ? `Cada ${_DOW[s.day_of_week ?? 1]}`
-               : s.frequency === 'once'    ? `Una vez el ${s.run_date || '—'}`
-               :                             `Día ${s.day_of_month ?? 1} de cada mes`;
+    const freq = s.frequency === 'weekly'   ? `Cada ${_DOW[s.day_of_week ?? 1]}`
+               : s.frequency === 'once'     ? `Una vez el ${s.run_date || '—'}`
+               : s.frequency === 'daily'    ? 'Todos los días'
+               : s.frequency === 'biweekly' ? 'Quincenal (días 1 y 16)'
+               :                              `Día ${s.day_of_month ?? 1} de cada mes`;
     const h = String(s.hour).padStart(2,'0');
     const m = String(s.minute ?? 0).padStart(2,'0');
     const last  = s.last_run ? `Último: ${s.last_run.slice(0,10)}` : 'Nunca ejecutado';
-    const mode  = s.notify_only ? ' · 💬 Solo mensaje' : '';
+    const kind  = s.notify_only ? ' · 💬 Mensaje'
+                : s.report_kind === 'radar' ? ' · 📡 Radar de Objeciones'
+                : ' · 📊 Análisis de Llamadas';
     const chat  = s.chat_space_id ? ' · Chat ✓' : '';
-    return `${freq} a las ${h}:${m} · ${last}${mode}${chat}`;
+    return `${freq} a las ${h}:${m} · ${last}${kind}${chat}`;
   }
 
   async function renderScheduleList() {
@@ -3492,48 +3548,110 @@
   let _scheduleFreq      = 'weekly';
   let _scheduleAdvisors  = 'all';
   let _scheduleGeneral   = true;
-  let _scheduleRadar     = false;
   let _scheduleEnabled   = true;
-  let _scheduleMode      = 'report';   // 'report' | 'notify_only'
+  let _scheduleType      = 'report';   // 'report' | 'message'  (message → notify_only)
+  let _scheduleReportKind = null;      // null | 'analisis' | 'radar'  (solo type='report')
   let _scheduleChat      = false;
 
   const _SF_FREQ_HINTS = {
-    weekly:  'Analiza la semana anterior (lun–dom) en el día y hora indicados.',
-    monthly: 'Analiza el mes anterior completo en el día y hora indicados.',
-    once:    'Se ejecutará una sola vez y luego se desactivará automáticamente.',
+    daily:    'Se ejecutará todos los días a la hora indicada.',
+    weekly:   'Analiza la semana anterior (lun–dom) en el día y hora indicados.',
+    biweekly: 'Corre el día 1 y el día 16 de cada mes; cada corrida analiza la quincena que acaba de cerrar.',
+    monthly:  'Analiza el mes anterior completo en el día y hora indicados.',
+    once:     'Se ejecutará una sola vez y luego se desactivará automáticamente.',
   };
+
+  const _show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
 
   function setScheduleFreq(f) {
     _scheduleFreq = f;
-    ['weekly','monthly','once'].forEach(k =>
+    ['daily','weekly','biweekly','monthly','once'].forEach(k =>
       document.getElementById('sf-freq-'+k).classList.toggle('active', k === f));
-    document.getElementById('sf-weekly-group').style.display  = f === 'weekly'  ? '' : 'none';
-    document.getElementById('sf-monthly-group').style.display = f === 'monthly' ? '' : 'none';
-    document.getElementById('sf-once-group').style.display    = f === 'once'    ? '' : 'none';
+    _show('sf-daily-group',    f === 'daily');
+    _show('sf-weekly-group',   f === 'weekly');
+    _show('sf-biweekly-group', f === 'biweekly');
+    _show('sf-monthly-group',  f === 'monthly');
+    _show('sf-once-group',     f === 'once');
     document.getElementById('sf-freq-hint').textContent = _SF_FREQ_HINTS[f] || '';
-    _updateRadarAvailability(f);
+    if (f === 'once') _applyOnceContext();
   }
 
-  // El Radar es mensual: el toggle solo se habilita en frecuencia mensual.
-  function _updateRadarAvailability(f) {
-    const monthly = f === 'monthly';
-    const yes = document.getElementById('sf-radar-yes');
-    const no  = document.getElementById('sf-radar-no');
-    const hint = document.getElementById('sf-radar-hint');
-    if (!yes || !no) return;
-    yes.disabled = !monthly;
-    yes.style.opacity = monthly ? '' : '.4';
-    yes.style.cursor  = monthly ? '' : 'not-allowed';
-    if (!monthly && _scheduleRadar) setScheduleRadar(false);   // fuerza off si deja de ser mensual
-    if (hint) hint.textContent = monthly
-      ? 'Genera además el Radar de Objeciones del mes, como archivo aparte en su carpeta de Drive.'
-      : 'El Radar es mensual: solo disponible en automatizaciones con frecuencia mensual.';
+  // Tipo de automatización: Reporte (genera PDF) | Mensaje (solo Chat).
+  function setScheduleType(t) {
+    _scheduleType = t;
+    document.getElementById('sf-type-report').classList.toggle('active',  t === 'report');
+    document.getElementById('sf-type-message').classList.toggle('active', t === 'message');
+    document.getElementById('sf-type-hint').textContent = t === 'report'
+      ? 'Genera un reporte con IA y lo sube a Drive.'
+      : 'Solo envía un mensaje a un espacio de Google Chat, sin generar ningún reporte.';
+    _applyScheduleVisibility();
   }
 
-  function setScheduleRadar(v) {
-    _scheduleRadar = v;
-    document.getElementById('sf-radar-yes').classList.toggle('active', v);
-    document.getElementById('sf-radar-no').classList.toggle('active', !v);
+  // Gate del tipo de reporte: Análisis de Llamadas | Radar de Objeciones.
+  function setScheduleReportKind(k) {
+    _scheduleReportKind = k;
+    document.getElementById('sf-kind-analisis').classList.toggle('active', k === 'analisis');
+    document.getElementById('sf-kind-radar').classList.toggle('active',    k === 'radar');
+    document.getElementById('sf-kind-hint').textContent = k === 'radar'
+      ? 'Radar de Objeciones: detecta preguntas y objeciones de los prospectos. Sin asesores ni reporte ejecutivo.'
+      : 'Análisis de Llamadas: reporte individual por asesor + reporte ejecutivo del equipo.';
+    _applyScheduleVisibility();
+  }
+
+  // Qué frecuencias admite cada contexto.
+  function _freqVisFor() {
+    if (_scheduleType === 'message')
+      return { daily:true,  weekly:true,  biweekly:false, monthly:true, once:true };
+    if (_scheduleReportKind === 'radar')
+      return { daily:false, weekly:false, biweekly:true,  monthly:true, once:true };
+    // Análisis de Llamadas
+    return   { daily:false, weekly:true,  biweekly:false, monthly:true, once:true };
+  }
+
+  // Muestra/oculta secciones según tipo de automatización + tipo de reporte.
+  function _applyScheduleVisibility() {
+    const isMsg = _scheduleType === 'message';
+    const resolved = isMsg || _scheduleReportKind !== null;   // ¿ya se puede mostrar el resto?
+
+    _show('sf-kind-section', !isMsg);                          // gate solo para "Reporte"
+    _show('sf-freq-section',  resolved);
+    _show('sf-space-section', resolved);
+    _show('sf-err-section',   resolved);
+    _show('sf-state-section', resolved);
+    _show('sf-report-section', !isMsg && _scheduleReportKind === 'analisis');
+
+    if (!resolved) return;
+
+    const vis = _freqVisFor();
+    ['daily','weekly','biweekly','monthly','once'].forEach(k => _show('sf-freq-'+k, vis[k]));
+
+    // Si la frecuencia actual ya no aplica en este contexto, elige un default válido.
+    if (!vis[_scheduleFreq]) {
+      const fallback = isMsg ? 'weekly' : (_scheduleReportKind === 'radar' ? 'monthly' : 'weekly');
+      setScheduleFreq(fallback);
+    } else if (_scheduleFreq === 'once') {
+      _applyOnceContext();
+    }
+  }
+
+  // Contexto del bloque "una sola vez": la modalidad Semanal/Mensual solo aplica
+  // al Análisis. El Radar fuerza modalidad mensual (elige un mes) y el Mensaje no
+  // analiza período (solo necesita la fecha de ejecución).
+  function _applyOnceContext() {
+    if (_scheduleFreq !== 'once') return;
+    const isMsg  = _scheduleType === 'message';
+    const isRadar = !isMsg && _scheduleReportKind === 'radar';
+    if (isMsg) {
+      _show('sf-once-modality', false);
+      _show('sf-once-week-group', false);
+      _show('sf-once-month-group', false);
+    } else if (isRadar) {
+      setOnceMode('monthly');
+      _show('sf-once-modality', false);   // fijo en mensual: elige el mes a analizar
+    } else {
+      _show('sf-once-modality', true);
+      setOnceMode(_onceMode);
+    }
   }
 
   // ── Run-date inline calendar ───────────────────────────────────────────────
@@ -3783,17 +3901,6 @@
     }
   });
 
-  function setScheduleMode(m) {
-    _scheduleMode = m;
-    document.getElementById('sf-mode-report').classList.toggle('active', m === 'report');
-    document.getElementById('sf-mode-notify').classList.toggle('active', m === 'notify_only');
-    document.getElementById('sf-report-section').style.display = m === 'report' ? '' : 'none';
-    document.getElementById('sf-mode-hint').textContent = m === 'report'
-      ? 'Genera el análisis con IA y sube el reporte a Drive.'
-      : 'Solo envía un mensaje a Google Chat sin generar ningún reporte.';
-    // Chat section is always visible regardless of mode
-  }
-
   function setScheduleAdvisors(v) {
     _scheduleAdvisors = v;
     document.getElementById('sf-advisors-all').classList.toggle('active', v === 'all');
@@ -3917,10 +4024,14 @@
     document.getElementById('sf-chat-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
     clientSel.value = '';
     setScheduleFreq('weekly');
-    setScheduleMode('report');
     setScheduleAdvisors('all');
     setScheduleGeneral(true);
-    setScheduleRadar(false);
+    // Tipo de automatización = Reporte, sin tipo de reporte elegido (gate cerrado)
+    _scheduleReportKind = null;
+    document.getElementById('sf-kind-analisis').classList.remove('active');
+    document.getElementById('sf-kind-radar').classList.remove('active');
+    document.getElementById('sf-kind-hint').textContent = 'Elige el tipo de reporte para continuar.';
+    setScheduleType('report');
     setScheduleEnabled(true);
     // Reset chat toggle without loading spaces
     _scheduleChat = false;
@@ -3963,11 +4074,11 @@
         }
         document.getElementById('sf-chat-message').value  = s.chat_message || '';
         clientSel.value = s.client_id;
+        setScheduleType(s.notify_only ? 'message' : 'report');
+        if (!s.notify_only) setScheduleReportKind(s.report_kind || 'analisis');
         setScheduleFreq(s.frequency || 'weekly');
-        setScheduleMode(s.notify_only ? 'notify_only' : 'report');
         setScheduleAdvisors(s.advisors === 'all' || !Array.isArray(s.advisors) ? 'all' : 'selected');
         setScheduleGeneral(s.include_general !== false);
-        setScheduleRadar(s.include_radar === true && s.frequency === 'monthly');
         setScheduleEnabled(s.enabled !== false);
         if (s.chat_space_id) {
           await setScheduleChat(true);
@@ -3999,11 +4110,19 @@
     if (!clientId) { alert('Selecciona un cliente.'); return; }
     const hour = parseInt(document.getElementById('sf-hour').value);
     if (isNaN(hour) || hour < 0 || hour > 23) { alert('La hora debe estar entre 0 y 23.'); return; }
+
+    const isMsg   = _scheduleType === 'message';
+    const isRadar = !isMsg && _scheduleReportKind === 'radar';
+    if (!isMsg && !_scheduleReportKind) {
+      alert('Elige el tipo de reporte: Análisis de Llamadas o Radar de Objeciones.'); return;
+    }
+
     if (_scheduleFreq === 'once') {
       if (!document.getElementById('sf-run-date').value) {
         alert('Selecciona la fecha de ejecución.'); return;
       }
-      if (_onceMode === 'weekly' && !document.getElementById('sf-once-week-from').value) {
+      // La modalidad semanal (elegir semana) solo aplica al Análisis de Llamadas.
+      if (!isMsg && !isRadar && _onceMode === 'weekly' && !document.getElementById('sf-once-week-from').value) {
         alert('Selecciona la semana a analizar.'); return;
       }
     }
@@ -4019,14 +4138,14 @@
       client_id:       clientId,
       enabled:         _scheduleEnabled,
       frequency:       _scheduleFreq,
+      report_kind:     isMsg ? 'analisis' : _scheduleReportKind,
       hour,
       minute:          parseInt(document.getElementById('sf-minute').value) || 0,
       timezone:        document.getElementById('sf-timezone').value.trim() || 'America/Mexico_City',
       report_type:     'selected',
       include_general: _scheduleGeneral,
-      include_radar:   _scheduleRadar && _scheduleFreq === 'monthly',
       advisors:        _scheduleAdvisors === 'all' ? 'all' : [],
-      notify_only:     _scheduleMode === 'notify_only',
+      notify_only:     isMsg,
       chat_space_id:   _scheduleChat ? document.getElementById('sf-chat-space').value : undefined,
       chat_message:    _scheduleChat ? document.getElementById('sf-chat-message').value.trim() || undefined : undefined,
       error_notify_enabled: _scheduleErrorNotify,
@@ -4035,15 +4154,20 @@
     if (_scheduleFreq === 'weekly')  payload.day_of_week  = parseInt(document.getElementById('sf-day-of-week').value);
     if (_scheduleFreq === 'monthly') payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;
     if (_scheduleFreq === 'once') {
-      payload.run_date  = document.getElementById('sf-run-date').value;
-      payload.once_mode = _onceMode;
-      if (_onceMode === 'weekly') {
-        payload.once_date_from = document.getElementById('sf-once-week-from').value;
-        payload.once_date_to   = document.getElementById('sf-once-week-to').value;
-      } else {
-        const mes  = String(document.getElementById('sf-once-month-mes').value).padStart(2, '0');
-        const anio = document.getElementById('sf-once-month-anio').value;
-        payload.once_month = `${anio}-${mes}`;
+      payload.run_date = document.getElementById('sf-run-date').value;
+      // El Mensaje no analiza período: solo necesita la fecha de ejecución.
+      if (!isMsg) {
+        // El Radar fuerza modalidad mensual (elige un mes); el Análisis respeta la modalidad.
+        const onceMode = isRadar ? 'monthly' : _onceMode;
+        payload.once_mode = onceMode;
+        if (onceMode === 'weekly') {
+          payload.once_date_from = document.getElementById('sf-once-week-from').value;
+          payload.once_date_to   = document.getElementById('sf-once-week-to').value;
+        } else {
+          const mes  = String(document.getElementById('sf-once-month-mes').value).padStart(2, '0');
+          const anio = document.getElementById('sf-once-month-anio').value;
+          payload.once_month = `${anio}-${mes}`;
+        }
       }
     }
 

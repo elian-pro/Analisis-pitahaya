@@ -9,7 +9,8 @@ const ScheduleBaseSchema = z.object({
   name:            z.string().min(1),
   client_id:       z.string().min(1),
   enabled:         z.boolean().default(true),
-  frequency:       z.enum(['weekly', 'monthly', 'once']),
+  frequency:       z.enum(['weekly', 'monthly', 'once', 'daily', 'biweekly']),
+  report_kind:     z.enum(['analisis', 'radar']).default('analisis'),
   day_of_week:     z.number().int().min(0).max(6).optional(),
   day_of_month:    z.number().int().min(1).max(28).optional(),
   run_date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -41,7 +42,8 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
   d => d.frequency !== 'once'    || d.run_date     !== undefined,
   { message: 'run_date required for once frequency' },
 ).refine(
-  d => d.frequency !== 'once'    || d.once_mode    !== undefined,
+  // El Mensaje (notify_only) no analiza período: no requiere once_mode.
+  d => d.frequency !== 'once' || d.notify_only === true || d.once_mode !== undefined,
   { message: 'once_mode required for once frequency' },
 ).refine(
   d => d.frequency !== 'once' || d.once_mode !== 'weekly' || (!!d.once_date_from && !!d.once_date_to),
@@ -52,6 +54,19 @@ const ScheduleBodySchema = ScheduleBaseSchema.refine(
 ).refine(
   d => !d.include_radar || d.frequency === 'monthly',
   { message: 'El Radar de Objeciones es mensual: activa "Incluir Radar" solo en automatizaciones mensuales.' },
+).refine(
+  // Quincenal solo aplica al Radar de Objeciones.
+  d => d.frequency !== 'biweekly' || d.report_kind === 'radar',
+  { message: 'La frecuencia quincenal solo está disponible para el Radar de Objeciones.' },
+).refine(
+  // Diaria solo aplica a las automatizaciones de tipo Mensaje (notify_only).
+  d => d.frequency !== 'daily' || d.notify_only === true,
+  { message: 'La frecuencia diaria solo está disponible para automatizaciones de tipo Mensaje.' },
+).refine(
+  // El Radar corre una-vez, quincenal o mensual (no semanal ni diario).
+  d => d.notify_only === true || d.report_kind !== 'radar' ||
+       ['once', 'biweekly', 'monthly'].includes(d.frequency),
+  { message: 'El Radar de Objeciones solo admite frecuencia: una vez, quincenal o mensual.' },
 );
 
 const SchedulePatchSchema = ScheduleBaseSchema.partial();

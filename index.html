@@ -370,6 +370,7 @@
     <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
     <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
     <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
+    <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')"><i class="ti ti-radar"></i>RADAR</button>
   </nav>
   <div id="tab-reports" class="tab-panel active">
   <div class="config-row">
@@ -629,6 +630,73 @@
     </div>
     <div id="schedule-list"></div>
   </div>
+
+  <!-- ── Radar de Objeciones ─────────────────────────────────────────────── -->
+  <div id="tab-radar" class="tab-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Radar de Objeciones</div>
+        <div class="panel-sub">Detecta qué preguntan los prospectos y cómo responde el equipo · reporte mensual en PDF</div>
+      </div>
+    </div>
+
+    <!-- Flujo A: desde un cliente en la base -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-label">Generar desde un cliente</div>
+      <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field" style="flex:1 1 220px;">
+          <label class="field-label">Cliente</label>
+          <select id="radar-client-select"></select>
+        </div>
+        <div class="field" style="flex:1 1 160px;">
+          <label class="field-label">Mes</label>
+          <select id="radar-month-select"></select>
+        </div>
+        <button class="btn-sm btn-sm-green" id="radar-gen-btn" onclick="generateRadarFromClient()">Generar Radar</button>
+      </div>
+      <div class="form-hint" style="margin-top:8px;">Usa la hoja del cliente (llamadas &gt; 200 s). Requiere que el cliente tenga configurada su "Carpeta Drive de Radar" en Ajustes.</div>
+      <div id="radar-client-status" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- Flujo B: desde archivo .md -->
+    <div class="card">
+      <div class="section-label">Radar desde archivo (.md)</div>
+      <p class="card-desc">Sube un Markdown con las transcripciones ya compiladas. Funciona con o sin cliente en la base.</p>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>Archivo .md *</label>
+        <input type="file" id="radar-md-file" accept=".md,text/markdown" class="form-control">
+      </div>
+      <div class="form-grid-2">
+        <div class="form-field">
+          <label>Cliente (opcional)</label>
+          <select id="radar-upload-client"></select>
+        </div>
+        <div class="form-field">
+          <label>Entrega</label>
+          <select id="radar-deliver">
+            <option value="download">Descargar</option>
+            <option value="drive">Subir a Drive</option>
+            <option value="both">Ambas</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid-2" style="margin-top:12px;">
+        <div class="form-field"><label>Nombre del cliente (override)</label><input id="radar-ov-name" class="form-control" placeholder="Si no viene en el archivo"></div>
+        <div class="form-field"><label>Periodo (override)</label><input id="radar-ov-period" class="form-control" placeholder="Ej. Junio 2026"></div>
+      </div>
+      <div class="form-field" style="margin-top:12px;">
+        <label>Contexto del negocio (override)</label>
+        <textarea id="radar-ov-contexto" class="form-control" rows="3" placeholder="Giro, tipo de llamada y objetivo. Si no lo pones, se toma del archivo o de un default."></textarea>
+      </div>
+      <div class="form-field" style="margin-top:12px;">
+        <label>Sidecar del periodo anterior (.json, opcional)</label>
+        <input type="file" id="radar-prev-sidecar" accept=".json,application/json" class="form-control">
+        <div class="form-hint" style="margin-top:4px;">Adjúntalo para habilitar el comparativo vs. el mes anterior.</div>
+      </div>
+      <button class="btn-sm btn-sm-green" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:14px;">Generar desde archivo</button>
+      <div id="radar-upload-status" style="margin-top:12px;"></div>
+    </div>
+  </div>
 </main>
 
 <!-- Client form modal -->
@@ -749,6 +817,36 @@
         <div class="form-group" style="margin-top:12px;">
           <label class="form-label">Prompt general</label>
           <textarea class="form-textarea" id="cf-prompt-general" rows="8" placeholder="Prompt para el reporte ejecutivo del equipo…"></textarea>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Radar de Objeciones (opcional)</div>
+        <div class="form-hint" style="margin:-4px 0 12px;">Configura el reporte “Radar de Objeciones” para este cliente. Si no lo usas, deja los campos vacíos.</div>
+        <div class="form-group">
+          <label class="form-label">Prompt del Radar</label>
+          <textarea class="form-textarea" id="cf-prompt-radar" rows="6" placeholder="Contexto del negocio para el Radar (giro, tipo de llamada, objetivo). Si lo dejas vacío, se usa un prompt genérico."></textarea>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Carpeta Drive de Radar</label>
+            <input class="form-control" id="cf-radar-folder-id" placeholder="Pega el link de la carpeta">
+            <div class="form-hint">Obligatoria para generar el Radar. Detectamos el ID del link.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Carpeta de respaldo Radar</label>
+            <input class="form-control" id="cf-radar-sidecar-folder-id" placeholder="Opcional — pega el link">
+            <div class="form-hint">Para el sidecar del comparativo. Si se deja vacía, se usa la de Radar.</div>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Duración mínima (segundos)</label>
+            <input class="form-control" id="cf-radar-min-dur" type="number" min="0" max="3600" placeholder="200">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Máx. caracteres (Radar)</label>
+            <input class="form-control" id="cf-radar-max-chars" type="number" min="100" max="50000" placeholder="8000">
+          </div>
         </div>
       </div>
     </div>
@@ -928,6 +1026,14 @@
             <button class="form-toggle-btn active" id="sf-gen-yes" onclick="setScheduleGeneral(true)">Incluir reporte general</button>
             <button class="form-toggle-btn"        id="sf-gen-no"  onclick="setScheduleGeneral(false)">Solo reportes individuales</button>
           </div>
+        </div>
+        <div class="form-group" id="sf-radar-group">
+          <label class="form-label">Radar de Objeciones</label>
+          <div class="form-toggle-row">
+            <button type="button" class="form-toggle-btn" id="sf-radar-yes" onclick="setScheduleRadar(true)">Incluir Radar</button>
+            <button type="button" class="form-toggle-btn active" id="sf-radar-no"  onclick="setScheduleRadar(false)">Sin Radar</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-radar-hint">El Radar es mensual: solo disponible en automatizaciones con frecuencia mensual.</div>
         </div>
       </div>
 
@@ -2698,7 +2804,7 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','dashboard','settings','automation'];
+  const _APP_TABS = ['reports','dashboard','settings','automation','radar'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -2712,6 +2818,109 @@
     if (tab === 'settings')   renderClientList();
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
+    if (tab === 'radar')      populateRadarSelectors();
+  }
+
+  // ── Radar de Objeciones ────────────────────────────────────────────────────
+  const RADAR_MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  async function populateRadarSelectors() {
+    let clients = [];
+    try { clients = await fetch(CLIENTS_API).then(r => r.json()); } catch { clients = []; }
+    // Selector de cliente (flujo A) y cliente opcional (flujo B)
+    const cSel = document.getElementById('radar-client-select');
+    const uSel = document.getElementById('radar-upload-client');
+    cSel.innerHTML = '';
+    uSel.innerHTML = '<option value="">— Sin cliente —</option>';
+    clients.forEach(c => {
+      cSel.appendChild(new Option(c.name, c.id));
+      uSel.appendChild(new Option(c.name, c.id));
+    });
+    // Selector de mes (últimos 12), solo si aún no está poblado
+    const mSel = document.getElementById('radar-month-select');
+    if (mSel.options.length === 0) {
+      const now = new Date();
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        mSel.appendChild(new Option(`${RADAR_MONTHS_ES[d.getMonth()]} ${d.getFullYear()}`, key));
+      }
+    }
+  }
+
+  // Descarga un archivo desde base64 (para el PDF y el sidecar del Radar).
+  function _downloadBase64(base64, filename, mime) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  function _radarSafeName(s) { return (s || 'cliente').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').slice(0, 40); }
+
+  async function generateRadarFromClient() {
+    const clientId = document.getElementById('radar-client-select').value;
+    const month    = document.getElementById('radar-month-select').value;
+    const status   = document.getElementById('radar-client-status');
+    const btn      = document.getElementById('radar-gen-btn');
+    if (!clientId) { status.innerHTML = '<span style="color:var(--danger);font-size:12px;">Elige un cliente.</span>'; return; }
+    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
+    status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Analizando llamadas y generando el reporte… (puede tardar ~1 min)</div>';
+    try {
+      const r = await fetch(`${REPORT_API}/radar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, month }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      const clientName = document.getElementById('radar-client-select').selectedOptions[0]?.textContent || 'cliente';
+      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(clientName)}_${month}.pdf`, 'application/pdf');
+      status.innerHTML = '<span style="color:var(--success);font-size:12px;">✓ Radar generado y descargado.'
+        + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : '') + '</span>';
+    } catch (e) {
+      status.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
+  }
+
+  async function uploadRadarFile() {
+    const fileEl = document.getElementById('radar-md-file');
+    const status = document.getElementById('radar-upload-status');
+    const btn    = document.getElementById('radar-upload-btn');
+    const file   = fileEl.files[0];
+    if (!file) { status.innerHTML = '<span style="color:var(--danger);font-size:12px;">Elige un archivo .md.</span>'; return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    const cid = document.getElementById('radar-upload-client').value;
+    if (cid) fd.append('client_id', cid);
+    const ov = (id, field) => { const v = document.getElementById(id).value.trim(); if (v) fd.append(field, v); };
+    ov('radar-ov-name', 'client_name'); ov('radar-ov-period', 'period_label'); ov('radar-ov-contexto', 'contexto_negocio');
+    fd.append('deliver', document.getElementById('radar-deliver').value);
+    const prev = document.getElementById('radar-prev-sidecar').files[0];
+    if (prev) fd.append('prev_sidecar', prev);
+
+    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
+    status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Procesando el archivo y generando el reporte…</div>';
+    try {
+      const r = await fetch(`${REPORT_API}/radar-upload`, { method: 'POST', body: fd });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      const name = data.reportData?.client_name || 'cliente';
+      const key  = data.reportData?.period_key || 'periodo';
+      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(name)}_${key}.pdf`, 'application/pdf');
+      if (data.sidecarBase64) _downloadBase64(data.sidecarBase64, `radar-${key}.json`, 'application/json');
+      const warns = (data.warnings || []).length ? `<div style="color:var(--muted);font-size:11px;margin-top:4px;">${data.warnings.join(' · ')}</div>` : '';
+      status.innerHTML = '<span style="color:var(--success);font-size:12px;">✓ Radar generado.'
+        + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : ' Descargado (PDF y sidecar).') + '</span>' + warns;
+    } catch (e) {
+      status.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
   }
 
   // ── Clients CRUD ───────────────────────────────────────────────────────────
@@ -2759,7 +2968,8 @@
     const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
-      'cf-prompt-individual','cf-prompt-general'];
+      'cf-prompt-individual','cf-prompt-general',
+      'cf-prompt-radar','cf-radar-folder-id','cf-radar-sidecar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '3000';
 
@@ -2803,6 +3013,11 @@
         document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 3000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
         document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
+        document.getElementById('cf-prompt-radar').value             = c.prompt_radar || '';
+        document.getElementById('cf-radar-folder-id').value          = c.radar_folder_id || '';
+        document.getElementById('cf-radar-sidecar-folder-id').value  = c.radar_sidecar_folder_id || '';
+        document.getElementById('cf-radar-min-dur').value            = c.radar_min_duration_seconds || '';
+        document.getElementById('cf-radar-max-chars').value          = c.radar_transcripcion_max_chars || '';
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -3011,6 +3226,18 @@
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
     };
+
+    // ── Radar de Objeciones (opcional): solo se envían los campos con valor ──
+    const _radarFolder  = document.getElementById('cf-radar-folder-id').value.trim();
+    const _radarSidecar = document.getElementById('cf-radar-sidecar-folder-id').value.trim();
+    const _radarPrompt  = document.getElementById('cf-prompt-radar').value.trim();
+    const _radarMinDur  = parseInt(document.getElementById('cf-radar-min-dur').value, 10);
+    const _radarMaxCh   = parseInt(document.getElementById('cf-radar-max-chars').value, 10);
+    if (_radarPrompt)  payload.prompt_radar = _radarPrompt;
+    if (_radarFolder)  payload.radar_folder_id = _extractDriveFolderId(_radarFolder);
+    if (_radarSidecar) payload.radar_sidecar_folder_id = _extractDriveFolderId(_radarSidecar);
+    if (!isNaN(_radarMinDur)) payload.radar_min_duration_seconds = _radarMinDur;
+    if (!isNaN(_radarMaxCh))  payload.radar_transcripcion_max_chars = _radarMaxCh;
 
     try {
       const r = _editingClientId
@@ -3265,6 +3492,7 @@
   let _scheduleFreq      = 'weekly';
   let _scheduleAdvisors  = 'all';
   let _scheduleGeneral   = true;
+  let _scheduleRadar     = false;
   let _scheduleEnabled   = true;
   let _scheduleMode      = 'report';   // 'report' | 'notify_only'
   let _scheduleChat      = false;
@@ -3283,6 +3511,29 @@
     document.getElementById('sf-monthly-group').style.display = f === 'monthly' ? '' : 'none';
     document.getElementById('sf-once-group').style.display    = f === 'once'    ? '' : 'none';
     document.getElementById('sf-freq-hint').textContent = _SF_FREQ_HINTS[f] || '';
+    _updateRadarAvailability(f);
+  }
+
+  // El Radar es mensual: el toggle solo se habilita en frecuencia mensual.
+  function _updateRadarAvailability(f) {
+    const monthly = f === 'monthly';
+    const yes = document.getElementById('sf-radar-yes');
+    const no  = document.getElementById('sf-radar-no');
+    const hint = document.getElementById('sf-radar-hint');
+    if (!yes || !no) return;
+    yes.disabled = !monthly;
+    yes.style.opacity = monthly ? '' : '.4';
+    yes.style.cursor  = monthly ? '' : 'not-allowed';
+    if (!monthly && _scheduleRadar) setScheduleRadar(false);   // fuerza off si deja de ser mensual
+    if (hint) hint.textContent = monthly
+      ? 'Genera además el Radar de Objeciones del mes, como archivo aparte en su carpeta de Drive.'
+      : 'El Radar es mensual: solo disponible en automatizaciones con frecuencia mensual.';
+  }
+
+  function setScheduleRadar(v) {
+    _scheduleRadar = v;
+    document.getElementById('sf-radar-yes').classList.toggle('active', v);
+    document.getElementById('sf-radar-no').classList.toggle('active', !v);
   }
 
   // ── Run-date inline calendar ───────────────────────────────────────────────
@@ -3669,6 +3920,7 @@
     setScheduleMode('report');
     setScheduleAdvisors('all');
     setScheduleGeneral(true);
+    setScheduleRadar(false);
     setScheduleEnabled(true);
     // Reset chat toggle without loading spaces
     _scheduleChat = false;
@@ -3715,6 +3967,7 @@
         setScheduleMode(s.notify_only ? 'notify_only' : 'report');
         setScheduleAdvisors(s.advisors === 'all' || !Array.isArray(s.advisors) ? 'all' : 'selected');
         setScheduleGeneral(s.include_general !== false);
+        setScheduleRadar(s.include_radar === true && s.frequency === 'monthly');
         setScheduleEnabled(s.enabled !== false);
         if (s.chat_space_id) {
           await setScheduleChat(true);
@@ -3771,6 +4024,7 @@
       timezone:        document.getElementById('sf-timezone').value.trim() || 'America/Mexico_City',
       report_type:     'selected',
       include_general: _scheduleGeneral,
+      include_radar:   _scheduleRadar && _scheduleFreq === 'monthly',
       advisors:        _scheduleAdvisors === 'all' ? 'all' : [],
       notify_only:     _scheduleMode === 'notify_only',
       chat_space_id:   _scheduleChat ? document.getElementById('sf-chat-space').value : undefined,

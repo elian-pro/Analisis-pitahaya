@@ -16,7 +16,11 @@ export interface Schedule {
   name:          string;
   client_id:     string;
   enabled:       boolean;
-  frequency:     'weekly' | 'monthly' | 'once';
+  frequency:     'weekly' | 'monthly' | 'once' | 'daily' | 'biweekly';
+  // Qué genera esta automatización cuando NO es 'notify_only':
+  //   'analisis' (default/legacy) → reporte de Análisis de Llamadas (individual + general)
+  //   'radar'                     → Radar de Objeciones (archivo aparte, sin asesores)
+  report_kind?:  'analisis' | 'radar';
   day_of_week?:  number;   // 0=Sun 1=Mon … 6=Sat  (weekly)
   day_of_month?: number;   // 1-28                  (monthly)
   run_date?:     string;   // YYYY-MM-DD             (once) — WHEN it executes
@@ -30,6 +34,7 @@ export interface Schedule {
   timezone:      string;
   report_type:   'selected' | 'general';
   include_general: boolean;
+  include_radar?:  boolean;   // genera además el Radar de Objeciones (solo frecuencia mensual)
   advisors:      'all' | string[];
   notify_only?:   boolean;   // skip report, just send Chat message
   chat_space_id?: string;    // Google Chat space, e.g. "spaces/AAAA"

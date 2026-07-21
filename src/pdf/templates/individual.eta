@@ -2,344 +2,425 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Reporte <%= it.asesor %> - <%= it.mes_label %></title>
+<title>Reporte <%= it.asesor %> · <%= it.mes_label %></title>
 <style>
+  <%~ it._fontsCss %>
+
+  /* ── Zebra Design System · tokens (impresión = siempre light) ─────────────── */
+  :root {
+    --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F9FAFB;
+    --text: #0A0A0A; --text-muted: #737373; --accent: #0A0A0A;
+    --ink-100: #F1F1F1; --ink-200: #E5E5E5; --ink-700: #262626;
+    --border: rgba(10,10,10,.10); --border-strong: rgba(10,10,10,.14);
+    --r-card: 12px; --r-chip: 6px; --r-control: 8px;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    --pos: #1E6B30;      --pos-bg: #E9F3EC;   --pos-bd: #C4E2CD;
+    --danger: #B4231C;   --danger-bg: #FBEBEA; --danger-bd: #F0CFCD;
+    --warn: #8A6300;     --warn-bg: #FBF3DA;   --warn-bd: #ECDDA8;
+    --orange: #B35A00;   --orange-bg: #FBEEDD; --orange-bd: #F0D6B4;
+  }
+
   @page {
     size: A4;
-    margin: 10mm 0 15mm 0;
-    @bottom-right {
-      content: "Pagina " counter(page) " / " counter(pages);
-      font-family: 'Helvetica', sans-serif;
-      font-size: 9pt;
-      color: #999;
-      padding: 0 20mm 0 0;
-    }
+    margin: 12mm 0 16mm 0;
+    @bottom-right { content: counter(page) " / " counter(pages); font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: #9a9a9a; padding: 0 18mm 0 0; }
+    @bottom-left  { content: "ZEBRA · Inteligencia Comercial"; font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: .12em; color: #b4b4b4; padding: 0 0 0 18mm; }
   }
   @page :first { margin-top: 0; }
+
   * { box-sizing: border-box; }
-  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; orphans: 3; widows: 3; }
-  .membrete { background: #0a0a0a; color: #fafafa; padding: 25mm 20mm 18mm 20mm; margin-bottom: 0; page-break-after: avoid; }
-  .membrete .marca { font-size: 28pt; font-weight: 900; letter-spacing: -1px; margin: 0; }
-  .membrete .marca .dot { color: #d4af37; }
-  .membrete .tagline { font-size: 9pt; color: #b0b0b0; margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
-  .membrete .meta { margin-top: 22pt; border-top: 1px solid #2a2a2a; padding-top: 14pt; display: flex; justify-content: space-between; }
-  .membrete .meta div { font-size: 8.5pt; color: #888; }
-  .membrete .meta b { color: #fafafa; font-weight: 600; }
-  .barra-oro { background: #d4af37; height: 3px; }
-  main { padding: 6mm 20mm 6mm 20mm; }
-  h1 { font-size: 18pt; margin: 18pt 0 4pt 0; font-weight: 800; letter-spacing: -0.3px; }
-  h1 .sub { font-size: 10pt; font-weight: 400; color: #777; display: block; margin-top: 2pt; }
-  h2 { font-size: 12pt; margin: 18pt 0 8pt 0; padding-bottom: 4pt; border-bottom: 2px solid #0a0a0a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; page-break-after: avoid; }
-  h3 { font-size: 10pt; margin: 12pt 0 4pt 0; font-weight: 700; color: #d4af37; }
-  p { margin: 0 0 6pt 0; }
-  .resumen { background: #fff; border: 1px solid #d4af37; padding: 10pt 14pt; margin-top: 8pt; font-size: 10pt; line-height: 1.55; }
-  .resumen::before { content: "RESUMEN EJECUTIVO"; display: block; font-size: 7pt; font-weight: 700; letter-spacing: 1.5px; color: #d4af37; margin-bottom: 5pt; }
-  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; margin: 10pt 0 8pt 0; }
-  .kpi { background: #f6f5f1; border: 1px solid #e3e0d6; padding: 8pt 10pt; border-radius: 4px; }
-  .kpi .label { font-size: 7.5pt; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
-  .kpi .value { font-size: 18pt; font-weight: 800; color: #0a0a0a; margin-top: 2pt; }
-  .kpi .footer { font-size: 7.5pt; color: #999; margin-top: 2pt; }
-  .delta-pos { color: #1e6b30; font-weight: 700; }
-  .delta-neg { color: #b51e1e; font-weight: 700; }
-  table { width: 100%; border-collapse: collapse; margin: 6pt 0 8pt 0; font-size: 9pt; }
-  th { background: #0a0a0a; color: #fff; padding: 5pt 7pt; text-align: left; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px; }
-  td { padding: 5pt 7pt; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
-  tr:nth-child(even) td { background: #faf9f6; }
-  .bar-row { margin: 6pt 0; }
-  .bar-row .head { display: flex; justify-content: space-between; font-size: 9pt; margin-bottom: 2pt; }
-  .bar-row .head .pct { color: #777; }
-  .bar-track { background: #ececec; height: 6pt; border-radius: 3px; overflow: hidden; }
-  .bar-fill { background: linear-gradient(90deg, #0a0a0a, #d4af37); height: 100%; }
-  .bar-fill.low  { background: #c44; }
-  .bar-fill.mid  { background: #d4af37; }
-  .bar-fill.high { background: #2c8f3a; }
-  ul { padding-left: 18pt; margin: 4pt 0 8pt 0; }
-  li { margin-bottom: 3pt; }
-  .cita { background: #faf9f6; border-left: 2px solid #d4af37; padding: 6pt 10pt; margin: 4pt 0; font-style: italic; font-size: 9pt; color: #444; }
-  .cita.mala { border-left-color: #c44; }
-  .cita .label { font-style: normal; font-weight: 700; color: #777; font-size: 8pt; text-transform: uppercase; display: block; margin-bottom: 2pt; letter-spacing: 0.4px; }
-  .pill { display: inline-block; padding: 1pt 6pt; border-radius: 8pt; font-size: 8pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-  .pill.alta  { background: #fde8e8; color: #b51e1e; }
-  .pill.media { background: #fff4d6; color: #8a6b00; }
-  .pill.baja  { background: #e5f3ea; color: #1e6b30; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
-  .grid-2 .col h3 { margin-top: 0; }
-  .nivel-badge { display: inline-block; padding: 3pt 10pt; border-radius: 12pt; font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-  .nivel-excelente       { background: #e5f3ea; color: #1e6b30; }
-  .nivel-bueno           { background: #e5efea; color: #2c5f3a; }
-  .nivel-aceptable       { background: #fff4d6; color: #8a6b00; }
-  .nivel-necesita_mejora { background: #ffe6cc; color: #b35a00; }
-  .nivel-critico         { background: #fde8e8; color: #b51e1e; }
-  .alert { background: transparent; border-top: 1.5px solid #0a0a0a; padding: 6pt 0 4pt 0; margin: 8pt 0; font-size: 9pt; color: #444; }
-  .kpi, .kpis { page-break-inside: avoid; break-inside: avoid; }
-  .cita { page-break-inside: avoid; break-inside: avoid; }
-  .bar-row { page-break-inside: avoid; break-inside: avoid; }
-  .objecion-bloque { page-break-inside: avoid; break-inside: avoid; margin-bottom: 10pt; }
-  .grid-short { page-break-inside: avoid; break-inside: avoid; }
-  table { page-break-inside: auto; }
-  tr { page-break-inside: avoid; break-inside: avoid; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: var(--sans); font-size: 10pt; color: var(--text); margin: 0; line-height: 1.5; orphans: 3; widows: 3; font-feature-settings: 'cv05' 1, 'ss01' 1; }
+
+  .eyebrow { font-family: var(--mono); font-size: 7.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: .2em; color: var(--text-muted); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ── Membrete ─────────────────────────────────────────────────────────────── */
+  .membrete { position: relative; overflow: hidden; background: var(--text); color: #fff; padding: 20mm 18mm 14mm 18mm; page-break-after: avoid; isolation: isolate; }
+  .membrete .motif { position: absolute; inset: 0 0 0 auto; width: 42%; height: 100%; background-image: url("data:image/png;base64,<%= it._motifB64 %>"); background-size: cover; background-position: right center; opacity: .10; z-index: -1; }
+  .membrete img.logo { height: 22pt; display: block; margin: 0 0 12pt -1pt; }
+  .membrete .eyebrow { color: rgba(255,255,255,.62); }
+  .membrete .titulo { font-size: 21pt; font-weight: 600; letter-spacing: -.02em; margin: 14pt 0 2pt 0; }
+  .membrete .sub { font-size: 9.5pt; color: rgba(255,255,255,.72); font-family: var(--mono); letter-spacing: .02em; }
+  .membrete .meta { margin-top: 16pt; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10pt; display: flex; gap: 28pt; font-size: 8pt; color: rgba(255,255,255,.6); }
+  .membrete .meta b { color: #fff; font-weight: 600; }
+
+  main { padding: 9mm 18mm 6mm 18mm; }
+  section { margin-top: 15pt; }
+  section > .eyebrow { display: block; margin-bottom: 7pt; }
+  h2.title { font-size: 12.5pt; font-weight: 600; letter-spacing: -.01em; margin: 0 0 7pt 0; page-break-after: avoid; }
+  h3.sub { font-size: 9.5pt; font-weight: 600; margin: 11pt 0 4pt 0; }
+
+  /* ── KPI cards + nivel ────────────────────────────────────────────────────── */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 11pt 12pt; page-break-inside: avoid; }
+  .kpi .label { display: block; margin-bottom: 7pt; }
+  .kpi .value { font-family: var(--mono); font-weight: 700; font-size: 23pt; letter-spacing: -.03em; line-height: 1; color: var(--text); }
+  .kpi .value .unit { font-size: 10pt; font-weight: 500; color: var(--text-muted); letter-spacing: 0; }
+  .kpi .foot { font-size: 7.5pt; color: var(--text-muted); margin-top: 5pt; }
+  .nivel-row { margin-top: 9pt; display: flex; align-items: center; gap: 8pt; }
+  .nivel-row .eyebrow { color: var(--text-muted); }
+
+  .chip { display: inline-block; font-family: var(--mono); font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2pt 8pt; border-radius: var(--r-chip); border: 1px solid var(--border-strong); color: var(--text); white-space: nowrap; }
+  .chip.nivel-excelente, .chip.nivel-bueno { background: var(--pos-bg); color: var(--pos); border-color: var(--pos-bd); }
+  .chip.nivel-aceptable       { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn-bd); }
+  .chip.nivel-necesita_mejora { background: var(--orange-bg); color: var(--orange); border-color: var(--orange-bd); }
+  .chip.nivel-critico         { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
+
+  .up-txt { color: var(--pos); font-weight: 600; }
+  .down-txt { color: var(--danger); font-weight: 600; }
+
+  /* ── Resumen ─────────────────────────────────────────────────────────────── */
+  .resumen { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 13pt 15pt; margin-top: 9pt; page-break-inside: avoid; }
+  .resumen .eyebrow { display: block; margin-bottom: 8pt; }
+  .resumen p { margin: 0; font-size: 9.5pt; line-height: 1.6; }
+
+  /* ── Barras de criterio (semáforo) ────────────────────────────────────────── */
+  .bar-row { margin: 7pt 0; page-break-inside: avoid; }
+  .bar-row .head { display: flex; justify-content: space-between; font-size: 9pt; margin-bottom: 3pt; }
+  .bar-row .head .pct { font-family: var(--mono); font-size: 8pt; color: var(--text-muted); }
+  .bar-track { background: var(--ink-100); height: 6pt; border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; }
+  .bar-fill.high { background: var(--pos); }
+  .bar-fill.mid  { background: var(--text); }
+  .bar-fill.low  { background: var(--danger); }
+
+  /* ── Tablas ──────────────────────────────────────────────────────────────── */
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
   thead { display: table-header-group; }
-  li { page-break-inside: avoid; break-inside: avoid; }
+  th { background: var(--text); color: #fff; text-align: left; vertical-align: middle; font-family: var(--mono); font-weight: 500; font-size: 7pt; text-transform: uppercase; letter-spacing: .09em; padding: 7pt 9pt; }
+  td { padding: 7pt 9pt; border-top: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+  tbody tr:nth-child(even) td { background: var(--surface-2); }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+
+  /* ── Citas (ejemplos textuales) ───────────────────────────────────────────── */
+  .cita { background: var(--surface-2); border-left: 2px solid var(--border-strong); padding: 6pt 10pt; margin: 4pt 0; font-size: 8.5pt; color: #333; border-radius: 0 var(--r-control) var(--r-control) 0; page-break-inside: avoid; }
+  .cita.buena { border-left-color: var(--pos); }
+  .cita.mala  { border-left-color: var(--danger); }
+  .cita .label { display: block; font-family: var(--mono); font-size: 6.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 3pt; }
+  .objecion-bloque { page-break-inside: avoid; margin-bottom: 10pt; }
+
+  /* ── Nota / alerta ────────────────────────────────────────────────────────── */
+  .nota { border-top: 1px solid var(--border); padding: 7pt 0 0 0; margin: 9pt 0 0 0; font-size: 8.5pt; color: var(--text-muted); }
+  .nota b { color: var(--text); font-weight: 600; }
+  .nota.warn { border-top-color: var(--warn-bd); color: var(--warn); }
+  .nota.warn b { color: var(--warn); }
+
+  /* ── Paneles de dos columnas ──────────────────────────────────────────────── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; page-break-inside: avoid; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12pt 13pt; }
+  .panel .eyebrow { display: block; margin-bottom: 9pt; }
+  .panel ul { list-style: none; margin: 0; padding: 0; }
+  .panel li { position: relative; padding-left: 13pt; margin-bottom: 8pt; font-size: 8.7pt; line-height: 1.5; }
+  .panel li:last-child { margin-bottom: 0; }
+  .panel li::before { content: ""; position: absolute; left: 0; top: 5pt; width: 6pt; height: 6pt; border-radius: 1.5px; }
+  .panel.pos { border-top: 2px solid var(--pos); }
+  .panel.pos .eyebrow { color: var(--pos); }
+  .panel.pos li::before { background: var(--pos); }
+  .panel.opp { border-top: 2px solid var(--danger); }
+  .panel.opp .eyebrow { color: var(--danger); }
+  .panel.opp li::before { background: var(--danger); }
+  .panel li b { font-weight: 600; }
+
+  .kv { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  .kv td { padding: 5pt 0; border-top: 1px solid var(--border); }
+  .kv tr:first-child td { border-top: none; }
+  .kv td:last-child { text-align: right; font-family: var(--mono); font-weight: 600; }
+
+  /* ── Callouts mejor / peor llamada ────────────────────────────────────────── */
+  .callout { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12pt 13pt; page-break-inside: avoid; }
+  .callout.best  { border-top: 2px solid var(--pos); }
+  .callout.worst { border-top: 2px solid var(--danger); }
+  .callout .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5pt; }
+  .callout .head .lbl { font-family: var(--mono); font-size: 7pt; text-transform: uppercase; letter-spacing: .1em; }
+  .callout.best  .head .lbl { color: var(--pos); }
+  .callout.worst .head .lbl { color: var(--danger); }
+  .callout .score { font-family: var(--mono); font-weight: 700; font-size: 15pt; letter-spacing: -.02em; }
+  .callout .meta { font-size: 8pt; color: var(--text-muted); margin-bottom: 4pt; }
+  .callout p { margin: 0; font-size: 8.7pt; line-height: 1.5; }
+  .btn-rec { display: inline-block; margin-top: 8pt; background: var(--text); color: #fff; text-decoration: none; font-family: var(--mono); font-size: 7.5pt; font-weight: 500; letter-spacing: .04em; padding: 5pt 11pt; border-radius: var(--r-control); }
+
+  .pill { display: inline-block; font-family: var(--mono); font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2pt 8pt; border-radius: var(--r-chip); white-space: nowrap; }
+  .pill.alta  { background: var(--text); color: #fff; border: 1px solid var(--text); }
+  .pill.media { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+  .pill.baja  { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
 </style>
 </head>
 <body>
 
+<%
+const barClass = function(pct){ return pct >= 75 ? 'high' : pct >= 40 ? 'mid' : 'low'; };
+const fmtDelta = function(n){ return (n >= 0 ? '+' : '') + n; };
+const tipoLabel = it.tipo_asesor === 'desconocido' ? 'asesor' : it.tipo_asesor;
+%>
+
 <header class="membrete">
+  <span class="motif"></span>
   <% if (it._logoB64) { %>
-    <img src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA" style="height:26pt;display:block;margin-bottom:6pt;margin-left:-2pt;">
-  <% } else { %>
-    <p class="marca">ZEBRA<span class="dot">.</span></p>
+    <img class="logo" src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA">
   <% } %>
-  <p class="tagline">Inteligencia Comercial · Analisis de Llamadas</p>
+  <span class="eyebrow">Inteligencia Comercial · Análisis de Llamadas</span>
+  <div class="titulo"><%= it.asesor %></div>
+  <div class="sub"><%= it.mes_label %><% if (it.period_label) { %> · <%= it.period_label %><% } %> · <%= it.call_count %> videollamada<%= it.call_count !== 1 ? 's' : '' %></div>
   <div class="meta">
-    <div><b>Reporte:</b> Desempeno mensual de <%= it.tipo_asesor === 'desconocido' ? 'asesor' : it.tipo_asesor %></div>
-    <div><b>Generado:</b> <%= it.generated_date %></div>
+    <div><b>Perfil</b> · <%= tipoLabel %></div>
+    <div><b>Llamadas</b> · <%= it.call_count %></div>
+    <div><b>Generado</b> · <%= it.generated_date %></div>
   </div>
 </header>
-<div class="barra-oro"></div>
 
 <main>
 
-<%
-const barClass = function(pct) { return pct >= 75 ? 'high' : pct >= 40 ? 'mid' : 'low'; };
-const resColor  = function(n)   { return n >= 80 ? '#1e6b30' : '#b51e1e'; };
-const impactoDisplay = function(v) { return 'impacto ' + (v === 'alta' ? 'alto' : v === 'media' ? 'medio' : 'bajo'); };
-const fmtDelta = function(n) { return (n >= 0 ? '+' : '') + n; };
-%>
-
-<h1><%= it.asesor %>
-  <span class="sub"><%= it.mes_label %><% if (it.period_label) { %> · <%= it.period_label %><% } %> · <%= it.call_count %> videollamada<%= it.call_count !== 1 ? 's' : '' %> analizadas</span>
-</h1>
-
-<div class="kpis">
-  <div class="kpi">
-    <div class="label">Puntaje promedio</div>
-    <div class="value"><%= it.avg_score %><span style="font-size:11pt;color:#777;">/100</span></div>
-    <div class="footer">
-      sigma = <%= it.score_sigma %>
-      <% if (it.has_previous && it.delta_score !== undefined) { %>
-        &nbsp;·&nbsp;<span class="<%= it.delta_score >= 0 ? 'delta-pos' : 'delta-neg' %>"><%= fmtDelta(it.delta_score) %> pts vs anterior</span>
-      <% } else if (!it.has_previous) { %>
-        &nbsp;·&nbsp;Primer periodo
-      <% } %>
+  <!-- ── KPIs ──────────────────────────────────────────────────────────────── -->
+  <section style="margin-top:0;">
+    <div class="kpis">
+      <div class="kpi">
+        <span class="eyebrow label">Puntaje promedio</span>
+        <div class="value"><%= it.avg_score %><span class="unit">/100</span></div>
+        <div class="foot">
+          σ = <%= it.score_sigma %> · rango <%= it.score_min %>–<%= it.score_max %>
+          <% if (it.has_previous && it.delta_score !== undefined) { %>
+            · <span class="<%= it.delta_score >= 0 ? 'up-txt' : 'down-txt' %>"><%= fmtDelta(it.delta_score) %> pts</span>
+          <% } else if (!it.has_previous) { %>
+            · primer periodo
+          <% } %>
+        </div>
+      </div>
+      <div class="kpi">
+        <span class="eyebrow label">Objeciones / llamada</span>
+        <div class="value"><%= it.objeciones_por_llamada %></div>
+        <div class="foot">resuelve <%= it.tasa_resolucion_global %>%</div>
+      </div>
+      <div class="kpi">
+        <span class="eyebrow label">Logra siguiente paso</span>
+        <div class="value"><%= it.pct_logra_siguiente_paso %><span class="unit">%</span></div>
+        <div class="foot">
+          de las llamadas
+          <% if (it.has_previous && it.delta_siguiente_paso !== undefined) { %>
+            · <span class="<%= it.delta_siguiente_paso >= 0 ? 'up-txt' : 'down-txt' %>"><%= fmtDelta(it.delta_siguiente_paso) %> pp</span>
+          <% } %>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="kpi">
-    <div class="label">Objeciones / llamada</div>
-    <div class="value"><%= it.objeciones_por_llamada %></div>
-    <div class="footer">resuelve <%= it.tasa_resolucion_global %>%</div>
-  </div>
-  <div class="kpi">
-    <div class="label">Logra siguiente paso</div>
-    <div class="value"><%= it.pct_logra_siguiente_paso %>%</div>
-    <div class="footer">
-      de las llamadas
-      <% if (it.has_previous && it.delta_siguiente_paso !== undefined) { %>
-        &nbsp;·&nbsp;<span class="<%= it.delta_siguiente_paso >= 0 ? 'delta-pos' : 'delta-neg' %>"><%= fmtDelta(it.delta_siguiente_paso) %> pp vs anterior</span>
-      <% } %>
+    <div class="nivel-row">
+      <span class="eyebrow">Nivel general</span>
+      <span class="chip nivel-<%= it.nivel %>"><%= it.nivel.replace('_', ' ') %></span>
     </div>
-  </div>
-</div>
+  </section>
 
-<p style="margin-top:10pt;">
-  <span class="nivel-badge nivel-<%= it.nivel %>"><%= it.nivel.replace('_', ' ') %></span>
-</p>
-
-<div class="resumen"><%= it.resumen %></div>
-
-<!-- === Desempeno por criterio === -->
-<div class="seccion">
-<h2>Desempeno por criterio</h2>
-<% for (const c of it.criterios) { %>
-  <div class="bar-row">
-    <div class="head">
-      <span><b><%= c.nombre %></b></span>
-      <span class="pct"><%= c.puntaje %> pts · <%= c.porcentaje %>%</span>
+  <!-- ── Resumen ───────────────────────────────────────────────────────────── -->
+  <section style="margin-top:11pt;">
+    <div class="resumen">
+      <span class="eyebrow">Resumen ejecutivo</span>
+      <p><%= it.resumen %></p>
     </div>
-    <div class="bar-track"><div class="bar-fill <%= barClass(c.porcentaje) %>" style="width: <%= c.porcentaje %>%;"></div></div>
-  </div>
-<% } %>
-</div>
+  </section>
 
-<!-- === Cobertura de informacion del producto === -->
-<% if (it.elementos_producto && it.elementos_producto.length > 0) { %>
-<div class="seccion">
-<h2>Cobertura de informacion del producto</h2>
-<p style="font-size:9pt;color:#666;margin-bottom:6pt;">Porcentaje de llamadas donde el vendedor menciono cada elemento del modelo.</p>
-<table>
-  <thead><tr><th>Elemento</th><th style="text-align:right;width:18%;">% Llamadas</th></tr></thead>
-  <tbody>
-  <% for (const e of it.elementos_producto) { %>
-    <tr><td><%= e.elemento %></td><td style="text-align:right;"><%= e.pct_llamadas %>%</td></tr>
-  <% } %>
-  </tbody>
-</table>
-<% if (it.elementos_subutilizados && it.elementos_subutilizados.length > 0) { %>
-<div class="alert"><b>Elementos subutilizados:</b> <%= it.elementos_subutilizados.join(', ') %></div>
-<% } %>
-</div>
-<% } %>
-
-<!-- === Top objeciones === -->
-<% if (it.objeciones && it.objeciones.length > 0) { %>
-<div class="seccion">
-<h2>Top <%= it.objeciones.length %> objeciones mas frecuentes</h2>
-<table>
-  <thead>
-    <tr>
-      <th>#</th><th>Categoria</th><th style="text-align:center;">Veces</th>
-      <th style="text-align:center;">% Llamadas</th><th style="text-align:center;">Tasa resolucion</th>
-      <th>Tecnicas mas usadas</th>
-    </tr>
-  </thead>
-  <tbody>
-  <% for (let i = 0; i < it.objeciones.length; i++) { const o = it.objeciones[i]; %>
-    <tr>
-      <td><b><%= i + 1 %></b></td>
-      <td><b><%= o.categoria %></b></td>
-      <td style="text-align:center;"><%= o.veces %></td>
-      <td style="text-align:center;"><%= o.pct_llamadas %>%</td>
-      <td style="text-align:center;"><b style="color: <%= resColor(o.tasa_resolucion) %>;"><%= o.tasa_resolucion %>%</b></td>
-      <td><%= o.tecnicas %></td>
-    </tr>
-  <% } %>
-  </tbody>
-</table>
-
-<h3>Ejemplos textuales por categoria</h3>
-<% for (let i = 0; i < it.objeciones.length; i++) { const o = it.objeciones[i]; %>
-  <div class="objecion-bloque">
-    <h3 style="color:#0a0a0a;margin-top:8pt;margin-bottom:4pt;"><%= i + 1 %>. <%= o.categoria %></h3>
-    <div class="cita"><span class="label">Objecion del lead</span><%= o.ejemplo_objecion %></div>
-    <div class="cita"><span class="label">Respuesta efectiva</span><%= o.ejemplo_respuesta_efectiva %></div>
-    <div class="cita mala"><span class="label">Respuesta que no resuelve</span><%= o.ejemplo_respuesta_fallida %></div>
-  </div>
-<% } %>
-
-<% if (it.categorias_peor_manejadas && it.categorias_peor_manejadas.length > 0) { %>
-<h3>Categorias peor manejadas</h3>
-<ul>
-<% for (const cat of it.categorias_peor_manejadas) { %>
-  <li><b><%= cat.categoria %></b>: <%= cat.consejo %></li>
-<% } %>
-</ul>
-<% } %>
-</div>
-<% } %>
-
-<!-- === Sesgos cognitivos === -->
-<% if (it.sesgos && it.sesgos.length > 0) { %>
-<div class="seccion">
-<h2>Uso de sesgos cognitivos</h2>
-<table>
-  <thead><tr><th>Sesgo</th><th style="text-align:center;">Promedio / llamada</th><th style="text-align:center;">% Llamadas donde lo usa</th></tr></thead>
-  <tbody>
-  <% for (const s of it.sesgos) { %>
-    <tr>
-      <td><b><%= s.nombre %></b></td>
-      <td style="text-align:center;"><%= s.promedio_por_llamada %></td>
-      <td style="text-align:center;"><%= s.pct_llamadas %>%</td>
-    </tr>
-  <% } %>
-  </tbody>
-</table>
-<% if (it.sesgos_subutilizados && it.sesgos_subutilizados.length > 0) { %>
-<div class="alert"><b>Sesgos subutilizados:</b> <%= it.sesgos_subutilizados.join(', ') %></div>
-<% } %>
-</div>
-<% } %>
-
-<!-- === Conversacion + Cierres === -->
-<div class="seccion">
-<div class="grid-2 grid-short">
-  <div class="col">
-    <h2 style="border:none;font-size:11pt;">Conversacion</h2>
-    <table>
-      <tr><td>Talk ratio vendedor</td><td style="text-align:right;"><b><%= it.talk_ratio %>%</b></td></tr>
-      <tr><td>Preguntas promedio</td><td style="text-align:right;"><b><%= it.preguntas_promedio %></b></td></tr>
-    </table>
-    <% if (it.talk_ratio > 70) { %>
-    <div class="alert">Talk ratio elevado: el vendedor habla demasiado y el lead apenas participa.</div>
+  <!-- ── Desempeño por criterio ────────────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Evaluación</span>
+    <h2 class="title">Desempeño por criterio</h2>
+    <% for (const c of it.criterios) { %>
+      <div class="bar-row">
+        <div class="head">
+          <span><b><%= c.nombre %></b></span>
+          <span class="pct"><%= c.puntaje %>/<%= c.max_puntaje %> · <%= c.porcentaje %>%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill <%= barClass(c.porcentaje) %>" style="width: <%= c.porcentaje %>%;"></div></div>
+      </div>
     <% } %>
-  </div>
-  <div class="col">
-    <h2 style="border:none;font-size:11pt;">Cierres</h2>
-    <table>
-      <tr><td>Apartado</td><td style="text-align:right;"><b><%= it.cierres.apartado %></b></td></tr>
-      <tr><td>Cita seguimiento</td><td style="text-align:right;"><b><%= it.cierres.cita_seguimiento %></b></td></tr>
-      <tr><td>Firma</td><td style="text-align:right;"><b><%= it.cierres.firma %></b></td></tr>
-      <tr><td>Fecha de decision</td><td style="text-align:right;"><b><%= it.cierres.fecha_decision %></b></td></tr>
-      <tr><td>Sin siguiente paso</td><td style="text-align:right;"><b><%= it.cierres.sin_siguiente_paso %></b></td></tr>
-    </table>
-  </div>
-</div>
-</div>
+  </section>
 
-<!-- === Fortalezas / Debilidades === -->
-<div class="seccion">
-<div class="grid-2">
-  <div class="col">
-    <h2 style="border:none;font-size:11pt;color:#1e6b30;">Fortalezas recurrentes</h2>
-    <ul>
-    <% for (const f of it.fortalezas) { %>
-      <li><b><%= f.descripcion %></b> (<%= f.pct_llamadas %>% de llamadas)
-      <% if (f.cita) { %>
-        <div class="cita" style="margin-top:4pt;"><%= f.cita %></div>
-      <% } %>
-      </li>
+  <!-- ── Cobertura de producto ─────────────────────────────────────────────── -->
+  <% if (it.elementos_producto && it.elementos_producto.length > 0) { %>
+  <section>
+    <span class="eyebrow">Modelo comercial</span>
+    <h2 class="title">Cobertura de información del producto</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Elemento</th><th style="text-align:right;width:20%;">% Llamadas</th></tr></thead>
+        <tbody>
+        <% for (const e of it.elementos_producto) { %>
+          <tr><td><%= e.elemento %></td><td class="num" style="text-align:right;"><%= e.pct_llamadas %>%</td></tr>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
+    <% if (it.elementos_subutilizados && it.elementos_subutilizados.length > 0) { %>
+      <div class="nota"><b>Elementos subutilizados:</b> <%= it.elementos_subutilizados.join(', ') %></div>
     <% } %>
-    </ul>
-  </div>
-  <div class="col">
-    <h2 style="border:none;font-size:11pt;color:#b51e1e;">Debilidades recurrentes</h2>
-    <ul>
-    <% for (const d of it.debilidades) { %>
-      <li><b><%= d.descripcion %></b> (<%= d.pct_llamadas %>%) <span class="pill <%= d.impacto %>"><%= impactoDisplay(d.impacto) %></span></li>
-    <% } %>
-    </ul>
-  </div>
-</div>
-</div>
-
-<!-- === Videollamadas destacadas === -->
-<div class="seccion">
-<h2>Videollamadas destacadas</h2>
-<div class="grid-2 grid-short">
-  <div class="col">
-    <h3 style="color:#1e6b30;">Mejor llamada: <%= it.mejor_llamada.score %>/100</h3>
-    <p style="font-size:9pt;color:#666;"><%= it.mejor_llamada.fecha %> · Lead: <%= it.mejor_llamada.lead %></p>
-    <p><%= it.mejor_llamada.descripcion %></p>
-    <% if (it.mejor_llamada_record_url) { %>
-    <p style="margin-top:8px;">
-      <a href="<%= it.mejor_llamada_record_url %>" style="display:inline-block;background:#1e6b30;color:#fff;text-decoration:none;font-size:9pt;font-weight:600;padding:6px 12px;border-radius:4px;">▶ Escuchar grabación</a>
-    </p>
-    <% } %>
-  </div>
-  <div class="col">
-    <h3 style="color:#b51e1e;">Peor llamada: <%= it.peor_llamada.score %>/100</h3>
-    <p style="font-size:9pt;color:#666;"><%= it.peor_llamada.fecha %> · Lead: <%= it.peor_llamada.lead %></p>
-    <p><%= it.peor_llamada.descripcion %></p>
-  </div>
-</div>
-</div>
-
-<!-- === Recomendaciones === -->
-<div class="seccion">
-<h2>Recomendaciones de accion</h2>
-<table>
-  <thead><tr><th style="width:9%;">Prioridad</th><th style="width:18%;">Area</th><th>Accion</th><th style="width:22%;">Metrica a mover</th></tr></thead>
-  <tbody>
-  <% for (const r of it.recomendaciones) { %>
-    <tr>
-      <td><span class="pill <%= r.prioridad %>"><%= r.prioridad %></span></td>
-      <td><%= r.area %></td>
-      <td><%= r.accion %></td>
-      <td style="font-size:9pt;color:#444;"><%= r.metrica %></td>
-    </tr>
+  </section>
   <% } %>
-  </tbody>
-</table>
-</div>
+
+  <!-- ── Objeciones ────────────────────────────────────────────────────────── -->
+  <% if (it.objeciones && it.objeciones.length > 0) { %>
+  <section>
+    <span class="eyebrow">Manejo de objeciones</span>
+    <h2 class="title">Top <%= it.objeciones.length %> objeciones más frecuentes</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:5%;">#</th><th>Categoría</th>
+            <th style="text-align:center;width:9%;">Veces</th>
+            <th style="text-align:center;width:12%;">% Llam.</th>
+            <th style="text-align:center;width:14%;">Resolución</th>
+            <th style="width:26%;">Técnicas</th>
+          </tr>
+        </thead>
+        <tbody>
+        <% for (let i = 0; i < it.objeciones.length; i++) { const o = it.objeciones[i]; %>
+          <tr>
+            <td class="num"><b><%= i + 1 %></b></td>
+            <td><b><%= o.categoria %></b></td>
+            <td class="num" style="text-align:center;"><%= o.veces %></td>
+            <td class="num" style="text-align:center;"><%= o.pct_llamadas %>%</td>
+            <td class="num" style="text-align:center;"><b class="<%= o.tasa_resolucion >= 60 ? 'up-txt' : 'down-txt' %>"><%= o.tasa_resolucion %>%</b></td>
+            <td><%= o.tecnicas %></td>
+          </tr>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub">Ejemplos textuales por categoría</h3>
+    <% for (let i = 0; i < it.objeciones.length; i++) { const o = it.objeciones[i]; %>
+      <div class="objecion-bloque">
+        <h3 class="sub" style="margin-top:8pt;"><%= i + 1 %>. <%= o.categoria %></h3>
+        <div class="cita"><span class="label">Objeción del lead</span><%= o.ejemplo_objecion %></div>
+        <div class="cita buena"><span class="label">Respuesta efectiva</span><%= o.ejemplo_respuesta_efectiva %></div>
+        <div class="cita mala"><span class="label">Respuesta que no resuelve</span><%= o.ejemplo_respuesta_fallida %></div>
+      </div>
+    <% } %>
+
+    <% if (it.categorias_peor_manejadas && it.categorias_peor_manejadas.length > 0) { %>
+      <h3 class="sub">Categorías peor manejadas</h3>
+      <div class="panel opp" style="border-top:none;">
+        <ul>
+        <% for (const cat of it.categorias_peor_manejadas) { %>
+          <li><b><%= cat.categoria %>:</b> <%= cat.consejo %></li>
+        <% } %>
+        </ul>
+      </div>
+    <% } %>
+  </section>
+  <% } %>
+
+  <!-- ── Sesgos ────────────────────────────────────────────────────────────── -->
+  <% if (it.sesgos && it.sesgos.length > 0) { %>
+  <section>
+    <span class="eyebrow">Persuasión</span>
+    <h2 class="title">Uso de sesgos cognitivos</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Sesgo</th><th style="text-align:center;width:22%;">Prom. / llamada</th><th style="text-align:center;width:26%;">% Llamadas</th></tr></thead>
+        <tbody>
+        <% for (const s of it.sesgos) { %>
+          <tr>
+            <td><b><%= s.nombre %></b></td>
+            <td class="num" style="text-align:center;"><%= s.promedio_por_llamada %></td>
+            <td class="num" style="text-align:center;"><%= s.pct_llamadas %>%</td>
+          </tr>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
+    <% if (it.sesgos_subutilizados && it.sesgos_subutilizados.length > 0) { %>
+      <div class="nota"><b>Sesgos subutilizados:</b> <%= it.sesgos_subutilizados.join(', ') %></div>
+    <% } %>
+  </section>
+  <% } %>
+
+  <!-- ── Conversación + Cierres ────────────────────────────────────────────── -->
+  <section>
+    <div class="grid-2">
+      <div class="panel">
+        <span class="eyebrow">Conversación</span>
+        <table class="kv">
+          <tr><td>Talk ratio del vendedor</td><td><%= it.talk_ratio %>%</td></tr>
+          <tr><td>Preguntas promedio</td><td><%= it.preguntas_promedio %></td></tr>
+        </table>
+        <% if (it.talk_ratio > 70) { %>
+          <div class="nota warn"><b>Talk ratio elevado:</b> el vendedor habla demasiado y el lead apenas participa.</div>
+        <% } %>
+      </div>
+      <div class="panel">
+        <span class="eyebrow">Cierres</span>
+        <table class="kv">
+          <tr><td>Apartado</td><td><%= it.cierres.apartado %></td></tr>
+          <tr><td>Cita de seguimiento</td><td><%= it.cierres.cita_seguimiento %></td></tr>
+          <tr><td>Firma</td><td><%= it.cierres.firma %></td></tr>
+          <tr><td>Fecha de decisión</td><td><%= it.cierres.fecha_decision %></td></tr>
+          <tr><td>Sin siguiente paso</td><td><span class="<%= it.cierres.sin_siguiente_paso > 0 ? 'down-txt' : '' %>"><%= it.cierres.sin_siguiente_paso %></span></td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Fortalezas / Debilidades ──────────────────────────────────────────── -->
+  <section>
+    <div class="grid-2">
+      <div class="panel pos">
+        <span class="eyebrow">Fortalezas recurrentes</span>
+        <ul>
+        <% for (const f of it.fortalezas) { %>
+          <li><b><%= f.descripcion %></b> (<%= f.pct_llamadas %>% de llamadas)<% if (f.cita) { %><div class="cita buena" style="margin-top:4pt;"><%= f.cita %></div><% } %></li>
+        <% } %>
+        </ul>
+      </div>
+      <div class="panel opp">
+        <span class="eyebrow">Debilidades recurrentes</span>
+        <ul>
+        <% for (const d of it.debilidades) { %>
+          <li><b><%= d.descripcion %></b> (<%= d.pct_llamadas %>%) — <span style="font-family:var(--mono);font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">impacto <%= d.impacto %></span></li>
+        <% } %>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Videollamadas destacadas ──────────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Videollamadas destacadas</span>
+    <div class="grid-2">
+      <div class="callout best">
+        <div class="head"><span class="lbl">Mejor llamada</span><span class="score"><%= it.mejor_llamada.score %>/100</span></div>
+        <div class="meta"><%= it.mejor_llamada.fecha %> · Lead: <%= it.mejor_llamada.lead %></div>
+        <p><%= it.mejor_llamada.descripcion %></p>
+        <% if (it.mejor_llamada_record_url) { %>
+          <a class="btn-rec" href="<%= it.mejor_llamada_record_url %>">▶ Escuchar grabación</a>
+        <% } %>
+      </div>
+      <div class="callout worst">
+        <div class="head"><span class="lbl">Peor llamada</span><span class="score"><%= it.peor_llamada.score %>/100</span></div>
+        <div class="meta"><%= it.peor_llamada.fecha %> · Lead: <%= it.peor_llamada.lead %></div>
+        <p><%= it.peor_llamada.descripcion %></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Recomendaciones ───────────────────────────────────────────────────── -->
+  <section>
+    <span class="eyebrow">Plan de acción</span>
+    <h2 class="title">Recomendaciones de acción</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:9%;">Prioridad</th><th style="width:18%;">Área</th><th>Acción</th><th style="width:22%;">Métrica a mover</th></tr></thead>
+        <tbody>
+        <% for (const r of it.recomendaciones) { %>
+          <tr>
+            <td><span class="pill <%= r.prioridad %>"><%= r.prioridad %></span></td>
+            <td><b><%= r.area %></b></td>
+            <td><%= r.accion %></td>
+            <td style="font-size:8.5pt;color:var(--text-muted);"><%= r.metrica %></td>
+          </tr>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
 </main>
 </body>

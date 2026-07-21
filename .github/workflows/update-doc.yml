@@ -1,0 +1,58 @@
+name: Actualizar documento explicativo
+
+# Reescribe docs/QUE-ES-ZEBRA-REPORTS.md con IA cada vez que cambia el código en
+# la rama principal, para que la explicación en lenguaje natural siga al día.
+#
+# Requisito: el secret ANTHROPIC_API_KEY debe estar configurado en el repositorio
+# (Settings → Secrets and variables → Actions → New repository secret).
+#
+# Nota: si cambias la rama por defecto del repositorio, actualiza `branches` abajo.
+
+on:
+  push:
+    branches: [claude/setup-html-project-6wZQX]
+    # Solo se regenera cuando cambia algo que afecta el CONTENIDO del documento.
+    # docs/ NO está en la lista: así el commit que hace este propio workflow no
+    # vuelve a dispararlo (evita bucles).
+    paths:
+      - 'src/**'
+      - 'clients.json'
+      - 'scripts/generate-doc.mjs'
+      - '.github/workflows/update-doc.yml'
+  workflow_dispatch:  # permite ejecutarlo a mano desde la pestaña Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-doc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Regenerar documento con IA
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/generate-doc.mjs
+
+      - name: Confirmar cambios (si los hay)
+        run: |
+          if git diff --quiet -- docs/QUE-ES-ZEBRA-REPORTS.md; then
+            echo "El documento ya estaba al día; no hay nada que confirmar."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/QUE-ES-ZEBRA-REPORTS.md
+          git commit -m "docs: regenerar explicación de la herramienta [skip ci]"
+          git push

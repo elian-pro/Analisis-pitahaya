@@ -14,6 +14,7 @@ import {
 import { processAdvisor, buildSidecar, parseSidecarMetrics, type AdvisorResult } from '../claude/individual';
 import { processGeneralReport } from '../claude/general';
 import { mergePdfs } from '../pdf/merge';
+import { runRadarForClient } from '../radar/dbFlow';
 import { recordTokens } from '../tokens/store';
 import { recordReportMetrics, previousReportTextFromDb } from '../metrics/store';
 
@@ -254,9 +255,29 @@ export async function runJob(job: Job): Promise<void> {
       ),
     );
 
+    // ── 8.5 Radar de Objeciones (opcional, entregable APARTE, solo mensual) ────
+    // No entra al merge: se sube a su propia carpeta de Drive. Un fallo aquí es
+    // parcial (el reporte de desempeño ya se subió correctamente).
+    let radarResult: Awaited<ReturnType<typeof runRadarForClient>> | undefined;
+    let radarInput = 0, radarOutput = 0;
+    const radarErrors: string[] = [];
+    if (job.include_radar && job.period_type === 'monthly') {
+      if (isCancelled()) throw new CancelledError();
+      try {
+        console.log(`[runner] Step 8.5: generating Radar de Objeciones for ${client.name}...`);
+        radarResult = await runRadarForClient(client, job.month);
+        radarInput  = radarResult.input_tokens;
+        radarOutput = radarResult.output_tokens;
+        console.log(`[runner] Step 8.5 done: radar PDF = ${radarResult.driveUrl}`);
+      } catch (e) {
+        console.error(`[runner] Radar de Objeciones failed:`, (e as Error).message);
+        radarErrors.push(`Radar de Objeciones: ${(e as Error).message}`);
+      }
+    }
+
     // ── 9. Finalise ──────────────────────────────────────────────────────────
-    const totalInput  = individualResults.reduce((s, r) => s + r.input_tokens,  0) + generalInput;
-    const totalOutput = individualResults.reduce((s, r) => s + r.output_tokens, 0) + generalOutput;
+    const totalInput  = individualResults.reduce((s, r) => s + r.input_tokens,  0) + generalInput  + radarInput;
+    const totalOutput = individualResults.reduce((s, r) => s + r.output_tokens, 0) + generalOutput + radarOutput;
     const tokenSummary = {
       input:    totalInput,
       output:   totalOutput,
@@ -273,12 +294,14 @@ export async function runJob(job: Job): Promise<void> {
         driveUrl: combinedUrl,
         advisors: individualResults.map(r => r.asesor),
       },
+      ...(radarResult && { radar: { driveUrl: radarResult.driveUrl } }),
       tokens: tokenSummary,
     };
     console.log(`[runner] Step 9: finalising job, combined.driveUrl=${combinedUrl}`);
     const partialErrors = [
       ...failures,
       ...sidecarFailures.map(f => `sidecar ${f} (sin comparación el próximo periodo)`),
+      ...radarErrors,
     ];
     updateJob(job.id, {
       status:  'done',

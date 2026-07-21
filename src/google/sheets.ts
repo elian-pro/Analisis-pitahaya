@@ -90,6 +90,39 @@ async function readSheet(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+// Lista los títulos de las pestañas (hojas) de un spreadsheet, para poder
+// elegirlos en un menú al configurar un cliente en vez de escribirlos a mano.
+export async function listSheetTabs(
+  spreadsheetId: string,
+): Promise<{ title: string; tabs: string[] }> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'properties.title,sheets.properties.title',
+  });
+  const title = res.data.properties?.title ?? '';
+  const tabs = (res.data.sheets ?? [])
+    .map(s => s.properties?.title)
+    .filter((t): t is string => typeof t === 'string' && t.length > 0);
+  return { title, tabs };
+}
+
+// Lee la primera fila (encabezados) de una pestaña, para ofrecer las columnas en
+// menús al configurar un cliente. Pide solo la fila 1 para no leer toda la hoja.
+export async function getSheetHeaders(spreadsheetId: string, tab: string): Promise<string[]> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const range = `'${tab.replace(/'/g, "''")}'!1:1`;
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const row = (res.data.values && res.data.values[0]) || [];
+  return row.map(h => String(h ?? '').trim()).filter(Boolean);
+}
+
 export async function getAdvisorsForMonth(
   spreadsheetId: string,
   dataSheetName: string,
@@ -194,6 +227,7 @@ export async function getCallData(
   maxTranscripcionChars: number,
   dateFrom?: string,  // YYYY-MM-DD, activates weekly range filter
   dateTo?: string,    // YYYY-MM-DD
+  minDurationSeconds: number = MIN_CALL_DURATION_SECONDS,  // umbral configurable (Radar usa 0 y filtra aparte)
 ): Promise<CallRow[]> {
   const rows = await readSheet(spreadsheetId, sheetName);
   if (rows.length < 2) return [];
@@ -238,7 +272,7 @@ export async function getCallData(
     const duracionSeg    = rawDuracion !== null ? Number(rawDuracion) : NaN;
     const duracionKnown  = idx.duracion >= 0 && !isNaN(duracionSeg);
 
-    if (duracionKnown && duracionSeg < MIN_CALL_DURATION_SECONDS) {
+    if (duracionKnown && duracionSeg < minDurationSeconds) {
       discardedByDuration++;
       continue;
     }

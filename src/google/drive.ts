@@ -179,6 +179,55 @@ export async function uploadPdf(
 
 const MIME_GDOC = 'application/vnd.google-apps.document';
 const MIME_TEXT = 'text/plain';
+const MIME_JSON = 'application/json';
+
+// ── Sidecar del Radar de Objeciones: radar-YYYY-MM.json en la carpeta de Radar ─
+// Se guarda separado de los sidecars de asesores (prefijo distinto) para no
+// confundir a findPreviousReport. Habilita el comparativo mes contra mes.
+function radarSidecarName(periodKey: string): string {
+  return `radar-${periodKey}.json`;
+}
+
+export async function findRadarSidecar(folderId: string, periodKey: string): Promise<string | null> {
+  const drive = getDrive();
+  const name = radarSidecarName(periodKey);
+  try {
+    const list = await drive.files.list({
+      q: [`'${folderId}' in parents`, `name = '${name}'`, `trashed = false`].join(' and '),
+      fields: 'files(id,mimeType)', pageSize: 1,
+      supportsAllDrives: true, includeItemsFromAllDrives: true,
+    });
+    const f = list.data.files?.[0];
+    if (!f?.id) return null;
+    return await downloadText(f.id, f.mimeType || MIME_JSON);
+  } catch (err) {
+    console.warn(`[drive] Could not read radar sidecar ${name}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+export async function uploadRadarSidecar(folderId: string, periodKey: string, json: string): Promise<void> {
+  const drive = getDrive();
+  const name = radarSidecarName(periodKey);
+  // Borra la versión previa del mismo mes para que re-generar no deje duplicados.
+  try {
+    const existing = await drive.files.list({
+      q: [`'${folderId}' in parents`, `name = '${name}'`, `trashed = false`].join(' and '),
+      fields: 'files(id)', pageSize: 10,
+      supportsAllDrives: true, includeItemsFromAllDrives: true,
+    });
+    for (const f of existing.data.files ?? []) {
+      if (f.id) await drive.files.delete({ fileId: f.id, supportsAllDrives: true });
+    }
+  } catch (err) {
+    console.warn(`[drive] Could not clean old radar sidecar ${name}:`, err instanceof Error ? err.message : err);
+  }
+  await drive.files.create({
+    requestBody: { name, parents: [folderId] },
+    media: { mimeType: MIME_JSON, body: Readable.from(Buffer.from(json, 'utf-8')) },
+    supportsAllDrives: true,
+  });
+}
 
 async function downloadText(fileId: string, mimeType: string): Promise<string> {
   const drive = getDrive();

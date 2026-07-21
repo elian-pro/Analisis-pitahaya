@@ -309,6 +309,17 @@
     .form-textarea{font-family:'Inter',monospace,sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--fg);width:100%;resize:vertical;line-height:1.55;}
     .form-textarea:focus{outline:none;border-color:var(--accent);}
     .form-hint{font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:0.04em;line-height:1.5;}
+    /* ── Custom file picker (reemplaza el input file default) ── */
+    .file-picker{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
+    .file-picker input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);}
+    .file-picker-btn{display:inline-flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:500;color:var(--fg);background:var(--surface2);border:0.5px solid var(--border2);border-radius:8px;padding:8px 14px;cursor:pointer;transition:border-color .15s,background .15s;white-space:nowrap;}
+    .file-picker-btn:hover{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 8%, var(--surface2));}
+    .file-picker-btn i{font-size:15px;color:var(--accent);transform:rotate(-45deg);}
+    .file-picker-name{font-size:12px;color:var(--muted);letter-spacing:0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+    .file-picker-name.has-file{color:var(--fg);font-weight:500;}
+    .file-picker-clear{border:none;background:none;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;display:none;}
+    .file-picker-clear:hover{color:var(--danger);}
+    .file-picker-name.has-file + .file-picker-clear{display:inline;}
     .form-note{padding:9px 12px;background:color-mix(in srgb, var(--accent) 7%, var(--surface));border:0.5px solid color-mix(in srgb, var(--accent) 28%, transparent);border-radius:7px;font-size:11px;color:var(--muted);line-height:1.5;}
     .form-toggle-row{display:flex;border:0.5px solid var(--border2);border-radius:100px;overflow:hidden;height:34px;width:fit-content;}
     .form-toggle-btn{padding:0 18px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:400;letter-spacing:0.12em;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap;}
@@ -367,9 +378,10 @@
 <main class="main">
   <nav class="app-nav">
     <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')"><i class="ti ti-chart-bar"></i>REPORTES</button>
+    <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')"><i class="ti ti-radar"></i>RADAR</button>
     <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
-    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
     <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
+    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
   </nav>
   <div id="tab-reports" class="tab-panel active">
   <div class="config-row">
@@ -629,6 +641,83 @@
     </div>
     <div id="schedule-list"></div>
   </div>
+
+  <!-- ── Radar de Objeciones ─────────────────────────────────────────────── -->
+  <div id="tab-radar" class="tab-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Radar de Objeciones</div>
+        <div class="panel-sub">Detecta qué preguntan los prospectos y cómo responde el equipo · reporte mensual en PDF</div>
+      </div>
+    </div>
+
+    <!-- Flujo A: desde un cliente en la base -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-label">Generar desde un cliente</div>
+      <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field" style="flex:1 1 220px;">
+          <label class="field-label">Cliente</label>
+          <select id="radar-client-select"></select>
+        </div>
+        <div class="field" style="flex:1 1 160px;">
+          <label class="field-label">Mes</label>
+          <select id="radar-month-select"></select>
+        </div>
+        <button class="btn-sm btn-sm-green" id="radar-gen-btn" onclick="generateRadarFromClient()">Generar Radar</button>
+      </div>
+      <div class="form-hint" style="margin-top:8px;">Usa la hoja del cliente (llamadas &gt; 200 s). Requiere que el cliente tenga configurada su "Carpeta Drive de Radar" en Ajustes.</div>
+      <div id="radar-client-status" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- Flujo B: desde archivo .md -->
+    <div class="card">
+      <div class="section-label">Radar desde archivo (.md)</div>
+      <p class="card-desc">Sube un Markdown con las transcripciones ya compiladas. Funciona con o sin cliente en la base.</p>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>Archivo .md *</label>
+        <div class="file-picker">
+          <input type="file" id="radar-md-file" accept=".md,text/markdown" onchange="_fpUpdate(this)">
+          <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-md-file')"><i class="ti ti-paperclip"></i> Adjuntar .md</button>
+          <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
+          <button type="button" class="file-picker-clear" onclick="_fpClear('radar-md-file')" title="Quitar archivo">✕</button>
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-field">
+          <label>Cliente (opcional)</label>
+          <select id="radar-upload-client"></select>
+        </div>
+        <div class="form-field">
+          <label>Entrega</label>
+          <select id="radar-deliver">
+            <option value="download">Descargar</option>
+            <option value="drive">Subir a Drive</option>
+            <option value="both">Ambas</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid-2" style="margin-top:12px;">
+        <div class="form-field"><label>Nombre del cliente (override)</label><input id="radar-ov-name" class="form-control" placeholder="Si no viene en el archivo"></div>
+        <div class="form-field"><label>Periodo (override)</label><input id="radar-ov-period" class="form-control" placeholder="Ej. Junio 2026"></div>
+      </div>
+      <div class="form-field" style="margin-top:12px;">
+        <label>Contexto del negocio (override)</label>
+        <textarea id="radar-ov-contexto" class="form-control" rows="3" placeholder="Giro, tipo de llamada y objetivo. Si no lo pones, se toma del archivo o de un default."></textarea>
+      </div>
+      <div class="form-field" style="margin-top:12px;">
+        <label>Sidecar del periodo anterior (.json, opcional)</label>
+        <div class="file-picker">
+          <input type="file" id="radar-prev-sidecar" accept=".json,application/json" onchange="_fpUpdate(this)">
+          <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-prev-sidecar')"><i class="ti ti-paperclip"></i> Adjuntar .json</button>
+          <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
+          <button type="button" class="file-picker-clear" onclick="_fpClear('radar-prev-sidecar')" title="Quitar archivo">✕</button>
+        </div>
+        <div class="form-hint" style="margin-top:6px;">Adjúntalo para habilitar el comparativo vs. el periodo anterior.</div>
+      </div>
+      <button class="btn-sm btn-sm-green" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:14px;">Generar desde archivo</button>
+      <div id="radar-upload-status" style="margin-top:12px;"></div>
+    </div>
+  </div>
 </main>
 
 <!-- Client form modal -->
@@ -660,60 +749,71 @@
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Carpeta de reportes (Drive ID) *</label>
-            <input class="form-control" id="cf-folder-id" placeholder="ID de la carpeta en Google Drive">
-            <div class="form-hint">Carpeta donde se guardan los reportes generados</div>
+            <label class="form-label">Carpeta de reportes (link de Drive) *</label>
+            <input class="form-control" id="cf-folder-id" placeholder="Pega el link de la carpeta de Google Drive">
+            <div class="form-hint">Pega el link de la carpeta donde se guardan los reportes. Detectamos el ID solo.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Carpeta de PDFs (Drive ID)</label>
-            <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional">
-            <div class="form-hint">Carpeta alternativa para los PDFs</div>
+            <label class="form-label">Carpeta de PDFs (link de Drive)</label>
+            <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional — pega el link">
+            <div class="form-hint">Carpeta alternativa para los PDFs (opcional)</div>
           </div>
         </div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Google Sheets</div>
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label">ID del spreadsheet *</label>
-            <input class="form-control" id="cf-spreadsheet-id" placeholder="ID de Google Sheets">
+        <div class="form-group">
+          <label class="form-label">Hoja de Google (pega el link) *</label>
+          <input class="form-control" id="cf-spreadsheet-id" placeholder="Pega el link de Google Sheets (o el ID)">
+          <div class="form-hint">Pega el link completo de la hoja. Detectamos el ID automáticamente.</div>
+        </div>
+        <div class="form-group">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
+            <label class="form-label" style="margin:0;">Pestaña (hoja de datos) *</label>
+            <span class="mode-toggle">
+              <button type="button" id="tab-mode-list" class="mode-btn active" onclick="setTabMode('list')">Lista</button>
+              <button type="button" id="tab-mode-text" class="mode-btn" onclick="setTabMode('text')">Escribir</button>
+            </span>
           </div>
-          <div class="form-group">
-            <label class="form-label">Nombre de la pestaña *</label>
-            <input class="form-control" id="cf-sheet-name" placeholder="Ej. Llamadas">
+          <div id="tab-mode-list-wrap" style="display:flex; gap:8px; align-items:center;">
+            <select class="form-control" id="cf-sheet-name-select" style="flex:1 1 180px;" data-placeholder="— Elige una pestaña —" onchange="_onTabSelect()"></select>
+            <button type="button" class="btn-sm btn-sm-cancel" id="cf-load-tabs" onclick="loadSheetTabs()" style="white-space:nowrap;">Cargar pestañas</button>
           </div>
+          <input class="form-control" id="cf-sheet-name" placeholder="Escribe el nombre exacto de la pestaña" style="display:none;" onchange="loadColumnsForTab()">
+          <div class="form-hint" id="cf-tabs-hint">En “Lista”, pega el link y pulsa “Cargar pestañas”. En “Escribir”, teclea el nombre exacto.</div>
         </div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Columnas de la hoja</div>
+        <div class="form-hint" style="margin:-4px 0 12px;">Elige la pestaña arriba y las columnas se llenan solas con los encabezados de la hoja. También puedes escribir el nombre.</div>
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Columna de fecha *</label>
-            <input class="form-control-sm" id="cf-col-fecha" placeholder="Ej. Fecha">
+            <select class="form-control-sm" id="cf-col-fecha" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de asesor *</label>
-            <input class="form-control-sm" id="cf-col-asesor" placeholder="Ej. Asesor">
+            <select class="form-control-sm" id="cf-col-asesor" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de calificación *</label>
-            <input class="form-control-sm" id="cf-col-calif" placeholder="Ej. Calif global">
+            <select class="form-control-sm" id="cf-col-calif" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de análisis *</label>
-            <input class="form-control-sm" id="cf-col-analisis" placeholder="Ej. Analisis">
+            <select class="form-control-sm" id="cf-col-analisis" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de transcripción *</label>
-            <input class="form-control-sm" id="cf-col-transcripcion" placeholder="Ej. Transcripcion">
+            <select class="form-control-sm" id="cf-col-transcripcion" data-free data-placeholder="Elige o escribe la columna"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de duración</label>
-            <input class="form-control-sm" id="cf-col-duracion" placeholder="Ej. Duracion (opcional)">
+            <select class="form-control-sm" id="cf-col-duracion" data-free data-placeholder="Opcional"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Columna de grabación</label>
-            <input class="form-control-sm" id="cf-col-record" placeholder="Ej. Record (opcional, link de la grabación)">
+            <select class="form-control-sm" id="cf-col-record" data-free data-placeholder="Opcional (link de la grabación)"></select>
           </div>
         </div>
       </div>
@@ -726,7 +826,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Máx. caracteres de transcripción</label>
-          <input class="form-control" id="cf-max-chars" type="number" placeholder="80000" min="1000" max="200000">
+          <input class="form-control" id="cf-max-chars" type="number" placeholder="3000" min="1000" max="200000">
         </div>
       </div>
       <div class="form-section">
@@ -738,6 +838,36 @@
         <div class="form-group" style="margin-top:12px;">
           <label class="form-label">Prompt general</label>
           <textarea class="form-textarea" id="cf-prompt-general" rows="8" placeholder="Prompt para el reporte ejecutivo del equipo…"></textarea>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Radar de Objeciones (opcional)</div>
+        <div class="form-hint" style="margin:-4px 0 12px;">Configura el reporte “Radar de Objeciones” para este cliente. Si no lo usas, deja los campos vacíos.</div>
+        <div class="form-group">
+          <label class="form-label">Prompt del Radar</label>
+          <textarea class="form-textarea" id="cf-prompt-radar" rows="6" placeholder="Contexto del negocio para el Radar (giro, tipo de llamada, objetivo). Si lo dejas vacío, se usa un prompt genérico."></textarea>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Carpeta Drive de Radar</label>
+            <input class="form-control" id="cf-radar-folder-id" placeholder="Pega el link de la carpeta">
+            <div class="form-hint">Obligatoria para generar el Radar. Detectamos el ID del link.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Carpeta de respaldo Radar</label>
+            <input class="form-control" id="cf-radar-sidecar-folder-id" placeholder="Opcional — pega el link">
+            <div class="form-hint">Para el sidecar del comparativo. Si se deja vacía, se usa la de Radar.</div>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Duración mínima (segundos)</label>
+            <input class="form-control" id="cf-radar-min-dur" type="number" min="0" max="3600" placeholder="200">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Máx. caracteres (Radar)</label>
+            <input class="form-control" id="cf-radar-max-chars" type="number" min="100" max="50000" placeholder="8000">
+          </div>
         </div>
       </div>
     </div>
@@ -774,29 +904,51 @@
         </div>
       </div>
 
-      <!-- Modo -->
+      <!-- Tipo de Automatización -->
       <div class="form-section">
-        <div class="form-section-title">Modo</div>
+        <div class="form-section-title">Tipo de automatización</div>
         <div class="form-group">
           <div class="form-toggle-row">
-            <button class="form-toggle-btn active" id="sf-mode-report" onclick="setScheduleMode('report')">Generar reporte</button>
-            <button class="form-toggle-btn" id="sf-mode-notify" onclick="setScheduleMode('notify_only')">Solo mensaje</button>
+            <button class="form-toggle-btn active" id="sf-type-report"  onclick="setScheduleType('report')">Reporte</button>
+            <button class="form-toggle-btn"        id="sf-type-message" onclick="setScheduleType('message')">Mensaje</button>
           </div>
-          <div class="form-hint" style="margin-top:6px;" id="sf-mode-hint">Genera el análisis con IA y sube el reporte a Drive.</div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-type-hint">Genera un reporte con IA y lo sube a Drive.</div>
+        </div>
+      </div>
+
+      <!-- Tipo de reporte (gate): solo visible cuando el tipo es "Reporte" -->
+      <div class="form-section" id="sf-kind-section">
+        <div class="form-section-title">Tipo de reporte</div>
+        <div class="form-group">
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn" id="sf-kind-analisis" onclick="setScheduleReportKind('analisis')">Análisis de Llamadas</button>
+            <button class="form-toggle-btn" id="sf-kind-radar"    onclick="setScheduleReportKind('radar')">Radar de Objeciones</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;" id="sf-kind-hint">Elige el tipo de reporte para continuar.</div>
         </div>
       </div>
 
       <!-- Frecuencia -->
-      <div class="form-section">
+      <div class="form-section" id="sf-freq-section">
         <div class="form-section-title">Frecuencia</div>
         <div class="form-group">
           <label class="form-label">Tipo</label>
-          <div class="form-toggle-row">
-            <button class="form-toggle-btn active" id="sf-freq-weekly"  onclick="setScheduleFreq('weekly')">Semanal</button>
-            <button class="form-toggle-btn"        id="sf-freq-monthly" onclick="setScheduleFreq('monthly')">Mensual</button>
-            <button class="form-toggle-btn"        id="sf-freq-once"    onclick="setScheduleFreq('once')">Una sola vez</button>
+          <div class="form-toggle-row" style="flex-wrap:wrap;">
+            <button class="form-toggle-btn"        id="sf-freq-daily"    onclick="setScheduleFreq('daily')">Diaria</button>
+            <button class="form-toggle-btn active" id="sf-freq-weekly"   onclick="setScheduleFreq('weekly')">Semanal</button>
+            <button class="form-toggle-btn"        id="sf-freq-biweekly" onclick="setScheduleFreq('biweekly')">Quincenal</button>
+            <button class="form-toggle-btn"        id="sf-freq-monthly"  onclick="setScheduleFreq('monthly')">Mensual</button>
+            <button class="form-toggle-btn"        id="sf-freq-once"     onclick="setScheduleFreq('once')">Una sola vez</button>
           </div>
           <div class="form-hint" style="margin-top:6px;" id="sf-freq-hint">Analiza la semana anterior (lun–dom) en el día y hora indicados.</div>
+        </div>
+        <!-- Diaria -->
+        <div id="sf-daily-group" class="form-group" style="display:none;">
+          <div class="form-note">Se ejecutará todos los días a la hora indicada.</div>
+        </div>
+        <!-- Quincenal -->
+        <div id="sf-biweekly-group" class="form-group" style="display:none;">
+          <div class="form-note">Corre dos veces al mes: el día 1 (analiza la 2ª quincena del mes anterior) y el día 16 (analiza la 1ª quincena del mes en curso).</div>
         </div>
         <!-- Semanal -->
         <div id="sf-weekly-group" class="form-group">
@@ -834,11 +986,13 @@
           </div>
           <div class="form-hint">La automatización se ejecutará una vez y luego se desactivará automáticamente.</div>
 
-          <!-- Modalidad del reporte (solo 'una sola vez') -->
-          <label class="form-label" style="margin-top:14px;">Modalidad del reporte *</label>
-          <div class="form-toggle-row">
-            <button type="button" class="form-toggle-btn active" id="sf-once-weekly"  onclick="setOnceMode('weekly')">Semanal</button>
-            <button type="button" class="form-toggle-btn"        id="sf-once-monthly" onclick="setOnceMode('monthly')">Mensual</button>
+          <!-- Modalidad del reporte (solo Análisis 'una sola vez') -->
+          <div id="sf-once-modality">
+            <label class="form-label" style="margin-top:14px;">Modalidad del reporte *</label>
+            <div class="form-toggle-row">
+              <button type="button" class="form-toggle-btn active" id="sf-once-weekly"  onclick="setOnceMode('weekly')">Semanal</button>
+              <button type="button" class="form-toggle-btn"        id="sf-once-monthly" onclick="setOnceMode('monthly')">Mensual</button>
+            </div>
           </div>
 
           <!-- Semanal: semana a analizar -->
@@ -900,9 +1054,9 @@
         </div>
       </div>
 
-      <!-- Tipo de reporte (oculto en modo Solo mensaje) -->
+      <!-- Configuración del Análisis de Llamadas (solo tipo Reporte → Análisis) -->
       <div class="form-section" id="sf-report-section">
-        <div class="form-section-title">Tipo de reporte</div>
+        <div class="form-section-title">Configuración del análisis</div>
         <div class="form-group">
           <label class="form-label">Asesores a incluir</label>
           <div class="form-toggle-row">
@@ -920,9 +1074,9 @@
         </div>
       </div>
 
-      <!-- Notificación Google Chat -->
-      <div class="form-section">
-        <div class="form-section-title">Notificación por Google Chat</div>
+      <!-- Selección de Espacio (Google Chat) -->
+      <div class="form-section" id="sf-space-section">
+        <div class="form-section-title">Selección de espacio</div>
         <div class="form-group">
           <div class="form-toggle-row">
             <button class="form-toggle-btn active" id="sf-chat-no"  onclick="setScheduleChat(false)">Sin notificación</button>
@@ -947,7 +1101,7 @@
       </div>
 
       <!-- Notificación de errores -->
-      <div class="form-section">
+      <div class="form-section" id="sf-err-section">
         <div class="form-section-title">Notificación de errores</div>
         <div class="form-group">
           <div class="form-toggle-row">
@@ -968,7 +1122,7 @@
       </div>
 
       <!-- Estado -->
-      <div class="form-section">
+      <div class="form-section" id="sf-state-section">
         <div class="form-section-title">Estado</div>
         <div class="form-group">
           <div class="form-toggle-row">
@@ -2497,9 +2651,9 @@
       data: {
         labels,
         datasets: [
-          _lineDataset('Puntaje promedio',         dashData.team.map(p => p.avg_score),     '#0a6cff'),
-          _lineDataset('% logra siguiente paso',   dashData.team.map(p => p.pct_siguiente), '#d4af37'),
-          _lineDataset('Talk ratio',               dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+          _lineDataset('Puntaje promedio',         dashData.team.map(p => p.avg_score),     '#0a0a0a'),
+          _lineDataset('% logra siguiente paso',   dashData.team.map(p => p.pct_siguiente), '#1e6b30'),
+          _lineDataset('Talk ratio',               dashData.team.map(p => p.talk_ratio),    '#8a6300'),
         ],
       },
       options: _chartOptions(),
@@ -2522,7 +2676,7 @@
         type: 'bar',
         data: {
           labels: rankingRows.map(r => r.advisor),
-          datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+          datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a0a0a')],
         },
         options: _chartOptions({ plugins: { legend: { display: false } } }),
       }));
@@ -2572,9 +2726,9 @@
       data: {
         labels,
         datasets: [
-          _lineDataset('Puntaje promedio',       series.map(p => p.avg_score),     '#0a6cff'),
-          _lineDataset('% logra siguiente paso', series.map(p => p.pct_siguiente), '#d4af37'),
-          _lineDataset('Talk ratio',             series.map(p => p.talk_ratio),    '#2e7d32'),
+          _lineDataset('Puntaje promedio',       series.map(p => p.avg_score),     '#0a0a0a'),
+          _lineDataset('% logra siguiente paso', series.map(p => p.pct_siguiente), '#1e6b30'),
+          _lineDataset('Talk ratio',             series.map(p => p.talk_ratio),    '#8a6300'),
           Object.assign(
             _lineDataset('Promedio del equipo (puntaje)', series.map(p => teamByBucket[p.bucket]?.avg_score ?? null), '#8A8A8A'),
             { borderDash: [6, 4], pointRadius: 0 },
@@ -2628,9 +2782,9 @@
       const teamTrendImage = _buildExportImage('line', {
         labels,
         datasets: [
-          _lineDataset('Puntaje promedio',       dashData.team.map(p => p.avg_score),     '#0a6cff'),
-          _lineDataset('% logra siguiente paso', dashData.team.map(p => p.pct_siguiente), '#d4af37'),
-          _lineDataset('Talk ratio',             dashData.team.map(p => p.talk_ratio),    '#2e7d32'),
+          _lineDataset('Puntaje promedio',       dashData.team.map(p => p.avg_score),     '#0a0a0a'),
+          _lineDataset('% logra siguiente paso', dashData.team.map(p => p.pct_siguiente), '#1e6b30'),
+          _lineDataset('Talk ratio',             dashData.team.map(p => p.talk_ratio),    '#8a6300'),
         ],
       }, _pdfChartOptions(), 900, 420);
 
@@ -2642,7 +2796,7 @@
       const rankingImage = rankingRows.length > 0
         ? _buildExportImage('bar', {
             labels: rankingRows.map(r => r.advisor),
-            datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a6cff')],
+            datasets: [_barDataset('Puntaje promedio', rankingRows.map(r => r.value), '#0a0a0a')],
           }, _pdfChartOptions({ plugins: { legend: { display: false } } }), 900, 420)
         : null;
 
@@ -2687,7 +2841,7 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','dashboard','settings','automation'];
+  const _APP_TABS = ['reports','radar','dashboard','automation','settings'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -2701,6 +2855,124 @@
     if (tab === 'settings')   renderClientList();
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
+    if (tab === 'radar')      populateRadarSelectors();
+  }
+
+  // ── File picker ad-hoc (botón + nombre de archivo) ─────────────────────────
+  function _fpOpen(id){ document.getElementById(id).click(); }
+  function _fpUpdate(input){
+    const name = input.parentElement.querySelector('.file-picker-name');
+    if (!name) return;
+    const f = input.files && input.files[0];
+    if (f) { name.textContent = f.name; name.classList.add('has-file'); }
+    else   { name.textContent = name.dataset.empty || 'Ningún archivo seleccionado'; name.classList.remove('has-file'); }
+  }
+  function _fpClear(id){
+    const input = document.getElementById(id);
+    input.value = '';
+    _fpUpdate(input);
+  }
+
+  // ── Radar de Objeciones ────────────────────────────────────────────────────
+  const RADAR_MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  async function populateRadarSelectors() {
+    let clients = [];
+    try { clients = await fetch(CLIENTS_API).then(r => r.json()); } catch { clients = []; }
+    // Selector de cliente (flujo A) y cliente opcional (flujo B)
+    const cSel = document.getElementById('radar-client-select');
+    const uSel = document.getElementById('radar-upload-client');
+    cSel.innerHTML = '';
+    uSel.innerHTML = '<option value="">— Sin cliente —</option>';
+    clients.forEach(c => {
+      cSel.appendChild(new Option(c.name, c.id));
+      uSel.appendChild(new Option(c.name, c.id));
+    });
+    // Selector de mes (últimos 12), solo si aún no está poblado
+    const mSel = document.getElementById('radar-month-select');
+    if (mSel.options.length === 0) {
+      const now = new Date();
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        mSel.appendChild(new Option(`${RADAR_MONTHS_ES[d.getMonth()]} ${d.getFullYear()}`, key));
+      }
+    }
+  }
+
+  // Descarga un archivo desde base64 (para el PDF y el sidecar del Radar).
+  function _downloadBase64(base64, filename, mime) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  function _radarSafeName(s) { return (s || 'cliente').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').slice(0, 40); }
+
+  async function generateRadarFromClient() {
+    const clientId = document.getElementById('radar-client-select').value;
+    const month    = document.getElementById('radar-month-select').value;
+    const status   = document.getElementById('radar-client-status');
+    const btn      = document.getElementById('radar-gen-btn');
+    if (!clientId) { status.innerHTML = '<span style="color:var(--danger);font-size:12px;">Elige un cliente.</span>'; return; }
+    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
+    status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Analizando llamadas y generando el reporte… (puede tardar ~1 min)</div>';
+    try {
+      const r = await fetch(`${REPORT_API}/radar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, month }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      const clientName = document.getElementById('radar-client-select').selectedOptions[0]?.textContent || 'cliente';
+      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(clientName)}_${month}.pdf`, 'application/pdf');
+      status.innerHTML = '<span style="color:var(--success);font-size:12px;">✓ Radar generado y descargado.'
+        + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : '') + '</span>';
+    } catch (e) {
+      status.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
+  }
+
+  async function uploadRadarFile() {
+    const fileEl = document.getElementById('radar-md-file');
+    const status = document.getElementById('radar-upload-status');
+    const btn    = document.getElementById('radar-upload-btn');
+    const file   = fileEl.files[0];
+    if (!file) { status.innerHTML = '<span style="color:var(--danger);font-size:12px;">Elige un archivo .md.</span>'; return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    const cid = document.getElementById('radar-upload-client').value;
+    if (cid) fd.append('client_id', cid);
+    const ov = (id, field) => { const v = document.getElementById(id).value.trim(); if (v) fd.append(field, v); };
+    ov('radar-ov-name', 'client_name'); ov('radar-ov-period', 'period_label'); ov('radar-ov-contexto', 'contexto_negocio');
+    fd.append('deliver', document.getElementById('radar-deliver').value);
+    const prev = document.getElementById('radar-prev-sidecar').files[0];
+    if (prev) fd.append('prev_sidecar', prev);
+
+    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
+    status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Procesando el archivo y generando el reporte…</div>';
+    try {
+      const r = await fetch(`${REPORT_API}/radar-upload`, { method: 'POST', body: fd });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      const name = data.reportData?.client_name || 'cliente';
+      const key  = data.reportData?.period_key || 'periodo';
+      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(name)}_${key}.pdf`, 'application/pdf');
+      if (data.sidecarBase64) _downloadBase64(data.sidecarBase64, `radar-${key}.json`, 'application/json');
+      const warns = (data.warnings || []).length ? `<div style="color:var(--muted);font-size:11px;margin-top:4px;">${data.warnings.join(' · ')}</div>` : '';
+      status.innerHTML = '<span style="color:var(--success);font-size:12px;">✓ Radar generado.'
+        + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : ' Descargado (PDF y sidecar).') + '</span>' + warns;
+    } catch (e) {
+      status.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
   }
 
   // ── Clients CRUD ───────────────────────────────────────────────────────────
@@ -2748,9 +3020,19 @@
     const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
-      'cf-prompt-individual','cf-prompt-general'];
+      'cf-prompt-individual','cf-prompt-general',
+      'cf-prompt-radar','cf-radar-folder-id','cf-radar-sidecar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
-    document.getElementById('cf-max-chars').value = '80000';
+    document.getElementById('cf-max-chars').value = '3000';
+
+    // Reset del selector de pestañas (se llena al pulsar "Cargar pestañas")
+    const _tabsSel = document.getElementById('cf-sheet-name-select');
+    if (_tabsSel) { _tabsSel.innerHTML = ''; _tabsSel.style.display = 'none'; }
+    const _tabsHint = document.getElementById('cf-tabs-hint');
+    if (_tabsHint) { _tabsHint.style.color = ''; _tabsHint.textContent = 'Pega el link de arriba y pulsa “Cargar pestañas” para elegir de una lista.'; }
+    // Reset de los menús de columnas (se llenan al elegir la pestaña)
+    populateColumnOptions([]);
+    setTabMode('list');   // por defecto: elegir de la lista (cliente nuevo)
 
     // Show restore banner only for new clients with a saved draft
     const banner = document.getElementById('draft-banner');
@@ -2771,6 +3053,7 @@
         document.getElementById('cf-sidecar-folder-id').value= c.sidecar_folder_id || '';
         document.getElementById('cf-spreadsheet-id').value   = c.spreadsheet_id || '';
         document.getElementById('cf-sheet-name').value       = c.data_sheet_name || '';
+        if (c.data_sheet_name) setTabMode('text');   // al editar, muestra el nombre guardado
         document.getElementById('cf-col-fecha').value        = c.col_fecha || '';
         document.getElementById('cf-col-asesor').value       = c.col_asesor || '';
         document.getElementById('cf-col-calif').value        = c.col_calif || '';
@@ -2779,9 +3062,14 @@
         document.getElementById('cf-col-duracion').value     = c.col_duracion || '';
         document.getElementById('cf-col-record').value       = c.col_record || '';
         document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
-        document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 80000;
+        document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 3000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
         document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
+        document.getElementById('cf-prompt-radar').value             = c.prompt_radar || '';
+        document.getElementById('cf-radar-folder-id').value          = c.radar_folder_id || '';
+        document.getElementById('cf-radar-sidecar-folder-id').value  = c.radar_sidecar_folder_id || '';
+        document.getElementById('cf-radar-min-dur').value            = c.radar_min_duration_seconds || '';
+        document.getElementById('cf-radar-max-chars').value          = c.radar_transcripcion_max_chars || '';
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -2813,6 +3101,145 @@
     return spaces;
   }
 
+  // ── Links → IDs (para que el equipo solo pegue el link) ───────────────────
+  function _extractSpreadsheetId(input) {
+    const s = (input || '').trim();
+    if (!s) return '';
+    const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/) || s.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return m ? m[1] : s.split(/[/?#]/)[0];
+  }
+  function _extractDriveFolderId(input) {
+    const s = (input || '').trim();
+    if (!s) return '';
+    const m = s.match(/\/folders\/([a-zA-Z0-9-_]+)/) || s.match(/[?&]id=([a-zA-Z0-9-_]+)/) || s.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return m ? m[1] : s.split(/[/?#]/)[0];
+  }
+
+  // Alterna entre elegir la pestaña de una lista precargada ('list') o teclear el
+  // nombre a mano ('text'), estilo n8n (fixed / expression). Solo se muestra un
+  // control a la vez; el campo de texto cf-sheet-name es siempre la fuente de verdad.
+  function setTabMode(mode) {
+    const isList = mode === 'list';
+    const listWrap = document.getElementById('tab-mode-list-wrap');
+    const textInput = document.getElementById('cf-sheet-name');
+    if (listWrap)  listWrap.style.display  = isList ? 'flex' : 'none';
+    if (textInput) textInput.style.display = isList ? 'none' : 'block';
+    document.getElementById('tab-mode-list')?.classList.toggle('active', isList);
+    document.getElementById('tab-mode-text')?.classList.toggle('active', !isList);
+    if (isList) {
+      // Refleja el valor actual en el menú (aunque no se hayan cargado las pestañas).
+      const sel = document.getElementById('cf-sheet-name-select');
+      const cur = (textInput?.value || '').trim();
+      if (sel && cur) {
+        if (!Array.from(sel.options).some(o => o.value === cur)) sel.appendChild(new Option(cur, cur));
+        sel.value = cur;
+      }
+    } else if (textInput) {
+      textInput.focus();
+    }
+  }
+
+  // Copia la pestaña elegida del menú al campo de texto (fuente de verdad) y
+  // carga los encabezados de esa pestaña en los menús de columnas.
+  function _onTabSelect() {
+    const sel = document.getElementById('cf-sheet-name-select');
+    if (sel.value) {
+      document.getElementById('cf-sheet-name').value = sel.value;
+      loadColumnsForTab();
+    }
+  }
+
+  const _COL_FIELDS = [
+    { id: 'cf-col-fecha',        ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-asesor',       ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-calif',        ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-analisis',     ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-transcripcion',ph: 'Elige o escribe la columna' },
+    { id: 'cf-col-duracion',     ph: 'Opcional' },
+    { id: 'cf-col-record',       ph: 'Opcional (link de la grabación)' },
+  ];
+
+  // Rellena los <select> de columnas con los encabezados de la hoja, conservando
+  // el valor actual (para edición) aunque no esté entre los encabezados.
+  function populateColumnOptions(headers) {
+    const seenAll = Array.isArray(headers) ? headers : [];
+    _COL_FIELDS.forEach(({ id, ph }) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = '';
+      sel.appendChild(new Option('— ' + ph + ' —', ''));
+      const seen = new Set();
+      seenAll.forEach(h => { if (h && !seen.has(h)) { seen.add(h); sel.appendChild(new Option(h, h)); } });
+      if (cur && !seen.has(cur)) sel.appendChild(new Option(cur, cur));
+      sel.value = cur;                 // el setter del combobox refresca la etiqueta
+    });
+  }
+
+  // Consulta los encabezados de la pestaña elegida y llena los menús de columnas.
+  async function loadColumnsForTab() {
+    const raw = document.getElementById('cf-spreadsheet-id').value.trim();
+    const tab = document.getElementById('cf-sheet-name').value.trim();
+    const hint = document.getElementById('cf-tabs-hint');
+    if (!raw || !tab) return;
+    try {
+      const r = await fetch(`/api/sheets/headers?spreadsheet=${encodeURIComponent(raw)}&tab=${encodeURIComponent(tab)}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'No se pudieron leer las columnas.');
+      populateColumnOptions(data.headers || []);
+      if (hint) { hint.style.color = ''; hint.textContent = `Pestaña “${tab}”: ${(data.headers || []).length} columna(s) cargadas abajo.`; }
+    } catch (e) {
+      if (hint) { hint.style.color = '#b4231c'; hint.textContent = e.message; }
+    }
+  }
+
+  // Consulta las pestañas de la hoja pegada y las muestra en un menú.
+  async function loadSheetTabs() {
+    const raw  = document.getElementById('cf-spreadsheet-id').value.trim();
+    const hint = document.getElementById('cf-tabs-hint');
+    const sel  = document.getElementById('cf-sheet-name-select');
+    const btn  = document.getElementById('cf-load-tabs');
+    hint.style.color = '';
+    if (!raw) { hint.style.color = '#b4231c'; hint.textContent = 'Primero pega el link de la hoja arriba.'; return; }
+
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Cargando…';
+    hint.textContent = 'Consultando la hoja…';
+    try {
+      const r = await fetch(`/api/sheets/tabs?spreadsheet=${encodeURIComponent(raw)}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'No se pudieron cargar las pestañas.');
+
+      sel.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = '— Elige una pestaña —';
+      sel.appendChild(ph);
+      (data.tabs || []).forEach(t => {
+        const o = document.createElement('option');
+        o.value = t; o.textContent = t;
+        sel.appendChild(o);
+      });
+      sel.style.display = 'block';
+
+      // Si ya hay una pestaña escrita/elegida, preselecciónala y carga sus
+      // columnas. Ojo: fijar sel.value NO dispara 'change', por eso llamamos a
+      // loadColumnsForTab() a mano (si no, las columnas se quedarían vacías).
+      const current = document.getElementById('cf-sheet-name').value.trim();
+      if (current && (data.tabs || []).includes(current)) { sel.value = current; loadColumnsForTab(); }
+
+      const n = (data.tabs || []).length;
+      hint.textContent = n
+        ? `${n} pestaña${n === 1 ? '' : 's'} en “${data.title || 'la hoja'}”. Elige una del menú.`
+        : 'La hoja no tiene pestañas legibles.';
+    } catch (e) {
+      sel.style.display = 'none';
+      hint.style.color = '#b4231c';
+      hint.textContent = e.message;
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+    }
+  }
+
   async function saveClient() {
     const missing = _validateClientForm();
     if (missing.length) {
@@ -2828,14 +3255,15 @@
     }
 
     const name          = document.getElementById('cf-name').value.trim();
-    const folderId      = document.getElementById('cf-folder-id').value.trim();
-    const spreadsheetId = document.getElementById('cf-spreadsheet-id').value.trim();
+    const folderId      = _extractDriveFolderId(document.getElementById('cf-folder-id').value);
+    const spreadsheetId = _extractSpreadsheetId(document.getElementById('cf-spreadsheet-id').value);
+    const sidecarRaw    = document.getElementById('cf-sidecar-folder-id').value.trim();
     const sheetName     = document.getElementById('cf-sheet-name').value.trim();
     const rawPhrases    = document.getElementById('cf-excluded-phrases').value;
     const payload = {
       name,
       folder_id:               folderId,
-      sidecar_folder_id:       document.getElementById('cf-sidecar-folder-id').value.trim() || undefined,
+      sidecar_folder_id:       sidecarRaw ? _extractDriveFolderId(sidecarRaw) : undefined,
       spreadsheet_id:          spreadsheetId,
       data_sheet_name:         sheetName,
       col_fecha:               document.getElementById('cf-col-fecha').value.trim(),
@@ -2846,10 +3274,22 @@
       col_duracion:            document.getElementById('cf-col-duracion').value.trim() || undefined,
       col_record:              document.getElementById('cf-col-record').value.trim() || undefined,
       excluded_phrases:        rawPhrases.split(',').map(s => s.trim()).filter(Boolean),
-      transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 80000,
+      transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 3000,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
     };
+
+    // ── Radar de Objeciones (opcional): solo se envían los campos con valor ──
+    const _radarFolder  = document.getElementById('cf-radar-folder-id').value.trim();
+    const _radarSidecar = document.getElementById('cf-radar-sidecar-folder-id').value.trim();
+    const _radarPrompt  = document.getElementById('cf-prompt-radar').value.trim();
+    const _radarMinDur  = parseInt(document.getElementById('cf-radar-min-dur').value, 10);
+    const _radarMaxCh   = parseInt(document.getElementById('cf-radar-max-chars').value, 10);
+    if (_radarPrompt)  payload.prompt_radar = _radarPrompt;
+    if (_radarFolder)  payload.radar_folder_id = _extractDriveFolderId(_radarFolder);
+    if (_radarSidecar) payload.radar_sidecar_folder_id = _extractDriveFolderId(_radarSidecar);
+    if (!isNaN(_radarMinDur)) payload.radar_min_duration_seconds = _radarMinDur;
+    if (!isNaN(_radarMaxCh))  payload.radar_transcripcion_max_chars = _radarMaxCh;
 
     try {
       const r = _editingClientId
@@ -3002,7 +3442,7 @@
       const el = document.getElementById(id);
       if (el && id !== 'cf-max-chars') el.value = '';
     });
-    document.getElementById('cf-max-chars').value = '80000';
+    document.getElementById('cf-max-chars').value = '3000';
   }
 
   function closeDraftModal() {
@@ -3029,15 +3469,19 @@
   const _DOW = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
   function _describeSchedule(s) {
-    const freq = s.frequency === 'weekly'  ? `Cada ${_DOW[s.day_of_week ?? 1]}`
-               : s.frequency === 'once'    ? `Una vez el ${s.run_date || '—'}`
-               :                             `Día ${s.day_of_month ?? 1} de cada mes`;
+    const freq = s.frequency === 'weekly'   ? `Cada ${_DOW[s.day_of_week ?? 1]}`
+               : s.frequency === 'once'     ? `Una vez el ${s.run_date || '—'}`
+               : s.frequency === 'daily'    ? 'Todos los días'
+               : s.frequency === 'biweekly' ? 'Quincenal (días 1 y 16)'
+               :                              `Día ${s.day_of_month ?? 1} de cada mes`;
     const h = String(s.hour).padStart(2,'0');
     const m = String(s.minute ?? 0).padStart(2,'0');
     const last  = s.last_run ? `Último: ${s.last_run.slice(0,10)}` : 'Nunca ejecutado';
-    const mode  = s.notify_only ? ' · 💬 Solo mensaje' : '';
+    const kind  = s.notify_only ? ' · 💬 Mensaje'
+                : s.report_kind === 'radar' ? ' · 📡 Radar de Objeciones'
+                : ' · 📊 Análisis de Llamadas';
     const chat  = s.chat_space_id ? ' · Chat ✓' : '';
-    return `${freq} a las ${h}:${m} · ${last}${mode}${chat}`;
+    return `${freq} a las ${h}:${m} · ${last}${kind}${chat}`;
   }
 
   async function renderScheduleList() {
@@ -3105,23 +3549,109 @@
   let _scheduleAdvisors  = 'all';
   let _scheduleGeneral   = true;
   let _scheduleEnabled   = true;
-  let _scheduleMode      = 'report';   // 'report' | 'notify_only'
+  let _scheduleType      = 'report';   // 'report' | 'message'  (message → notify_only)
+  let _scheduleReportKind = null;      // null | 'analisis' | 'radar'  (solo type='report')
   let _scheduleChat      = false;
 
   const _SF_FREQ_HINTS = {
-    weekly:  'Analiza la semana anterior (lun–dom) en el día y hora indicados.',
-    monthly: 'Analiza el mes anterior completo en el día y hora indicados.',
-    once:    'Se ejecutará una sola vez y luego se desactivará automáticamente.',
+    daily:    'Se ejecutará todos los días a la hora indicada.',
+    weekly:   'Analiza la semana anterior (lun–dom) en el día y hora indicados.',
+    biweekly: 'Corre el día 1 y el día 16 de cada mes; cada corrida analiza la quincena que acaba de cerrar.',
+    monthly:  'Analiza el mes anterior completo en el día y hora indicados.',
+    once:     'Se ejecutará una sola vez y luego se desactivará automáticamente.',
   };
+
+  const _show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
 
   function setScheduleFreq(f) {
     _scheduleFreq = f;
-    ['weekly','monthly','once'].forEach(k =>
+    ['daily','weekly','biweekly','monthly','once'].forEach(k =>
       document.getElementById('sf-freq-'+k).classList.toggle('active', k === f));
-    document.getElementById('sf-weekly-group').style.display  = f === 'weekly'  ? '' : 'none';
-    document.getElementById('sf-monthly-group').style.display = f === 'monthly' ? '' : 'none';
-    document.getElementById('sf-once-group').style.display    = f === 'once'    ? '' : 'none';
+    _show('sf-daily-group',    f === 'daily');
+    _show('sf-weekly-group',   f === 'weekly');
+    _show('sf-biweekly-group', f === 'biweekly');
+    _show('sf-monthly-group',  f === 'monthly');
+    _show('sf-once-group',     f === 'once');
     document.getElementById('sf-freq-hint').textContent = _SF_FREQ_HINTS[f] || '';
+    if (f === 'once') _applyOnceContext();
+  }
+
+  // Tipo de automatización: Reporte (genera PDF) | Mensaje (solo Chat).
+  function setScheduleType(t) {
+    _scheduleType = t;
+    document.getElementById('sf-type-report').classList.toggle('active',  t === 'report');
+    document.getElementById('sf-type-message').classList.toggle('active', t === 'message');
+    document.getElementById('sf-type-hint').textContent = t === 'report'
+      ? 'Genera un reporte con IA y lo sube a Drive.'
+      : 'Solo envía un mensaje a un espacio de Google Chat, sin generar ningún reporte.';
+    _applyScheduleVisibility();
+  }
+
+  // Gate del tipo de reporte: Análisis de Llamadas | Radar de Objeciones.
+  function setScheduleReportKind(k) {
+    _scheduleReportKind = k;
+    document.getElementById('sf-kind-analisis').classList.toggle('active', k === 'analisis');
+    document.getElementById('sf-kind-radar').classList.toggle('active',    k === 'radar');
+    document.getElementById('sf-kind-hint').textContent = k === 'radar'
+      ? 'Radar de Objeciones: detecta preguntas y objeciones de los prospectos. Sin asesores ni reporte ejecutivo.'
+      : 'Análisis de Llamadas: reporte individual por asesor + reporte ejecutivo del equipo.';
+    _applyScheduleVisibility();
+  }
+
+  // Qué frecuencias admite cada contexto.
+  function _freqVisFor() {
+    if (_scheduleType === 'message')
+      return { daily:true,  weekly:true,  biweekly:false, monthly:true, once:true };
+    if (_scheduleReportKind === 'radar')
+      return { daily:false, weekly:false, biweekly:true,  monthly:true, once:true };
+    // Análisis de Llamadas
+    return   { daily:false, weekly:true,  biweekly:false, monthly:true, once:true };
+  }
+
+  // Muestra/oculta secciones según tipo de automatización + tipo de reporte.
+  function _applyScheduleVisibility() {
+    const isMsg = _scheduleType === 'message';
+    const resolved = isMsg || _scheduleReportKind !== null;   // ¿ya se puede mostrar el resto?
+
+    _show('sf-kind-section', !isMsg);                          // gate solo para "Reporte"
+    _show('sf-freq-section',  resolved);
+    _show('sf-space-section', resolved);
+    _show('sf-err-section',   resolved);
+    _show('sf-state-section', resolved);
+    _show('sf-report-section', !isMsg && _scheduleReportKind === 'analisis');
+
+    if (!resolved) return;
+
+    const vis = _freqVisFor();
+    ['daily','weekly','biweekly','monthly','once'].forEach(k => _show('sf-freq-'+k, vis[k]));
+
+    // Si la frecuencia actual ya no aplica en este contexto, elige un default válido.
+    if (!vis[_scheduleFreq]) {
+      const fallback = isMsg ? 'weekly' : (_scheduleReportKind === 'radar' ? 'monthly' : 'weekly');
+      setScheduleFreq(fallback);
+    } else if (_scheduleFreq === 'once') {
+      _applyOnceContext();
+    }
+  }
+
+  // Contexto del bloque "una sola vez": la modalidad Semanal/Mensual solo aplica
+  // al Análisis. El Radar fuerza modalidad mensual (elige un mes) y el Mensaje no
+  // analiza período (solo necesita la fecha de ejecución).
+  function _applyOnceContext() {
+    if (_scheduleFreq !== 'once') return;
+    const isMsg  = _scheduleType === 'message';
+    const isRadar = !isMsg && _scheduleReportKind === 'radar';
+    if (isMsg) {
+      _show('sf-once-modality', false);
+      _show('sf-once-week-group', false);
+      _show('sf-once-month-group', false);
+    } else if (isRadar) {
+      setOnceMode('monthly');
+      _show('sf-once-modality', false);   // fijo en mensual: elige el mes a analizar
+    } else {
+      _show('sf-once-modality', true);
+      setOnceMode(_onceMode);
+    }
   }
 
   // ── Run-date inline calendar ───────────────────────────────────────────────
@@ -3371,17 +3901,6 @@
     }
   });
 
-  function setScheduleMode(m) {
-    _scheduleMode = m;
-    document.getElementById('sf-mode-report').classList.toggle('active', m === 'report');
-    document.getElementById('sf-mode-notify').classList.toggle('active', m === 'notify_only');
-    document.getElementById('sf-report-section').style.display = m === 'report' ? '' : 'none';
-    document.getElementById('sf-mode-hint').textContent = m === 'report'
-      ? 'Genera el análisis con IA y sube el reporte a Drive.'
-      : 'Solo envía un mensaje a Google Chat sin generar ningún reporte.';
-    // Chat section is always visible regardless of mode
-  }
-
   function setScheduleAdvisors(v) {
     _scheduleAdvisors = v;
     document.getElementById('sf-advisors-all').classList.toggle('active', v === 'all');
@@ -3505,9 +4024,14 @@
     document.getElementById('sf-chat-space').innerHTML = '<option value="">— Selecciona un espacio —</option>';
     clientSel.value = '';
     setScheduleFreq('weekly');
-    setScheduleMode('report');
     setScheduleAdvisors('all');
     setScheduleGeneral(true);
+    // Tipo de automatización = Reporte, sin tipo de reporte elegido (gate cerrado)
+    _scheduleReportKind = null;
+    document.getElementById('sf-kind-analisis').classList.remove('active');
+    document.getElementById('sf-kind-radar').classList.remove('active');
+    document.getElementById('sf-kind-hint').textContent = 'Elige el tipo de reporte para continuar.';
+    setScheduleType('report');
     setScheduleEnabled(true);
     // Reset chat toggle without loading spaces
     _scheduleChat = false;
@@ -3550,8 +4074,9 @@
         }
         document.getElementById('sf-chat-message').value  = s.chat_message || '';
         clientSel.value = s.client_id;
+        setScheduleType(s.notify_only ? 'message' : 'report');
+        if (!s.notify_only) setScheduleReportKind(s.report_kind || 'analisis');
         setScheduleFreq(s.frequency || 'weekly');
-        setScheduleMode(s.notify_only ? 'notify_only' : 'report');
         setScheduleAdvisors(s.advisors === 'all' || !Array.isArray(s.advisors) ? 'all' : 'selected');
         setScheduleGeneral(s.include_general !== false);
         setScheduleEnabled(s.enabled !== false);
@@ -3585,11 +4110,19 @@
     if (!clientId) { alert('Selecciona un cliente.'); return; }
     const hour = parseInt(document.getElementById('sf-hour').value);
     if (isNaN(hour) || hour < 0 || hour > 23) { alert('La hora debe estar entre 0 y 23.'); return; }
+
+    const isMsg   = _scheduleType === 'message';
+    const isRadar = !isMsg && _scheduleReportKind === 'radar';
+    if (!isMsg && !_scheduleReportKind) {
+      alert('Elige el tipo de reporte: Análisis de Llamadas o Radar de Objeciones.'); return;
+    }
+
     if (_scheduleFreq === 'once') {
       if (!document.getElementById('sf-run-date').value) {
         alert('Selecciona la fecha de ejecución.'); return;
       }
-      if (_onceMode === 'weekly' && !document.getElementById('sf-once-week-from').value) {
+      // La modalidad semanal (elegir semana) solo aplica al Análisis de Llamadas.
+      if (!isMsg && !isRadar && _onceMode === 'weekly' && !document.getElementById('sf-once-week-from').value) {
         alert('Selecciona la semana a analizar.'); return;
       }
     }
@@ -3605,13 +4138,14 @@
       client_id:       clientId,
       enabled:         _scheduleEnabled,
       frequency:       _scheduleFreq,
+      report_kind:     isMsg ? 'analisis' : _scheduleReportKind,
       hour,
       minute:          parseInt(document.getElementById('sf-minute').value) || 0,
       timezone:        document.getElementById('sf-timezone').value.trim() || 'America/Mexico_City',
       report_type:     'selected',
       include_general: _scheduleGeneral,
       advisors:        _scheduleAdvisors === 'all' ? 'all' : [],
-      notify_only:     _scheduleMode === 'notify_only',
+      notify_only:     isMsg,
       chat_space_id:   _scheduleChat ? document.getElementById('sf-chat-space').value : undefined,
       chat_message:    _scheduleChat ? document.getElementById('sf-chat-message').value.trim() || undefined : undefined,
       error_notify_enabled: _scheduleErrorNotify,
@@ -3620,15 +4154,20 @@
     if (_scheduleFreq === 'weekly')  payload.day_of_week  = parseInt(document.getElementById('sf-day-of-week').value);
     if (_scheduleFreq === 'monthly') payload.day_of_month = parseInt(document.getElementById('sf-day-of-month').value) || 1;
     if (_scheduleFreq === 'once') {
-      payload.run_date  = document.getElementById('sf-run-date').value;
-      payload.once_mode = _onceMode;
-      if (_onceMode === 'weekly') {
-        payload.once_date_from = document.getElementById('sf-once-week-from').value;
-        payload.once_date_to   = document.getElementById('sf-once-week-to').value;
-      } else {
-        const mes  = String(document.getElementById('sf-once-month-mes').value).padStart(2, '0');
-        const anio = document.getElementById('sf-once-month-anio').value;
-        payload.once_month = `${anio}-${mes}`;
+      payload.run_date = document.getElementById('sf-run-date').value;
+      // El Mensaje no analiza período: solo necesita la fecha de ejecución.
+      if (!isMsg) {
+        // El Radar fuerza modalidad mensual (elige un mes); el Análisis respeta la modalidad.
+        const onceMode = isRadar ? 'monthly' : _onceMode;
+        payload.once_mode = onceMode;
+        if (onceMode === 'weekly') {
+          payload.once_date_from = document.getElementById('sf-once-week-from').value;
+          payload.once_date_to   = document.getElementById('sf-once-week-to').value;
+        } else {
+          const mes  = String(document.getElementById('sf-once-month-mes').value).padStart(2, '0');
+          const anio = document.getElementById('sf-once-month-anio').value;
+          payload.once_month = `${anio}-${mes}`;
+        }
       }
     }
 
@@ -3729,6 +4268,275 @@
     _schedSig = sig;
     renderScheduleList();
   }
+</script>
+
+<!-- ── Combobox Zebra (reemplaza los <select> nativos) ────────────────────────
+     Mejora cada <select> a un desplegable con búsqueda, con el sistema de diseño
+     del app (tokens --bg/--surface/--border/--fg/--accent, tema claro/oscuro).
+     El <select> nativo queda oculto como fuente de verdad, así el resto del
+     código (leer/escribir .value, poblar <option>, onchange) sigue funcionando.
+     Marca un select con data-no-zselect para excluirlo, o data-free para permitir
+     texto libre (usado en las columnas). -->
+<style>
+  .zs-wrap { position: relative; display: inline-block; vertical-align: middle; }
+  select.zs-native { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none; }
+  .zs-trigger {
+    font-family: 'Inter', sans-serif; background: var(--bg); color: var(--fg);
+    border: 0.5px solid var(--border2); border-radius: 8px; padding: 9px 12px; font-size: 13px;
+    width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    text-align: left; transition: border-color .15s;
+  }
+  .zs-wrap.zs-sm .zs-trigger { padding: 7px 10px; font-size: 12px; }
+  .zs-trigger:hover { border-color: var(--fg); }
+  .zs-wrap.zs-open .zs-trigger { border-color: var(--accent); }
+  .zs-wrap.zs-error .zs-trigger { border-color: var(--danger); background: rgba(226,75,74,0.04); }
+  .zs-wrap.zs-disabled .zs-trigger { opacity: .5; cursor: not-allowed; }
+  .zs-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zs-label.zs-muted { color: var(--muted); }
+  .zs-chev { flex-shrink: 0; font-size: 10px; color: var(--muted); transition: transform .15s; }
+  .zs-wrap.zs-open .zs-chev { transform: rotate(180deg); }
+
+  .zs-pop {
+    position: fixed; z-index: 2147483200; background: var(--surface);
+    border: 0.5px solid var(--border2); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,.28), 0 0 0 0.5px var(--border);
+    display: flex; flex-direction: column; max-height: 320px; min-width: 180px;
+  }
+  .zs-search { padding: 8px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .zs-input {
+    font-family: 'Inter', sans-serif; width: 100%; box-sizing: border-box; background: var(--bg);
+    border: 0.5px solid var(--border2); border-radius: 7px; padding: 7px 10px; font-size: 12.5px; color: var(--fg);
+  }
+  .zs-input:focus { outline: none; border-color: var(--accent); }
+  .zs-input::placeholder { color: var(--faint); }
+  .zs-list { overflow-y: auto; padding: 5px; }
+  .zs-opt {
+    padding: 8px 10px; font-size: 13px; color: var(--fg); border-radius: 7px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px;
+  }
+  .zs-opt.zs-active { background: var(--surface2); }
+  .zs-opt.zs-sel { font-weight: 600; }
+  .zs-opt.zs-sel::after { content: '✓'; margin-left: auto; color: var(--accent); font-size: 11px; }
+  .zs-opt.zs-free { color: var(--muted); font-style: italic; }
+  .zs-empty { padding: 10px; font-size: 12px; color: var(--faint); text-align: center; }
+
+  /* Toggle Lista / Escribir (estilo n8n: fixed / expression) */
+  .mode-toggle { display: inline-flex; border: 0.5px solid var(--border2); border-radius: 7px; overflow: hidden; flex-shrink: 0; }
+  .mode-btn { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 3px 10px; background: transparent; color: var(--muted); border: none; cursor: pointer; transition: background .15s, color .15s; }
+  .mode-btn.active { background: var(--accent); color: var(--on-accent); }
+  .mode-btn:not(.active):hover { color: var(--fg); }
+</style>
+<script>
+(function () {
+  const NATIVE = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  function enhance(sel) {
+    if (!sel || sel.__zs || sel.multiple || sel.hasAttribute('data-no-zselect')) return;
+    sel.__zs = true;
+    const free = sel.hasAttribute('data-free');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'zs-wrap' + (sel.classList.contains('form-control-sm') ? ' zs-sm' : '');
+    if (sel.classList.contains('form-control') || sel.classList.contains('form-control-sm')) wrap.style.width = '100%';
+    ['minWidth', 'width', 'flex'].forEach(p => { if (sel.style[p]) wrap.style[p] = sel.style[p]; });
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('zs-native');
+
+    const trig = document.createElement('button');
+    trig.type = 'button'; trig.className = 'zs-trigger';
+    trig.innerHTML = '<span class="zs-label"></span><span class="zs-chev">▾</span>';
+    wrap.appendChild(trig);
+
+    const pop = document.createElement('div');
+    pop.className = 'zs-pop';
+    pop.innerHTML = '<div class="zs-search"><input type="text" class="zs-input" placeholder="Buscar…" autocomplete="off" spellcheck="false"></div><div class="zs-list"></div>';
+    const input = pop.querySelector('.zs-input');
+    const list = pop.querySelector('.zs-list');
+
+    let open = false, activeIdx = -1, filtered = [];
+    const opts = () => Array.from(sel.options);
+    const placeholder = () => {
+      const empty = opts().find(o => o.value === '');
+      return sel.getAttribute('data-placeholder') || (empty ? empty.textContent : '') || 'Selecciona…';
+    };
+    function refresh() {
+      const o = sel.options[sel.selectedIndex];
+      const lbl = trig.querySelector('.zs-label');
+      if (!o || o.value === '') { lbl.textContent = placeholder(); lbl.classList.add('zs-muted'); }
+      else { lbl.textContent = o.textContent; lbl.classList.remove('zs-muted'); }
+      wrap.classList.toggle('zs-disabled', sel.disabled);
+      trig.disabled = sel.disabled;
+      wrap.classList.toggle('zs-error', sel.classList.contains('field-error'));
+    }
+    function setActive(i) {
+      activeIdx = i;
+      Array.from(list.children).forEach((el, idx) => {
+        const on = idx === i && el.classList.contains('zs-opt');
+        el.classList.toggle('zs-active', on);
+        if (on) el.scrollIntoView({ block: 'nearest' });
+      });
+    }
+    function build(q) {
+      const nq = norm(q); list.innerHTML = ''; filtered = [];
+      opts().forEach(o => {
+        if (o.value === '' && !norm(o.textContent).includes(nq)) return;
+        if (o.value === '' && q) return;
+        if (nq && !norm(o.textContent).includes(nq)) return;
+        filtered.push(o);
+      });
+      if (!filtered.length && free && q.trim()) {
+        const row = document.createElement('div');
+        row.className = 'zs-opt zs-free'; row.textContent = 'Usar: “' + q.trim() + '”';
+        row.addEventListener('mousedown', e => { e.preventDefault(); commitFree(q.trim()); });
+        list.appendChild(row); return;
+      }
+      if (!filtered.length) {
+        const e = document.createElement('div'); e.className = 'zs-empty'; e.textContent = 'Sin resultados';
+        list.appendChild(e); return;
+      }
+      filtered.forEach((o, i) => {
+        const row = document.createElement('div');
+        row.className = 'zs-opt' + (o.value && o.value === sel.value ? ' zs-sel' : '');
+        row.textContent = o.textContent;
+        row.addEventListener('mousedown', e => { e.preventDefault(); pick(o.value); });
+        row.addEventListener('mousemove', () => setActive(i));
+        list.appendChild(row);
+      });
+      setActive(0);
+    }
+    function commitFree(v) {
+      if (!opts().some(o => o.value === v)) sel.appendChild(new Option(v, v));
+      pick(v);
+    }
+    function pick(v) {
+      if (free && v && !opts().some(o => o.value === v)) sel.appendChild(new Option(v, v));
+      NATIVE.set.call(sel, v); refresh(); close();
+      sel.dispatchEvent(new Event('input', { bubbles: true }));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function position() {
+      const r = trig.getBoundingClientRect();
+      pop.style.minWidth = r.width + 'px';
+      pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - r.width - 8)) + 'px';
+      const spaceBelow = window.innerHeight - r.bottom;
+      const need = Math.min(320, pop.offsetHeight || 320);
+      if (spaceBelow < need + 8 && r.top > spaceBelow) { pop.style.top = 'auto'; pop.style.bottom = (window.innerHeight - r.top + 4) + 'px'; }
+      else { pop.style.bottom = 'auto'; pop.style.top = (r.bottom + 4) + 'px'; }
+    }
+    function openPop() {
+      if (sel.disabled || open) return;
+      open = true; document.body.appendChild(pop); wrap.classList.add('zs-open');
+      input.value = ''; build(''); position();
+      setTimeout(() => input.focus(), 0);
+      document.addEventListener('mousedown', onDocDown, true);
+      window.addEventListener('resize', position); window.addEventListener('scroll', position, true);
+    }
+    function close() {
+      if (!open) return; open = false; wrap.classList.remove('zs-open');
+      if (pop.parentNode) pop.parentNode.removeChild(pop);
+      document.removeEventListener('mousedown', onDocDown, true);
+      window.removeEventListener('resize', position); window.removeEventListener('scroll', position, true);
+    }
+    function onDocDown(e) { if (!pop.contains(e.target) && !wrap.contains(e.target)) close(); }
+
+    trig.addEventListener('click', () => { open ? close() : openPop(); });
+    input.addEventListener('input', () => build(input.value));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(activeIdx + 1, filtered.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(activeIdx - 1, 0)); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (filtered[activeIdx]) pick(filtered[activeIdx].value); else if (free && input.value.trim()) commitFree(input.value.trim()); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(); trig.focus(); }
+    });
+
+    // Reflejar cambios programáticos de .value en la etiqueta (y auto-crear opción en modo libre).
+    Object.defineProperty(sel, 'value', {
+      configurable: true,
+      get() { return NATIVE.get.call(this); },
+      set(v) { if (free && v && !Array.from(this.options).some(o => o.value === v)) this.appendChild(new Option(v, v)); NATIVE.set.call(this, v); refresh(); },
+    });
+
+    new MutationObserver((muts) => {
+      let child = false, style = false;
+      muts.forEach(m => { if (m.type === 'childList') child = true; if (m.attributeName === 'style') style = true; });
+      if (child && open) build(input.value);
+      if (style) { const d = sel.style.display; wrap.style.display = (d === 'none') ? 'none' : ''; }
+      refresh();
+    }).observe(sel, { childList: true, attributes: true, attributeFilter: ['disabled', 'style', 'class'] });
+
+    if (sel.style.display === 'none') wrap.style.display = 'none';
+    refresh();
+  }
+
+  function enhanceAll(root) { (root || document).querySelectorAll('select:not([data-no-zselect])').forEach(enhance); }
+
+  function init() {
+    enhanceAll(document);
+    new MutationObserver((muts) => {
+      muts.forEach(m => m.addedNodes && m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.tagName === 'SELECT') enhance(n);
+        else if (n.querySelectorAll) enhanceAll(n);
+      }));
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+
+<!-- ── Sesión (login con Google) ──────────────────────────────────────────────
+     Autocontenido: si la auth está activa, muestra un chip con el correo y un
+     botón de salir, y redirige a /login si una llamada a la API devuelve 401
+     (por ejemplo, sesión expirada). Si la auth está desactivada, no hace nada. -->
+<style>
+  #zr-session {
+    position: fixed; bottom: 14px; right: 14px; z-index: 2147483000;
+    display: none; align-items: center; gap: 8px;
+    background: rgba(10,10,10,.9); color: #fff; border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px; padding: 5px 6px 5px 12px;
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px;
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,.45); backdrop-filter: blur(4px);
+  }
+  #zr-session .email { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .02em; }
+  #zr-session button {
+    cursor: pointer; border: none; background: #fff; color: #0A0A0A; font: inherit; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .06em; border-radius: 999px; padding: 4px 10px;
+  }
+  #zr-session button:hover { background: #e5e5e5; }
+</style>
+<div id="zr-session"><span class="email"></span><button type="button">Salir</button></div>
+<script>
+  (function () {
+    // Redirige a /login cuando cualquier fetch a la API devuelve 401.
+    const _fetch = window.fetch;
+    window.fetch = function (...args) {
+      return _fetch.apply(this, args).then((res) => {
+        try {
+          const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+          if (res.status === 401 && url.indexOf('/auth/') === -1) {
+            window.location.replace('/login');
+          }
+        } catch (_) {}
+        return res;
+      });
+    };
+
+    fetch('/auth/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (!me || !me.email) return; // auth desactivada o sin sesión → sin chip
+        const box = document.getElementById('zr-session');
+        box.querySelector('.email').textContent = me.email;
+        box.style.display = 'flex';
+        box.querySelector('button').addEventListener('click', async () => {
+          try { await _fetch('/auth/logout', { method: 'POST' }); } catch (_) {}
+          window.location.replace('/login');
+        });
+      })
+      .catch(() => {});
+  })();
 </script>
 </body>
 </html>

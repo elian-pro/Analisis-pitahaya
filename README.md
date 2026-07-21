@@ -2,6 +2,10 @@
 
 Genera reportes PDF de desempeño de asesores a partir de transcripciones de llamadas almacenadas en Google Sheets, usando Claude (Anthropic) para el análisis cualitativo y Google Drive para la entrega.
 
+> ¿Qué es y cómo funciona esta herramienta, en lenguaje no técnico?
+> Ver **[docs/QUE-ES-ZEBRA-REPORTS.md](docs/QUE-ES-ZEBRA-REPORTS.md)**. Ese documento
+> se regenera solo con IA en cada cambio de código (ver `.github/workflows/update-doc.yml`).
+
 ## Arquitectura
 
 ```
@@ -70,6 +74,31 @@ Debe responder:
 ```json
 {"status":"ok","ts":"2026-..."}
 ```
+
+---
+
+## Autenticación (Login con Google)
+
+El acceso a la app puede restringirse a los correos de tu organización mediante
+"Sign in with Google". Es **opcional y no rompe nada**: mientras
+`GOOGLE_OAUTH_CLIENT_ID` esté vacío la app corre abierta (como siempre); al
+definirlo, el login pasa a ser **obligatorio** y solo entran los dominios
+permitidos (`ALLOWED_EMAIL_DOMAINS`, por defecto `zebradigital.marketing`).
+
+**Cómo activarlo:**
+1. En [Google Cloud Console](https://console.cloud.google.com) → *Pantalla de
+   consentimiento OAuth* (tipo **Interno** si usas Google Workspace) → crea un
+   **ID de cliente de OAuth** de tipo *Aplicación web*.
+2. En **Orígenes de JavaScript autorizados** agrega la URL exacta de tu app
+   (p. ej. `https://analisis-estrategicos-asesores.zebra-ecosystem.cloud`, y
+   `http://localhost:3000` si pruebas en local).
+3. En EasyPanel define las variables `GOOGLE_OAUTH_CLIENT_ID`,
+   `AUTH_SESSION_SECRET` (usa `openssl rand -hex 32`) y, si aplica,
+   `ALLOWED_EMAIL_DOMAINS`. Redeploy.
+
+Detalle de cada variable en `.env.example`. La verificación del token y el filtro
+de dominio ocurren en el servidor (`src/auth/`); la sesión es una cookie httpOnly
+firmada, así que la API y la SPA quedan protegidas.
 
 ---
 
@@ -273,7 +302,10 @@ npm run dry-run -- pitahaya-investments 2026-05 Felipe
 ```
 
 > Para el dry-run local, Playwright descargará Chromium automáticamente la primera vez.  
-> En producción (Docker), se usa el Chromium del sistema (`/usr/bin/chromium`).
+> En producción (Docker) se usa el Chromium propio de Playwright (instalado con
+> `npx playwright install --with-deps chromium`), cuya versión coincide siempre con
+> la librería. Se dejó de usar el Chromium del sistema (`/usr/bin/chromium`) porque
+> tras un rebuild podía quedar desfasado y crashear al arrancar (SIGTRAP).
 
 ---
 

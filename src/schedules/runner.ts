@@ -9,6 +9,8 @@ import { listAdvisors, seedAdvisorsFromSheetIfNeeded } from '../advisors/store';
 import { createJob, getJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { sendChatMessage } from '../google/chat';
+import { monthLabel } from '../google/drive';
+import { runRadarForClient, runRadarForClientFortnight, fortnightForRun, type RadarDbResult } from '../radar/dbFlow';
 
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
@@ -146,6 +148,12 @@ function isDue(schedule: Schedule): boolean {
   if (schedule.frequency === 'weekly'  && now.day  !== (schedule.day_of_week  ?? 1)) return false;
   if (schedule.frequency === 'monthly' && parseInt(now.dateStr.slice(8)) !== (schedule.day_of_month ?? 1)) return false;
   if (schedule.frequency === 'once'    && now.dateStr !== (schedule.run_date ?? '')) return false;
+  // Quincenal: corre el día 1 (2ª quincena del mes anterior) y el 16 (1ª del mes actual).
+  if (schedule.frequency === 'biweekly') {
+    const dom = parseInt(now.dateStr.slice(8));
+    if (dom !== 1 && dom !== 16) return false;
+  }
+  // 'daily' no tiene filtro de día: corre todos los días (sujeto a hora + 1×/día).
 
   // Already ran today (judged in the schedule's timezone)? Skip.
   if (schedule.last_run && dateStrInTz(schedule.last_run, tz) === now.dateStr) return false;
@@ -191,6 +199,42 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
     if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
     await notifyChat(schedule, client.name, getNowInTz(tz).dateStr, '');
     _running.delete(schedule.id);
+    return { ok: true };
+  }
+
+  // ── Radar de Objeciones: su propia automatización (sin asesores, sin job) ──
+  if (schedule.report_kind === 'radar') {
+    let periodLabel: string;
+    let radarRun: () => Promise<RadarDbResult>;
+
+    if (schedule.frequency === 'biweekly') {
+      const f = fortnightForRun(getNowInTz(tz).dateStr);
+      periodLabel = f.periodLabel;
+      radarRun = () => runRadarForClientFortnight(client, f);
+    } else {
+      // 'monthly' → mes anterior; 'once' (modo mensual) → el mes elegido.
+      const month = (schedule.frequency === 'once' && schedule.once_month)
+        ? schedule.once_month
+        : lastMonthKey(tz);
+      periodLabel = monthLabel(month);
+      radarRun = () => runRadarForClient(client, month);
+    }
+
+    await markRan(schedule.id);
+    if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
+    console.log(`[scheduler] Radar run started for '${schedule.name}' (${periodLabel})`);
+
+    radarRun()
+      .then(async (res) => {
+        await notifyChat(schedule, client.name, periodLabel, res.driveUrl);
+      })
+      .catch(async (err) => {
+        console.error(`[scheduler] Radar for '${schedule.name}' failed:`, (err as Error).message);
+        await markFailed(schedule.id, (err as Error).message);
+        await notifyError(schedule, client.name, periodLabel, (err as Error).message);
+      })
+      .finally(() => { _running.delete(schedule.id); });
+
     return { ok: true };
   }
 
@@ -265,7 +309,9 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   const reportType = schedule.report_type === 'general' ? 'general'
     : (schedule.include_general ? 'general' : 'selected');
 
-  const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo);
+  // El Radar de Objeciones es MENSUAL: solo se propaga en automatizaciones mensuales.
+  const includeRadar = schedule.include_radar === true && schedule.frequency === 'monthly';
+  const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo, includeRadar);
   await markRan(schedule.id);
   if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
 
@@ -289,6 +335,16 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
         ?? done?.results?.individual?.[0]?.driveUrl
         ?? '';
       await notifyChat(schedule, client.name, periodLabel, url);
+
+      // Si se generó el Radar de Objeciones (archivo aparte), avisa su link también.
+      const radarUrl = done?.results?.radar?.driveUrl;
+      if (radarUrl) {
+        try {
+          await sendChatMessage(schedule.chat_space_id, `📡 *Radar de Objeciones*: ${client.name} | ${periodLabel}\n🔗 ${radarUrl}`);
+        } catch (e) {
+          console.error(`[scheduler] Radar chat notification failed for '${schedule.name}':`, (e as Error).message);
+        }
+      }
     })
     .catch(async err => {
       console.error(`[scheduler] Job ${job.id} for '${schedule.name}' failed:`, (err as Error).message);

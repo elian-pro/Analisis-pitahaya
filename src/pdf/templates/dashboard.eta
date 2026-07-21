@@ -2,121 +2,138 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Dashboard <%= it.client_name %></title>
+<title>Dashboard · <%= it.client_name %></title>
 <style>
+  <%~ it._fontsCss %>
+
+  :root {
+    --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F9FAFB;
+    --text: #0A0A0A; --text-muted: #737373;
+    --border: rgba(10,10,10,.10); --border-strong: rgba(10,10,10,.14);
+    --r-card: 12px; --r-chip: 6px;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+
   @page {
     size: A4;
-    margin: 10mm 0 15mm 0;
-    @bottom-right {
-      content: "Pagina " counter(page) " / " counter(pages);
-      font-family: 'Helvetica', sans-serif;
-      font-size: 9pt;
-      color: #999;
-      padding: 0 20mm 0 0;
-    }
+    margin: 12mm 0 16mm 0;
+    @bottom-right { content: counter(page) " / " counter(pages); font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: #9a9a9a; padding: 0 18mm 0 0; }
+    @bottom-left  { content: "ZEBRA · Inteligencia Comercial"; font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: .12em; color: #b4b4b4; padding: 0 0 0 18mm; }
   }
   @page :first { margin-top: 0; }
+
   * { box-sizing: border-box; }
-  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; line-height: 1.45; orphans: 3; widows: 3; }
-  .membrete { background: #0a0a0a; color: #fafafa; padding: 25mm 20mm 18mm 20mm; margin-bottom: 0; page-break-after: avoid; }
-  .membrete .marca { font-size: 28pt; font-weight: 900; letter-spacing: -1px; margin: 0; }
-  .membrete .marca .dot { color: #d4af37; }
-  .membrete .tagline { font-size: 9pt; color: #b0b0b0; margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
-  .membrete .meta { margin-top: 22pt; border-top: 1px solid #2a2a2a; padding-top: 14pt; display: flex; justify-content: space-between; }
-  .membrete .meta div { font-size: 8.5pt; color: #888; }
-  .membrete .meta b { color: #fafafa; font-weight: 600; }
-  .barra-oro { background: #d4af37; height: 3px; }
-  main { padding: 6mm 20mm 6mm 20mm; }
-  h1 { font-size: 18pt; margin: 18pt 0 4pt 0; font-weight: 800; letter-spacing: -0.3px; }
-  h1 .sub { font-size: 10pt; font-weight: 400; color: #777; display: block; margin-top: 2pt; }
-  h2 { font-size: 12pt; margin: 18pt 0 8pt 0; padding-bottom: 4pt; border-bottom: 2px solid #0a0a0a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; page-break-after: avoid; }
-  p { margin: 0 0 6pt 0; }
-  .seccion { page-break-inside: avoid; }
-  .chart-img { width: 100%; max-width: 680px; display: block; margin: 6pt auto 0 auto; }
-  .chart-empty { font-size: 9.5pt; color: #999; padding: 10pt 0; text-align: center; }
-  table { width: 100%; border-collapse: collapse; margin: 6pt 0 8pt 0; font-size: 9pt; }
-  th { background: #0a0a0a; color: #fff; padding: 5pt 7pt; text-align: left; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px; }
-  td { padding: 5pt 7pt; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
-  tr:nth-child(even) td { background: #faf9f6; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: var(--sans); font-size: 10pt; color: var(--text); margin: 0; line-height: 1.5; orphans: 3; widows: 3; font-feature-settings: 'cv05' 1, 'ss01' 1; }
+
+  .eyebrow { font-family: var(--mono); font-size: 7.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: .2em; color: var(--text-muted); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .membrete { position: relative; overflow: hidden; background: var(--text); color: #fff; padding: 20mm 18mm 14mm 18mm; page-break-after: avoid; isolation: isolate; }
+  .membrete .motif { position: absolute; inset: 0 0 0 auto; width: 42%; height: 100%; background-image: url("data:image/png;base64,<%= it._motifB64 %>"); background-size: cover; background-position: right center; opacity: .10; z-index: -1; }
+  .membrete img.logo { height: 22pt; display: block; margin: 0 0 12pt -1pt; }
+  .membrete .eyebrow { color: rgba(255,255,255,.62); }
+  .membrete .titulo { font-size: 21pt; font-weight: 600; letter-spacing: -.02em; margin: 14pt 0 2pt 0; }
+  .membrete .sub { font-size: 9.5pt; color: rgba(255,255,255,.72); font-family: var(--mono); letter-spacing: .02em; }
+  .membrete .meta { margin-top: 16pt; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10pt; display: flex; gap: 28pt; font-size: 8pt; color: rgba(255,255,255,.6); }
+  .membrete .meta b { color: #fff; font-weight: 600; }
+
+  main { padding: 9mm 18mm 6mm 18mm; }
+  section { margin-top: 16pt; page-break-inside: avoid; }
+  section > .eyebrow { display: block; margin-bottom: 7pt; }
+  h2.title { font-size: 12.5pt; font-weight: 600; letter-spacing: -.01em; margin: 0 0 8pt 0; page-break-after: avoid; }
+
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12pt; }
+  .chart-img { width: 100%; max-width: 660px; display: block; margin: 0 auto; }
+  .chart-empty { font-size: 9pt; color: var(--text-muted); padding: 14pt 0; text-align: center; }
+
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  thead { display: table-header-group; }
+  th { background: var(--text); color: #fff; text-align: left; font-family: var(--mono); font-weight: 500; font-size: 7pt; text-transform: uppercase; letter-spacing: .09em; padding: 7pt 9pt; }
+  td { padding: 7pt 9pt; border-top: 1px solid var(--border); vertical-align: top; }
+  tbody tr:nth-child(even) td { background: var(--surface-2); }
   table { page-break-inside: auto; }
   tr { page-break-inside: avoid; break-inside: avoid; }
-  thead { display: table-header-group; }
 </style>
 </head>
 <body>
 
 <header class="membrete">
+  <span class="motif"></span>
   <% if (it._logoB64) { %>
-    <img src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA" style="height:26pt;display:block;margin-bottom:6pt;margin-left:-2pt;">
-  <% } else { %>
-    <p class="marca">ZEBRA<span class="dot">.</span></p>
+    <img class="logo" src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA">
   <% } %>
-  <p class="tagline">Inteligencia Comercial &middot; Dashboard de Metricas</p>
+  <span class="eyebrow">Inteligencia Comercial · Dashboard de Métricas</span>
+  <div class="titulo"><%= it.client_name %></div>
+  <div class="sub"><%= it.granularity_label %> · <%= it.from %> a <%= it.to %></div>
   <div class="meta">
-    <div><b>Cliente:</b> <%= it.client_name %></div>
-    <div><b>Generado:</b> <%= it.generated_date %></div>
+    <div><b>Vista</b> · <%= it.granularity_label %></div>
+    <div><b>Generado</b> · <%= it.generated_date %></div>
   </div>
 </header>
-<div class="barra-oro"></div>
 
 <main>
 
-<h1><%= it.client_name %>
-  <span class="sub">Dashboard de metricas &middot; <%= it.granularity_label %> &middot; <%= it.from %> a <%= it.to %></span>
-</h1>
+  <section>
+    <span class="eyebrow">Evolución</span>
+    <h2 class="title">Tendencia del equipo</h2>
+    <div class="chart-card">
+      <% if (it.team_trend_image) { %>
+        <img class="chart-img" src="<%= it.team_trend_image %>" alt="Tendencia del equipo">
+      <% } else { %>
+        <p class="chart-empty">Sin datos suficientes para graficar la tendencia en este rango.</p>
+      <% } %>
+    </div>
+  </section>
 
-<div class="seccion">
-<h2>Tendencia del equipo</h2>
-<% if (it.team_trend_image) { %>
-  <img class="chart-img" src="<%= it.team_trend_image %>" alt="Tendencia del equipo">
-<% } else { %>
-  <p class="chart-empty">Sin datos suficientes para graficar la tendencia en este rango.</p>
-<% } %>
-</div>
+  <section>
+    <span class="eyebrow">Comparativo</span>
+    <h2 class="title">Ranking de asesores<% if (it.buckets.length > 0) { %> · <%= it.buckets[it.buckets.length - 1].label %><% } %></h2>
+    <div class="chart-card">
+      <% if (it.ranking_image) { %>
+        <img class="chart-img" src="<%= it.ranking_image %>" alt="Ranking de asesores">
+      <% } else { %>
+        <p class="chart-empty">Sin asesores con datos en el último periodo del rango.</p>
+      <% } %>
+    </div>
+  </section>
 
-<div class="seccion">
-<h2>Ranking de asesores<% if (it.buckets.length > 0) { %> (<%= it.buckets[it.buckets.length - 1].label %>)<% } %></h2>
-<% if (it.ranking_image) { %>
-  <img class="chart-img" src="<%= it.ranking_image %>" alt="Ranking de asesores">
-<% } else { %>
-  <p class="chart-empty">Sin asesores con datos en el ultimo periodo del rango.</p>
-<% } %>
-</div>
-
-<div class="seccion">
-<h2>Resumen por asesor y periodo</h2>
-<% if (it.advisors.length === 0) { %>
-  <p class="chart-empty">Aun no hay datos para este cliente en el rango seleccionado.</p>
-<% } else { %>
-<table>
-  <thead>
-    <tr>
-      <th>Asesor</th><th>Periodo</th>
-      <th style="text-align:right;">Puntaje</th>
-      <th style="text-align:right;">% Logra siguiente paso</th>
-      <th style="text-align:right;">Talk ratio</th>
-    </tr>
-  </thead>
-  <tbody>
-  <% const bucketLabel = function(key) {
-       const b = it.buckets.find(function(x) { return x.key === key; });
-       return b ? b.label : key;
-     }; %>
-  <% for (const advisor of it.advisors) { %>
-    <% for (const point of (it.by_advisor[advisor] || [])) { %>
-    <tr>
-      <td><%= advisor %></td>
-      <td><%= bucketLabel(point.bucket) %></td>
-      <td style="text-align:right;"><%= point.avg_score !== null ? point.avg_score : 'N/D' %></td>
-      <td style="text-align:right;"><%= point.pct_siguiente !== null ? point.pct_siguiente + '%' : 'N/D' %></td>
-      <td style="text-align:right;"><%= point.talk_ratio !== null ? point.talk_ratio + '%' : 'N/D' %></td>
-    </tr>
+  <section>
+    <span class="eyebrow">Detalle</span>
+    <h2 class="title">Resumen por asesor y periodo</h2>
+    <% if (it.advisors.length === 0) { %>
+      <div class="chart-card"><p class="chart-empty">Aún no hay datos para este cliente en el rango seleccionado.</p></div>
+    <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Asesor</th><th>Periodo</th>
+            <th style="text-align:right;">Puntaje</th>
+            <th style="text-align:right;">% Sig. paso</th>
+            <th style="text-align:right;">Talk ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+        <% const bucketLabel = function(key) { const b = it.buckets.find(function(x) { return x.key === key; }); return b ? b.label : key; }; %>
+        <% for (const advisor of it.advisors) { %>
+          <% for (const point of (it.by_advisor[advisor] || [])) { %>
+          <tr>
+            <td><b><%= advisor %></b></td>
+            <td><%= bucketLabel(point.bucket) %></td>
+            <td class="num" style="text-align:right;"><%= point.avg_score !== null ? point.avg_score : 'N/D' %></td>
+            <td class="num" style="text-align:right;"><%= point.pct_siguiente !== null ? point.pct_siguiente + '%' : 'N/D' %></td>
+            <td class="num" style="text-align:right;"><%= point.talk_ratio !== null ? point.talk_ratio + '%' : 'N/D' %></td>
+          </tr>
+          <% } %>
+        <% } %>
+        </tbody>
+      </table>
+    </div>
     <% } %>
-  <% } %>
-  </tbody>
-</table>
-<% } %>
-</div>
+  </section>
 
 </main>
 </body>

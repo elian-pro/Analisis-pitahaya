@@ -1,6 +1,7 @@
 import fs from 'fs';
 import crypto from 'crypto';
 import { CLIENTS_FILE } from '../config/paths';
+import { extractSpreadsheetId, extractDriveFolderId } from '../google/urls';
 import {
   dbEnabled,
   CLIENTS_TABLE,
@@ -30,11 +31,36 @@ export interface ClientConfig {
   transcripcion_max_chars: number;
   prompt_individual:       string;
   prompt_general:          string;
+  // ── Radar de Objeciones (opcionales; el reporte usa defaults si faltan) ──────
+  prompt_radar?:                 string;   // vacío => se usa el prompt default
+  radar_folder_id?:              string;   // carpeta Drive del PDF de Radar
+  radar_sidecar_folder_id?:      string;   // carpeta del sidecar radar-YYYY-MM.json (opcional)
+  radar_min_duration_seconds?:   number;   // filtro de duración del Radar (default 200)
+  radar_transcripcion_max_chars?: number;  // recorte de transcripción del Radar (default 8000)
   // Internal bookkeeping (not part of the public CRUD form, set by
   // advisors/store.ts): true once this client's advisor roster has been
   // imported from Sheets into the `advisors` table, so the one-time import
   // never runs again even if it found zero advisors that first time.
   advisors_seeded?:        boolean;
+}
+
+// Normaliza los campos que pueden llegar como link pegado (o como ID): extrae el
+// ID real de la hoja y de las carpetas de Drive. Red de seguridad del servidor,
+// para que el equipo solo tenga que copiar el link sin buscar el ID.
+function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
+  const out = { ...data };
+  if (typeof out.spreadsheet_id === 'string')    out.spreadsheet_id = extractSpreadsheetId(out.spreadsheet_id);
+  if (typeof out.folder_id === 'string')         out.folder_id = extractDriveFolderId(out.folder_id);
+  if (typeof out.sidecar_folder_id === 'string' && out.sidecar_folder_id) {
+    out.sidecar_folder_id = extractDriveFolderId(out.sidecar_folder_id);
+  }
+  if (typeof out.radar_folder_id === 'string' && out.radar_folder_id) {
+    out.radar_folder_id = extractDriveFolderId(out.radar_folder_id);
+  }
+  if (typeof out.radar_sidecar_folder_id === 'string' && out.radar_sidecar_folder_id) {
+    out.radar_sidecar_folder_id = extractDriveFolderId(out.radar_sidecar_folder_id);
+  }
+  return out;
 }
 
 // ── File fallback (used only when DATABASE_URL is not set) ───────────────────
@@ -60,6 +86,7 @@ export async function getClient(id: string): Promise<ClientConfig | undefined> {
 }
 
 export async function createClient(data: Omit<ClientConfig, 'id'>): Promise<ClientConfig> {
+  data = normalizeIds(data);
   const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 28);
   const id   = `${slug}_${crypto.randomBytes(3).toString('hex')}`;
   const client: ClientConfig = { id, ...data };
@@ -77,6 +104,7 @@ export async function updateClient(
   id: string,
   patch: Partial<Omit<ClientConfig, 'id'>>,
 ): Promise<ClientConfig> {
+  patch = normalizeIds(patch);
   if (dbEnabled) {
     const existing = await dbGet<ClientConfig>(CLIENTS_TABLE, id);
     if (!existing) throw new Error(`Client '${id}' not found`);

@@ -16,6 +16,7 @@ export interface JobResult {
   individual: Array<{ asesor: string; driveUrl: string }>;
   general?:   { driveUrl: string };
   combined?:  { driveUrl: string; advisors: string[] };
+  radar?:     { driveUrl: string };   // Radar de Objeciones (archivo aparte, no va en el merge)
   tokens?:    TokenSummary;
 }
 
@@ -34,6 +35,7 @@ export interface Job {
   period_type: 'monthly' | 'weekly';
   date_from?:  string;  // YYYY-MM-DD, required for weekly
   date_to?:    string;  // YYYY-MM-DD, required for weekly
+  include_radar?: boolean;  // genera además el Radar de Objeciones (solo mensual)
 }
 
 // In-memory cache is the source of truth for reads (the runner polls job status
@@ -106,6 +108,7 @@ export function createJob(
   period_type: 'monthly' | 'weekly' = 'monthly',
   date_from?:  string,
   date_to?:    string,
+  include_radar = false,
 ): Job {
   const job: Job = {
     id:         crypto.randomUUID(),
@@ -120,6 +123,7 @@ export function createJob(
     period_type,
     date_from,
     date_to,
+    include_radar,
   };
   store.set(job.id, job);
   persist(job);

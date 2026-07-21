@@ -100,9 +100,25 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: `Client '${client_id}' not found` });
       return;
     }
+    // Busca coincidencia por nombre incluyendo los INACTIVOS (borrado suave). Si
+    // el nombre ya existe pero está inactivo, se REACTIVA en vez de dar error:
+    // así volver a agregar a alguien que se quitó del roster no queda bloqueado
+    // por un registro oculto (y no crea duplicados en la base de datos).
     const existing = await listAdvisors(client_id, { includeInactive: true });
-    if (existing.some(a => a.name.toLowerCase() === name.trim().toLowerCase())) {
-      res.status(409).json({ error: `'${name}' ya existe en el roster de este cliente` });
+    const match = existing.find(a => a.name.toLowerCase() === name.trim().toLowerCase());
+    if (match) {
+      if (match.active) {
+        res.status(409).json({ error: `'${name}' ya existe en el roster de este cliente` });
+        return;
+      }
+      const reactivated = await updateAdvisor(match.id, {
+        active: true,
+        name:   name.trim(),
+        ...(initials ? { initials: initials.trim().toUpperCase() } : {}),
+        ...(bg    ? { bg }    : {}),
+        ...(color ? { color } : {}),
+      });
+      res.status(200).json(reactivated);
       return;
     }
     const advisor = await createAdvisor(client_id, { name, initials, bg, color });

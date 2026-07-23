@@ -155,14 +155,14 @@ export async function uploadPdf(
     if (msg.includes('notFound') || msg.includes('File not found') || msg.includes('404')) {
       throw new Error(
         `La carpeta de Drive (ID: ${folderId}) no es accesible. ` +
-        `Verifica que sea una Unidad Compartida y que la service account sea miembro con rol Colaborador o superior.`,
+        `Verifica que la cuenta de Google conectada sea dueña de la carpeta o tenga acceso de Editor ` +
+        `(si es una Unidad Compartida, que sea miembro con rol Colaborador o superior).`,
       );
     }
     if (msg.includes('storageQuota') || msg.includes('storage quota')) {
       throw new Error(
-        `La service account no tiene cuota de almacenamiento. ` +
-        `La carpeta debe estar en una Unidad Compartida (no en Mi Unidad). ` +
-        `Crea una Unidad Compartida, mueve la carpeta ahi y agrega la service account como miembro.`,
+        `La cuenta de Google conectada se quedó sin cuota de almacenamiento en Drive. ` +
+        `Libera espacio, o usa una carpeta en una Unidad Compartida (que no consume la cuota personal).`,
       );
     }
     throw err;

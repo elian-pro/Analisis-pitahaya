@@ -1,23 +1,24 @@
 import { google } from 'googleapis';
-import type { JWT } from 'google-auth-library';
-import { getGoogleServiceAccount } from '../config/env';
+import type { JWT, OAuth2Client } from 'google-auth-library';
+import { getGoogleServiceAccount, getGoogleOAuth } from '../config/env';
 
-let _client: JWT | null = null;
+// Scopes que necesita la cuenta central para leer hojas y escribir en Drive.
+// Deben coincidir con los que se conceden en `npm run oauth:setup`.
+export const SHEETS_DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/spreadsheets.readonly',
+  'https://www.googleapis.com/auth/drive',
+];
 
-export function getAuth(): JWT {
+let _client: OAuth2Client | null = null;
+
+// Acceso a Sheets/Drive con OAuth de la cuenta central (agencia). El OAuth2Client
+// refresca el access token automáticamente usando el refresh_token cada vez que
+// una llamada lo necesita, así que basta construirlo una vez.
+export function getAuth(): OAuth2Client {
   if (!_client) {
-    const sa = getGoogleServiceAccount() as {
-      client_email: string;
-      private_key: string;
-    };
-    _client = new google.auth.JWT({
-      email: sa.client_email,
-      key: sa.private_key,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets.readonly',
-        'https://www.googleapis.com/auth/drive',
-      ],
-    });
+    const { clientId, clientSecret, refreshToken } = getGoogleOAuth();
+    _client = new google.auth.OAuth2({ clientId, clientSecret });
+    _client.setCredentials({ refresh_token: refreshToken });
   }
   return _client;
 }

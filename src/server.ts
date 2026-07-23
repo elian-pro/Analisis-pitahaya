@@ -16,6 +16,7 @@ import clientsRouter from './routes/clients';
 import schedulesRouter from './routes/schedules';
 import chatRouter from './routes/chat';
 import sheetsRouter from './routes/sheets';
+import oauthSetupRouter from './routes/oauthSetup';
 import authRouter from './auth/router';
 import { requireApiAuth, requirePage } from './auth/middleware';
 import { startScheduler } from './schedules/runner';
@@ -45,6 +46,7 @@ app.use('/api/clients', clientsRouter);
 app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/sheets', sheetsRouter);
+app.use('/api/oauth', oauthSetupRouter);       // setup OAuth cuenta central (Sheets/Drive)
 
 // ── Protected frontend (redirect to /login when unauthenticated) ──────────────
 app.use(requirePage);

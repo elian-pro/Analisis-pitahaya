@@ -179,7 +179,6 @@ async function main() {
   fs.writeFileSync(outFile, JSON.stringify(parsed.data, null, 2));
 
   console.log(`\n✅ Claude output validated successfully`);
-  console.log(`   nivel     : ${parsed.data.nivel}`);
   console.log(`   tipo      : ${parsed.data.tipo_asesor}`);
   console.log(`   criterios : ${parsed.data.criterios.length}`);
   console.log(`   objeciones: ${parsed.data.objeciones.length}`);

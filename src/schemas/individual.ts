@@ -4,11 +4,26 @@ export const NivelEnum     = z.enum(['excelente', 'bueno', 'aceptable', 'necesit
 export const PrioridadEnum = z.enum(['alta', 'media', 'baja']);
 export const ImpactoEnum   = z.enum(['alta', 'media', 'baja']);
 
+export type Nivel = z.infer<typeof NivelEnum>;
+
+/**
+ * Deriva el nivel del score promedio. Antes lo elegia Claude libremente (sin
+ * rubrica en el prompt), asi que dos asesores con el mismo score podian salir
+ * con niveles distintos y el chip contradecia a la columna de al lado.
+ * Umbrales iguales para todos los clientes.
+ */
+export function nivelFromScore(avgScore: number): Nivel {
+  if (avgScore >= 90) return 'excelente';
+  if (avgScore >= 75) return 'bueno';
+  if (avgScore >= 60) return 'aceptable';
+  if (avgScore >= 45) return 'necesita_mejora';
+  return 'critico';
+}
+
 // ── What Claude must return for one advisor ───────────────────────────────────
 
 export const ClaudeIndividualOutputSchema = z.object({
   tipo_asesor:              z.enum(['linner', 'cerrador', 'desconocido']),
-  nivel:                    NivelEnum,
   objeciones_por_llamada:   z.number().nonnegative(),
   tasa_resolucion_global:   z.number().min(0).max(100),
   pct_logra_siguiente_paso: z.number().min(0).max(100),
@@ -89,6 +104,7 @@ export type ClaudeIndividualOutput = z.infer<typeof ClaudeIndividualOutputSchema
 // ── Full data passed to the PDF template ─────────────────────────────────────
 
 export interface IndividualReportData extends ClaudeIndividualOutput {
+  nivel:                   Nivel;    // derivado de avg_score, ver nivelFromScore
   asesor:                  string;
   mes:                     string;    // "YYYY-MM"
   mes_label:               string;    // "Mayo 2026"

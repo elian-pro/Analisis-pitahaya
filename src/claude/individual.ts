@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { env } from '../config/env';
 import {
   ClaudeIndividualOutputSchema,
+  nivelFromScore,
   type ClaudeIndividualOutput,
   type IndividualReportData,
 } from '../schemas/individual';
@@ -137,7 +138,7 @@ const REPORT_TOOL: Anthropic.Tool = {
   input_schema: {
     type: 'object',
     required: [
-      'tipo_asesor','nivel','objeciones_por_llamada','tasa_resolucion_global',
+      'tipo_asesor','objeciones_por_llamada','tasa_resolucion_global',
       'pct_logra_siguiente_paso','resumen','criterios','elementos_producto',
       'elementos_subutilizados','objeciones','categorias_peor_manejadas','sesgos',
       'sesgos_subutilizados','talk_ratio','preguntas_promedio','cierres',
@@ -145,7 +146,6 @@ const REPORT_TOOL: Anthropic.Tool = {
     ],
     properties: {
       tipo_asesor:              { type: 'string', enum: ['linner','cerrador','desconocido'] },
-      nivel:                    { type: 'string', enum: ['excelente','bueno','aceptable','necesita_mejora','critico'] },
       objeciones_por_llamada:   { type: 'number' },
       tasa_resolucion_global:   { type: 'number' },
       pct_logra_siguiente_paso: { type: 'number' },
@@ -374,6 +374,7 @@ export async function processAdvisor(
 
   const reportData: IndividualReportData = {
     ...claudeOut,
+    nivel:  nivelFromScore(metrics.avg_score),
     asesor: advisorName,
     mes: month,
     mes_label: monthLabel(month),

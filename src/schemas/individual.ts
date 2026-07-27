@@ -16,7 +16,7 @@ export function nivelFromScore(avgScore: number): Nivel {
   if (avgScore >= 90) return 'excelente';
   if (avgScore >= 75) return 'bueno';
   if (avgScore >= 60) return 'aceptable';
-  if (avgScore >= 45) return 'necesita_mejora';
+  if (avgScore >= 50) return 'necesita_mejora';
   return 'critico';
 }
 

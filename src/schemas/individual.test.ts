@@ -10,8 +10,9 @@ test('cada umbral cae del lado correcto', () => {
   assert.equal(nivelFromScore(74),  'aceptable');
   assert.equal(nivelFromScore(60),  'aceptable');
   assert.equal(nivelFromScore(59),  'necesita_mejora');
-  assert.equal(nivelFromScore(45),  'necesita_mejora');
-  assert.equal(nivelFromScore(44),  'critico');
+  assert.equal(nivelFromScore(50),  'necesita_mejora');
+  assert.equal(nivelFromScore(49),  'critico');
+  assert.equal(nivelFromScore(45),  'critico');
   assert.equal(nivelFromScore(0),   'critico');
 });
 

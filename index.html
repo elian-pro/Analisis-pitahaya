@@ -657,7 +657,7 @@
       <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
         <div class="field" style="flex:1 1 220px;">
           <label class="field-label">Cliente</label>
-          <select id="radar-client-select"></select>
+          <select id="radar-client-select" onchange="onRadarClientChange()"></select>
         </div>
         <div class="field" style="flex:1 1 160px;">
           <label class="field-label">Mes</label>
@@ -666,6 +666,24 @@
         <button class="btn-sm btn-sm-green" id="radar-gen-btn" onclick="generateRadarFromClient()">Generar Radar</button>
       </div>
       <div class="form-hint" style="margin-top:8px;">Usa la hoja del cliente (llamadas &gt; 200 s). Requiere que el cliente tenga configurada su "Carpeta Drive de Radar" en Ajustes.</div>
+      <!-- Carpeta de Radar del cliente: mismo bloque que en Reportes, pero apunta a
+           radar_folder_id. A diferencia de Reportes, cuando falta no se oculta en
+           silencio: se explica que hay que configurarla. -->
+      <div id="radar-drive-wrap" style="display:none;margin-top:14px;">
+        <a id="radar-drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
+          <div class="drive-block-left">
+            <div class="drive-block-icon">📁</div>
+            <div>
+              <div class="drive-block-title">Carpeta de Google Drive</div>
+              <div class="drive-block-sub" id="radar-drive-client"></div>
+            </div>
+          </div>
+          <div class="drive-block-arrow">Abrir ↗</div>
+        </a>
+      </div>
+      <div class="form-hint" id="radar-drive-missing" style="display:none;margin-top:14px;color:var(--danger);">
+        ⚠️ Este cliente no tiene carpeta de Radar. Agrégala en <strong>Ajustes → Carpeta Drive de Radar</strong> para poder entregar el reporte.
+      </div>
       <div id="radar-client-status" style="margin-top:12px;"></div>
     </div>
 
@@ -2913,9 +2931,11 @@
   // ── Radar de Objeciones ────────────────────────────────────────────────────
   const RADAR_MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+  let _radarClients = [];
   async function populateRadarSelectors() {
     let clients = [];
     try { clients = await fetch(CLIENTS_API).then(r => r.json()); } catch { clients = []; }
+    _radarClients = clients;
     // Selector de cliente (flujo A) y cliente opcional (flujo B)
     const cSel = document.getElementById('radar-client-select');
     const uSel = document.getElementById('radar-upload-client');
@@ -2934,6 +2954,23 @@
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         mSel.appendChild(new Option(`${RADAR_MONTHS_ES[d.getMonth()]} ${d.getFullYear()}`, key));
       }
+    }
+    onRadarClientChange();   // el selector arranca con el primer cliente ya elegido
+  }
+
+  // Muestra la carpeta de Drive del Radar del cliente elegido, o explica que falta.
+  function onRadarClientChange() {
+    const wrap    = document.getElementById('radar-drive-wrap');
+    const missing = document.getElementById('radar-drive-missing');
+    const client  = _radarClients.find(c => c.id === document.getElementById('radar-client-select').value);
+    document.getElementById('radar-client-status').innerHTML = '';
+    if (client && client.radar_folder_id) {
+      document.getElementById('radar-drive-link').href = `https://drive.google.com/drive/folders/${client.radar_folder_id}`;
+      document.getElementById('radar-drive-client').textContent = client.name;
+      wrap.style.display = 'block'; missing.style.display = 'none';
+    } else {
+      wrap.style.display = 'none';
+      missing.style.display = client ? 'block' : 'none';   // sin cliente no hay nada que pedir
     }
   }
 

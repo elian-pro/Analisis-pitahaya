@@ -1192,6 +1192,43 @@
   </div>
 </div>
 
+<!-- Confirmación del Radar: mismo patrón que el de reportes, con los datos que
+     conviene ver antes de disparar (periodo anterior, carpeta de Drive, roster). -->
+<div class="confirm-backdrop" id="radar-confirm-backdrop">
+  <div class="confirm-modal">
+    <div class="confirm-title">Confirmar generación del Radar</div>
+    <div class="confirm-subtitle">Revisa los datos antes de iniciar el proceso</div>
+    <div class="confirm-row">
+      <div class="confirm-label">Cliente</div>
+      <div class="confirm-value" id="rconf-client"></div>
+    </div>
+    <div class="confirm-row">
+      <div class="confirm-label">Período</div>
+      <div class="confirm-value" id="rconf-period"></div>
+    </div>
+    <div class="confirm-row">
+      <div class="confirm-label">Asesores registrados</div>
+      <div class="confirm-value" id="rconf-advisors"></div>
+    </div>
+    <div class="confirm-prev-badge" id="rconf-prev-badge" style="display:none;">
+      <span class="conf-prev-icon">📊</span>
+      <span class="conf-prev-text" id="rconf-prev-text"></span>
+    </div>
+    <div class="confirm-prev-badge" id="rconf-folder-badge" style="display:none;">
+      <span class="conf-prev-icon">📁</span>
+      <span class="conf-prev-text" id="rconf-folder-text"></span>
+    </div>
+    <div class="confirm-warning">
+      <span>⚠️</span>
+      <span>El Radar solo analiza las llamadas de los asesores registrados de este cliente. Puede tardar ~1 minuto.</span>
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="closeRadarConfirm()">Cancelar</button>
+      <button class="confirm-ok" id="rconf-ok-btn" onclick="confirmAndGenerateRadar()">Confirmar y generar Radar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal de progreso -->
 <div class="modal-backdrop" id="modal-backdrop">
   <div class="modal">
@@ -2913,12 +2950,94 @@
 
   function _radarSafeName(s) { return (s || 'cliente').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').slice(0, 40); }
 
+  // Abre el modal de confirmación y carga el pre-vuelo (periodo anterior, carpeta
+  // de Drive, roster). El disparo real vive en confirmAndGenerateRadar().
+  function setRadarBadge(id, state, iconText, html) {
+    const badge = document.getElementById(id);
+    badge.classList.remove('is-yes', 'is-no');
+    if (state === 'hidden') { badge.style.display = 'none'; return; }
+    badge.querySelector('.conf-prev-icon').textContent = iconText;
+    badge.querySelector('.conf-prev-text').innerHTML = html;
+    if (state === 'yes') badge.classList.add('is-yes');
+    else if (state === 'no') badge.classList.add('is-no');
+    badge.style.display = 'flex';
+  }
+
+  let _radarPreflightSeq = 0;
   async function generateRadarFromClient() {
+    const cSel     = document.getElementById('radar-client-select');
+    const clientId = cSel.value;
+    const month    = document.getElementById('radar-month-select').value;
+    const status   = document.getElementById('radar-client-status');
+    if (!clientId) { status.innerHTML = '<span style="color:var(--danger);font-size:12px;">Elige un cliente.</span>'; return; }
+
+    status.innerHTML = '';
+    document.getElementById('rconf-client').textContent = cSel.selectedOptions[0]?.textContent || '—';
+    document.getElementById('rconf-period').textContent =
+      document.getElementById('radar-month-select').selectedOptions[0]?.textContent || month;
+    document.getElementById('rconf-advisors').textContent = 'Verificando…';
+    setRadarBadge('rconf-prev-badge', 'neutral', '⏳', 'Verificando el Radar del periodo anterior…');
+    setRadarBadge('rconf-folder-badge', 'hidden');
+    const okBtn = document.getElementById('rconf-ok-btn');
+    okBtn.disabled = true;
+
+    const cb = document.getElementById('radar-confirm-backdrop');
+    cb.classList.add('show'); cb.style.display = 'flex';
+
+    const seq = ++_radarPreflightSeq;
+    try {
+      const r = await fetch(`${REPORT_API}/radar-preflight?client_id=${encodeURIComponent(clientId)}&month=${encodeURIComponent(month)}`);
+      if (seq !== _radarPreflightSeq) return;
+      const data = await r.json().catch(() => null);
+      if (seq !== _radarPreflightSeq) return;
+      if (!r.ok || !data) throw new Error((data && data.error) || `HTTP ${r.status}`);
+
+      // Roster: sin asesores el backend aborta, así que bloqueamos el botón aquí.
+      const n = data.advisor_count || 0;
+      document.getElementById('rconf-advisors').textContent = n === 0 ? 'Ninguno' : `${n} asesor(es)`;
+      if (n === 0) {
+        setRadarBadge('rconf-prev-badge', 'no', '⚠️',
+          '<strong>Este cliente no tiene asesores registrados.</strong> El Radar los necesita para saber qué llamadas de la hoja le pertenecen. Da de alta su equipo en Ajustes.');
+      } else if (data.unknown) {
+        setRadarBadge('rconf-prev-badge', 'neutral', 'ℹ️', 'No se pudo verificar el periodo anterior.');
+      } else if (data.has_previous) {
+        const period = data.period_label ? ` (${data.period_label})` : '';
+        setRadarBadge('rconf-prev-badge', 'yes', '✅',
+          `<strong>Radar del periodo anterior detectado${period}.</strong> El reporte incluirá la comparativa contra ese periodo.`);
+      } else {
+        setRadarBadge('rconf-prev-badge', 'no', '⚠️',
+          '<strong>No se detectó Radar del periodo anterior.</strong> Este será el primero, sin comparativa.');
+      }
+
+      if (data.has_folder) {
+        setRadarBadge('rconf-folder-badge', 'yes', '📁',
+          `<strong>Carpeta de Radar configurada.</strong> <a href="${data.folder_url}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>`);
+      } else {
+        setRadarBadge('rconf-folder-badge', 'no', '📁',
+          '<strong>Falta la carpeta de Drive del Radar.</strong> Agrégala en Ajustes → Carpeta Drive de Radar; sin ella el reporte no se puede entregar.');
+      }
+
+      okBtn.disabled = n === 0 || !data.has_folder;
+    } catch (e) {
+      if (seq !== _radarPreflightSeq) return;
+      console.warn('[radar preflight]', e);
+      document.getElementById('rconf-advisors').textContent = '—';
+      setRadarBadge('rconf-prev-badge', 'neutral', 'ℹ️', 'No se pudo verificar la configuración del cliente.');
+      okBtn.disabled = false;   // el pre-vuelo es informativo: no bloquea por fallo de red
+    }
+  }
+
+  function closeRadarConfirm() {
+    const cb = document.getElementById('radar-confirm-backdrop');
+    cb.classList.remove('show'); cb.style.display = 'none';
+  }
+
+  async function confirmAndGenerateRadar() {
+    closeRadarConfirm();
     const clientId = document.getElementById('radar-client-select').value;
     const month    = document.getElementById('radar-month-select').value;
     const status   = document.getElementById('radar-client-status');
     const btn      = document.getElementById('radar-gen-btn');
-    if (!clientId) { status.innerHTML = '<span style="color:var(--danger);font-size:12px;">Elige un cliente.</span>'; return; }
     btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
     status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Analizando llamadas y generando el reporte… (puede tardar ~1 min)</div>';
     try {

@@ -1,4 +1,6 @@
 import type { ClientConfig } from '../clients/manager';
+import { listAdvisors } from '../advisors/store';
+import { rosterMatcher } from '../advisors/match';
 import { getCallData, type SheetColumns } from '../google/sheets';
 import { monthLabel, previousMonth, uploadPdf, findRadarSidecar, uploadRadarSidecar } from '../google/drive';
 import { resolveRadarPrompt, type RadarCall, type RadarPeriodMeta } from '../claude/radar';
@@ -21,6 +23,10 @@ import type { RadarReportData } from '../schemas/radar';
 
 export const RADAR_MIN_DURATION_DEFAULT = 200;
 export const RADAR_MAX_CHARS_DEFAULT     = 8000;
+
+// El Radar solo analiza las llamadas de los asesores dados de alta en el cliente:
+// sin ese filtro, dos clientes que comparten hoja se contaminan el reporte y el
+// PDF del equipo A se sube igual a la carpeta de Drive de A. Ver advisors/match.
 
 function secondsToLabel(sec: number): string | undefined {
   if (!sec || sec <= 0) return undefined;
@@ -70,15 +76,43 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
     duracion: client.col_duracion, record: client.col_record,
   };
 
+  // Roster del cliente: define que llamadas de la hoja le pertenecen. Se incluyen
+  // los inactivos porque un asesor dado de baja hoy pudo tener llamadas en el
+  // periodo analizado, y esas llamadas siguen siendo de este equipo.
+  const roster = await listAdvisors(client.id, { includeInactive: true });
+  if (roster.length === 0) {
+    throw new Error(
+      `El cliente '${client.name}' no tiene asesores registrados, y el Radar los necesita para saber ` +
+      `que llamadas de la hoja le pertenecen. Da de alta su equipo en Ajustes y vuelve a intentarlo.`,
+    );
+  }
+  const isMine = rosterMatcher(roster.map(a => a.name));
+
   // Lee TODAS las llamadas del período (umbral 0) para conocer el total; luego
   // filtra a >= minDur en memoria. Una llamada sin duración legible (0) se incluye.
-  const periodCalls = await getCallData(
+  const allPeriodCalls = await getCallData(
     client.spreadsheet_id, client.data_sheet_name, cols, period.month,
     client.excluded_phrases, maxChars,
     period.useRange ? period.dateFrom : undefined,
     period.useRange ? period.dateTo   : undefined,
     0,
   );
+  // El total que se reporta es el del equipo de ESTE cliente, no el de la hoja.
+  const periodCalls = allPeriodCalls.filter(c => isMine(c.asesor));
+  const foreign     = allPeriodCalls.length - periodCalls.length;
+  if (foreign > 0) {
+    console.log(
+      `[radar] ${foreign} llamada(s) de la hoja no pertenecen al roster de '${client.name}' y quedan fuera ` +
+      `(quedan ${periodCalls.length} del equipo).`,
+    );
+  }
+  if (periodCalls.length === 0) {
+    throw new Error(
+      `Ninguna llamada de ${period.periodLabel} pertenece a los asesores registrados de '${client.name}'. ` +
+      `Revisa que los nombres del roster coincidan con la columna "${client.col_asesor}" de la hoja.`,
+    );
+  }
+
   const total = periodCalls.length;
   const kept = periodCalls.filter(c => c.duracion_segundos === 0 || c.duracion_segundos >= minDur);
 

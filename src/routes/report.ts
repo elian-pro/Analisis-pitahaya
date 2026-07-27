@@ -4,7 +4,8 @@ import multer from 'multer';
 import { getClient } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
-import { findSidecarFolder, findPreviousPeriodKey, monthLabel, uploadPdf } from '../google/drive';
+import { findSidecarFolder, findPreviousPeriodKey, findRadarSidecar, monthLabel, previousMonth, uploadPdf } from '../google/drive';
+import { listAdvisors } from '../advisors/store';
 import { previousPeriodKeyFromDb } from '../metrics/store';
 import { parseRadarMarkdown } from '../ingest/radarMarkdown';
 import { parseRadarSidecar } from '../radar/sidecar';
@@ -313,6 +314,67 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
     // the client only to aid debugging from the browser console.
     res.json({ has_previous: false, unknown: true, reason: msg });
   }
+});
+
+// GET /api/report/radar-preflight — que sabemos ANTES de disparar el Radar:
+// si hay reporte del periodo anterior para comparar, si el cliente tiene carpeta
+// de Drive donde dejar el PDF, y cuantos asesores tiene registrados (el Radar
+// solo analiza las llamadas de su roster). Puramente informativo para el modal
+// de confirmacion: los errores se degradan a "desconocido", nunca a un 500.
+router.get('/radar-preflight', async (req: Request, res: Response): Promise<void> => {
+  const client_id = String(req.query.client_id ?? '');
+  const month     = String(req.query.month ?? '');
+  if (!client_id || !/^\d{4}-\d{2}$/.test(month)) {
+    res.status(400).json({ error: 'client_id y month (YYYY-MM) son obligatorios' });
+    return;
+  }
+
+  let client: Awaited<ReturnType<typeof getClient>>;
+  try {
+    client = await getClient(client_id);
+  } catch {
+    res.status(500).json({ error: 'Failed to load clients configuration' });
+    return;
+  }
+  if (!client) {
+    res.status(404).json({ error: `Client '${client_id}' not found` });
+    return;
+  }
+
+  const folderId  = client.radar_folder_id || null;
+  const folderUrl = folderId ? `https://drive.google.com/drive/folders/${folderId}` : null;
+
+  let advisorCount = 0;
+  try {
+    advisorCount = (await listAdvisors(client_id, { includeInactive: true })).length;
+  } catch (e) {
+    console.warn('[radar preflight] roster lookup failed:', (e as Error).message);
+  }
+
+  // Sin carpeta no hay donde buscar el sidecar del periodo anterior.
+  const prevKey = previousMonth(month);
+  let previous: Record<string, unknown> = { has_previous: false };
+  if (folderId) {
+    try {
+      const sidecarFolder = client.radar_sidecar_folder_id || folderId;
+      const prevText = await findRadarSidecar(sidecarFolder, prevKey);
+      previous = prevText
+        ? { has_previous: true, period_key: prevKey, period_label: periodKeyLabel(prevKey) }
+        : { has_previous: false };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[radar preflight]', msg);
+      previous = { has_previous: false, unknown: true, reason: msg };
+    }
+  }
+
+  res.json({
+    client_name:   client.name,
+    has_folder:    !!folderId,
+    folder_url:    folderUrl,
+    advisor_count: advisorCount,
+    ...previous,
+  });
 });
 
 // GET /api/report/:jobId — poll job status

@@ -834,7 +834,6 @@
           </div>
           <div style="display:flex; gap:8px; align-items:center;" id="cf-folder-row">
             <input class="form-control" id="cf-folder-id" placeholder="Análisis — se crea sola al elegir la ubicación" style="flex:1 1 auto; min-width:0;">
-            <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;">📁&nbsp; Elegir ubicación</button>
           </div>
           <div class="drive-chip" id="cf-radar-name-chip">
             <span class="chip-k">Radar</span><span id="cf-radar-name-text"></span>
@@ -844,6 +843,9 @@
             <input class="form-control" id="cf-radar-folder-id" placeholder="Radar — pega el link si ya existe en otro sitio">
           </div>
           <input type="hidden" id="cf-parent-folder-id">
+          <div style="margin-top:6px;">
+            <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;" id="cf-pick-location">📁&nbsp; Elegir ubicación</button>
+          </div>
           <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearlas en la Unidad Compartida. También puedes pegar el link de las que ya existan.</div>
         </div>
         <details class="form-group" style="margin-top:4px;">
@@ -3857,6 +3859,12 @@
     if (c.parent_folder_id && info[c.parent_folder_id]) {
       const { name, path } = info[c.parent_folder_id];
       document.getElementById('cf-drive-chip-path').textContent = path ? `${path} / ${name}` : name;
+    } else if (!c.parent_folder_id && c.folder_id && info[c.folder_id]?.parentId) {
+      // Cliente dado de alta antes del selector: no tiene ubicación guardada.
+      // Se deduce de dónde vive de verdad su carpeta de análisis, para que las
+      // carpetas que falten se creen ahí mismo, junto a las suyas.
+      const a = info[c.folder_id];
+      _dpApplyLocation(a.path, a.parentId);
     }
     if (c.radar_folder_id && info[c.radar_folder_id]) {
       _showRadarFolderName(info[c.radar_folder_id].name);

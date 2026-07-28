@@ -9,6 +9,10 @@ const ClientBodySchema = z.object({
   // Vacío es válido: la app la crea dentro de parent_folder_id (ver manager.ts).
   folder_id:               z.string().default(''),
   parent_folder_id:        z.string().optional(),
+  // Qué carpetas crear en esa ubicación. No se guardan en el cliente: son
+  // instrucciones de este guardado, no configuración.
+  create_reports_folder:   z.boolean().default(true),
+  create_radar_folder:     z.boolean().default(true),
   sidecar_folder_id:       z.string().optional(),
   spreadsheet_id:          z.string().min(1),
   data_sheet_name:         z.string().min(1),
@@ -56,12 +60,18 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: msg });
     return;
   }
-  if (!parsed.data.folder_id && !parsed.data.parent_folder_id) {
-    res.status(400).json({ error: 'Elige la ubicación en Drive donde crear la carpeta del cliente.' });
+  const { create_reports_folder, create_radar_folder, ...data } = parsed.data;
+  if (!data.folder_id && !(data.parent_folder_id && create_reports_folder)) {
+    res.status(400).json({
+      error: 'Falta la carpeta de reportes: elige una ubicación donde crearla o pega el link de una existente.',
+    });
     return;
   }
   try {
-    res.status(201).json(await createClient(parsed.data));
+    res.status(201).json(await createClient(data, {
+      reports: create_reports_folder,
+      radar:   create_radar_folder,
+    }));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
@@ -74,8 +84,14 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: msg });
     return;
   }
+  // En PUT el schema es parcial: si el formulario no manda las banderas, no se
+  // crea nada. Editar un cliente no debe crear carpetas por sorpresa.
+  const { create_reports_folder, create_radar_folder, ...patch } = parsed.data;
   try {
-    res.json(await updateClient(req.params.id, parsed.data));
+    res.json(await updateClient(req.params.id, patch, {
+      reports: create_reports_folder ?? false,
+      radar:   create_radar_folder   ?? false,
+    }));
   } catch (e) {
     res.status(404).json({ error: (e as Error).message });
   }

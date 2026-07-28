@@ -63,6 +63,21 @@ La ubicación elegida queda visible como chip (`📁 Zebra — Clientes / 2026 �
 debajo se lee exactamente qué carpetas se van a crear. La ✕ la quita si te
 equivocaste.
 
+### Qué carpetas crear — en "Opciones avanzadas"
+
+Dos casillas, **ambas marcadas por defecto**:
+
+- ☑ `{Cliente} | Analisis de llamadas IA`
+- ☑ `{Cliente} | Radar de Objeciones IA`
+
+Desmarca la que el cliente ya tenga y se creará solo la otra. El caso típico:
+un cliente que ya venía con su carpeta de análisis y ahora necesita el Radar —
+desmarcas la primera, pegas el link de la que ya existe y la app crea únicamente
+la de Radar.
+
+Al **editar** un cliente, las casillas vienen marcadas solo para las carpetas que
+le faltan, así que guardar sin tocarlas nunca duplica nada.
+
 ### Carpeta de sidecars — en "Opciones avanzadas"
 Opcional. Un *sidecar* es un archivo de texto (`Sidecar_{asesor}_{período}.txt`)
 donde el sistema guarda el resumen de lo que analizó ese período. Es la memoria

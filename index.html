@@ -323,6 +323,10 @@
     .wiz-toggle input:checked{background:var(--accent);}
     .wiz-toggle input:checked::after{transform:translateX(15px);background:var(--on-accent);}
     .wiz-toggle span{font-size:12px;color:var(--fg);}
+    .wiz-check{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:12px;color:var(--fg);padding:3px 0;}
+    .wiz-check input{appearance:none;width:15px;height:15px;flex-shrink:0;border:0.5px solid var(--border2);border-radius:4px;cursor:pointer;position:relative;}
+    .wiz-check input:checked{background:var(--accent);border-color:var(--accent);}
+    .wiz-check input:checked::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--on-accent);}
     /* Resumen del paso 3 */
     .wiz-summary{border:0.5px solid var(--border2);border-radius:12px;padding:16px;background:var(--bg);}
     .wiz-sum-row{display:flex;gap:12px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:12px;}
@@ -825,6 +829,14 @@
         </div>
         <details class="form-group" style="margin-top:4px;">
           <summary style="cursor:pointer; font-size:12px; color:var(--muted);">Opciones avanzadas</summary>
+          <div class="form-group" style="margin-top:14px;">
+            <label class="form-label">Qué carpetas crear en esa ubicación</label>
+            <label class="wiz-check"><input type="checkbox" id="cf-create-reports" checked onchange="_wizOnFolderChoice()">
+              <span id="cf-create-reports-label">Cliente | Analisis de llamadas IA</span></label>
+            <label class="wiz-check"><input type="checkbox" id="cf-create-radar" checked onchange="_wizOnFolderChoice()">
+              <span id="cf-create-radar-label">Cliente | Radar de Objeciones IA</span></label>
+            <div class="form-hint">Desmarca la que el cliente ya tenga: se creará solo la otra. Si desmarcas la de reportes, pega abajo el link de la que ya existe.</div>
+          </div>
           <div class="form-group" style="margin-top:12px;">
             <label class="form-label">Carpeta de sidecars (link de Drive)</label>
             <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional — pega el link">
@@ -3271,7 +3283,10 @@
       'cf-prompt-radar','cf-radar-folder-id','cf-radar-sidecar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '3000';
-    // Reset del wizard: paso 1, sin ubicación, Radar apagado, columnas bloqueadas
+    // Reset del wizard: paso 1, sin ubicación, ambas carpetas marcadas,
+    // Radar apagado, columnas bloqueadas
+    document.getElementById('cf-create-reports').checked = true;
+    document.getElementById('cf-create-radar').checked   = true;
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
     _dpApplyLocation('', '');
@@ -3328,8 +3343,11 @@
         document.getElementById('cf-radar-on').checked =
           !!(c.radar_folder_id || c.prompt_radar || c.radar_sidecar_folder_id);
         _wizRadarToggle();
+        // Al editar, solo se ofrece crear lo que le falta al cliente.
+        document.getElementById('cf-create-reports').checked = !c.folder_id;
+        document.getElementById('cf-create-radar').checked   = !c.radar_folder_id;
         // Ubicación guardada: se muestra como chip (no conservamos la ruta legible)
-        if (c.parent_folder_id && !c.folder_id) _dpApplyLocation('', c.parent_folder_id);
+        if (c.parent_folder_id) _dpApplyLocation('', c.parent_folder_id);
         _wizFolderHint();
         wizGo(1);
       } catch(e) {
@@ -3559,11 +3577,13 @@
 
   function _wizValidateStep(step) {
     _clearClientErrors();
-    const hasParent = !!document.getElementById('cf-parent-folder-id').value;
+    // La carpeta de reportes solo es obligatoria si la app no la va a crear.
+    const laCrea = !!document.getElementById('cf-parent-folder-id').value
+                && document.getElementById('cf-create-reports').checked;
     const missing = [];
     _CF_REQUIRED.forEach(f => {
       if ((_WIZ_STEP_OF[f.id] || 1) !== step) return;
-      if (f.id === 'cf-folder-id' && hasParent) return;   // se crea sola
+      if (f.id === 'cf-folder-id' && laCrea) return;
       const el = document.getElementById(f.id);
       if (!el || !el.value.trim()) {
         missing.push(f.label);
@@ -3595,18 +3615,50 @@
 
   function _wizOnNameInput() { _wizFolderHint(); }
 
-  // Texto bajo el campo de carpeta: qué se va a crear exactamente y dónde.
+  // Qué carpetas va a crear la app: las casillas de "Opciones avanzadas" mandan.
+  // Un cliente que ya tiene la de análisis desmarca esa y recibe solo el Radar.
+  function _wizFolderChoice() {
+    return {
+      reports: document.getElementById('cf-create-reports').checked,
+      radar:   document.getElementById('cf-create-radar').checked,
+    };
+  }
+
+  function _wizOnFolderChoice() {
+    _wizFolderHint();
+    if (_wizStep === 3) _wizSummary();
+  }
+
+  // Etiquetas de las casillas, visibilidad del campo de link y texto de ayuda.
   function _wizFolderHint() {
     const nombre = document.getElementById('cf-name').value.trim() || 'Cliente';
     const path   = document.getElementById('cf-drive-chip-path').textContent;
     const hint   = document.getElementById('cf-folder-location-hint');
-    if (!document.getElementById('cf-parent-folder-id').value) {
+    const parent = document.getElementById('cf-parent-folder-id').value;
+    const { reports, radar } = _wizFolderChoice();
+
+    document.getElementById('cf-create-reports-label').textContent = `${nombre} | Analisis de llamadas IA`;
+    document.getElementById('cf-create-radar-label').textContent   = `${nombre} | Radar de Objeciones IA`;
+
+    // El campo de pegar link solo sobra cuando la app va a crear esa carpeta.
+    const laCrea = !!parent && reports;
+    document.getElementById('cf-folder-row').style.display = laCrea ? 'none' : 'flex';
+    if (laCrea) {   // deja de ser obligatorio: quita el rojo si lo tenía
+      const f = document.getElementById('cf-folder-id');
+      f.classList.remove('field-error');
+      f.closest('.form-group')?.querySelector('.form-label')?.classList.remove('field-error');
+    }
+
+    if (!parent) {
       hint.textContent = 'Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.';
       return;
     }
-    const radar = document.getElementById('cf-radar-on').checked
-      ? ` y “${nombre} | Radar de Objeciones IA”` : '';
-    hint.textContent = `En ${path || 'la ubicación elegida'} se creará “${nombre} | Analisis de llamadas IA”${radar}.`;
+    const nuevas = [];
+    if (reports) nuevas.push(`“${nombre} | Analisis de llamadas IA”`);
+    if (radar)   nuevas.push(`“${nombre} | Radar de Objeciones IA”`);
+    hint.textContent = nuevas.length
+      ? `En ${path || 'la ubicación elegida'} se creará${nuevas.length > 1 ? 'n' : ''}: ${nuevas.join(' y ')}.`
+      : 'No se creará ninguna carpeta. Pega el link de la carpeta de reportes que ya existe.';
   }
 
   function _wizFiltersSummary() {
@@ -3649,10 +3701,16 @@
     const path   = document.getElementById('cf-drive-chip-path').textContent;
     const radarOn = document.getElementById('cf-radar-on').checked;
 
+    const elige = _wizFolderChoice();
     let carpetas;
-    if (g('cf-parent-folder-id')) {
-      carpetas = `${_esc(path || 'Ubicación elegida')} /<br>📁 ${_esc(nombre || 'Cliente')} | Analisis de llamadas IA`
-        + (radarOn ? `<br>📁 ${_esc(nombre || 'Cliente')} | Radar de Objeciones IA` : '');
+    if (g('cf-parent-folder-id') && (elige.reports || elige.radar)) {
+      const n = _esc(nombre || 'Cliente');
+      carpetas = `${_esc(path || 'Ubicación elegida')} /`
+        + (elige.reports ? `<br>📁 ${n} | Analisis de llamadas IA` : '')
+        + (elige.radar   ? `<br>📁 ${n} | Radar de Objeciones IA` : '');
+      if (!elige.reports && g('cf-folder-id')) {
+        carpetas += `<br>Reportes: carpeta existente <code>${_esc(g('cf-folder-id'))}</code>`;
+      }
     } else if (g('cf-folder-id')) {
       carpetas = `Se usará la carpeta existente <code>${_esc(g('cf-folder-id'))}</code>`;
     } else {
@@ -3713,7 +3771,9 @@
     document.getElementById('cf-drive-chip-path').textContent = id ? (path || 'Ubicación en Drive') : '';
     chip.classList.toggle('show', !!id);
     row.style.display = id ? 'none' : 'flex';
-    if (id) {
+    // Solo se vacía el link si la app va a crear esa carpeta. Si el cliente ya
+    // la tiene (casilla desmarcada), su ID debe sobrevivir al elegir ubicación.
+    if (id && document.getElementById('cf-create-reports').checked) {
       const f = document.getElementById('cf-folder-id');
       f.value = '';
       f.classList.remove('field-error');
@@ -3767,6 +3827,8 @@
       name,
       folder_id:               folderId,
       parent_folder_id:        document.getElementById('cf-parent-folder-id').value || undefined,
+      create_reports_folder:   _wizFolderChoice().reports,
+      create_radar_folder:     _wizFolderChoice().radar,
       sidecar_folder_id:       sidecarRaw ? _extractDriveFolderId(sidecarRaw) : undefined,
       spreadsheet_id:          spreadsheetId,
       data_sheet_name:         sheetName,

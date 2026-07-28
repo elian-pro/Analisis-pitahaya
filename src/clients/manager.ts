@@ -79,23 +79,33 @@ export function radarFolderName(clientName: string): string {
   return `${clientName} | Radar de Objeciones IA`;
 }
 
+// Qué carpetas crear en la ubicación elegida. Ambas por defecto; el formulario
+// las desmarca por separado (un cliente puede ya tener la de análisis y
+// necesitar solo la de Radar, o al revés).
+export interface FolderChoice { reports?: boolean; radar?: boolean }
+
 // Crea las carpetas del cliente en Drive cuando se eligió una ubicación en el
-// selector y no se pegó carpeta a mano. `_Sidecars` no va aquí: se crea sola
-// dentro de la carpeta de reportes en el primer reporte.
-// Idempotente y sin costo cuando folder_id ya existe (no llama a Drive).
+// selector. Cada carpeta se evalúa por separado: tener folder_id no impide
+// crear la de Radar. `_Sidecars` no va aquí: se crea sola dentro de la carpeta
+// de reportes en el primer reporte.
+// Idempotente y sin costo cuando la carpeta ya está (no llama a Drive).
 // `mkdir` es parámetro solo para poder probar la decisión sin llamar a Drive.
 export async function ensureClientFolders<T extends Partial<ClientConfig>>(
   data: T,
+  choice: FolderChoice = {},
   // Import diferido: cargar google/drive valida el env y aborta el proceso, y
   // este módulo se usa también donde no hay credenciales (tests, CLI).
   mkdir: (parentId: string, name: string) => Promise<string> =
     async (p, n) => (await import('../google/drive')).ensureFolder(p, n),
 ): Promise<T> {
-  if (data.folder_id || !data.parent_folder_id || !data.name) return data;
+  const parent = data.parent_folder_id;
+  if (!parent || !data.name) return data;
   const out = { ...data };
-  out.folder_id = await mkdir(data.parent_folder_id, reportsFolderName(data.name));
-  if (!out.radar_folder_id) {
-    out.radar_folder_id = await mkdir(data.parent_folder_id, radarFolderName(data.name));
+  if (!out.folder_id && choice.reports !== false) {
+    out.folder_id = await mkdir(parent, reportsFolderName(data.name));
+  }
+  if (!out.radar_folder_id && choice.radar !== false) {
+    out.radar_folder_id = await mkdir(parent, radarFolderName(data.name));
   }
   return out;
 }
@@ -122,9 +132,12 @@ export async function getClient(id: string): Promise<ClientConfig | undefined> {
   return loadFromFile().find(c => c.id === id);
 }
 
-export async function createClient(data: Omit<ClientConfig, 'id'>): Promise<ClientConfig> {
+export async function createClient(
+  data: Omit<ClientConfig, 'id'>,
+  choice: FolderChoice = {},
+): Promise<ClientConfig> {
   data = normalizeIds(data);
-  data = await ensureClientFolders(data);
+  data = await ensureClientFolders(data, choice);
   const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 28);
   const id   = `${slug}_${crypto.randomBytes(3).toString('hex')}`;
   const client: ClientConfig = { id, ...data };
@@ -141,19 +154,20 @@ export async function createClient(data: Omit<ClientConfig, 'id'>): Promise<Clie
 export async function updateClient(
   id: string,
   patch: Partial<Omit<ClientConfig, 'id'>>,
+  choice: FolderChoice = {},
 ): Promise<ClientConfig> {
   patch = normalizeIds(patch);
   if (dbEnabled) {
     const existing = await dbGet<ClientConfig>(CLIENTS_TABLE, id);
     if (!existing) throw new Error(`Client '${id}' not found`);
-    const updated = await ensureClientFolders({ ...existing, ...patch, id }) as ClientConfig;
+    const updated = await ensureClientFolders({ ...existing, ...patch, id }, choice) as ClientConfig;
     await dbUpsert(CLIENTS_TABLE, id, updated);
     return updated;
   }
   const clients = loadFromFile();
   const idx = clients.findIndex(c => c.id === id);
   if (idx === -1) throw new Error(`Client '${id}' not found`);
-  clients[idx] = await ensureClientFolders({ ...clients[idx], ...patch, id }) as ClientConfig;
+  clients[idx] = await ensureClientFolders({ ...clients[idx], ...patch, id }, choice) as ClientConfig;
   saveToFile(clients);
   return clients[idx];
 }

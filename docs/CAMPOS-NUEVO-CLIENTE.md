@@ -32,7 +32,10 @@ lugares, así que conviene escribirlo bien desde el principio:
 3. El identificador interno del cliente (`sofia_fractional_a3f9c1`), que ya no
    cambia aunque después le cambies el nombre.
 
-### Carpeta de reportes *
+### Carpetas actuales *
+
+Las **dos** carpetas del cliente se gestionan aquí, juntas: la de análisis y la
+de Radar. En Drive son hermanas, dentro de la misma carpeta madre.
 Dónde se guardan los PDFs que genera el sistema.
 
 **No hace falta crear nada a mano.** Pulsa **📁 Elegir ubicación**, navega por tus
@@ -60,13 +63,19 @@ directamente en el campo de texto y la app detecta el ID sola.
 > Si en el selector no aparece ninguna unidad, esa cuenta no es miembro de la
 > Unidad Compartida — es permiso, no un fallo de la app.
 
-La ubicación elegida queda visible como chip (`SE CREA EN  Material Clientes /
-Success M | Anakaren Marín ✕`), y debajo se lee exactamente qué carpetas se van
-a crear. La ✕ la quita si te equivocaste.
+Al editar un cliente ves su estado real de un vistazo, con **nombres**, no IDs:
 
-Al editar un cliente que ya tiene carpeta, aparece un segundo chip
-(`CARPETA ACTUAL  Sofia | Analisis de llamadas IA`) con el **nombre** de la
-carpeta, no su ID. La ✕ lo suelta si quieres apuntar a otra.
+```
+SE CREAN EN   Success M | César Luna / Grupo Tactical / Grupo Tactical | IA  ✕
+ANÁLISIS      Grupo Tactical | Análisis de Llamadas IA                       ✕
+RADAR         Grupo Tactical | Radar de Objeciones IA                        ✕
+```
+
+La ✕ de la ubicación la quita. La ✕ de cada carpeta la suelta y deja un campo
+para pegar el link de otra que ya exista en cualquier otro sitio de Drive.
+
+Si una carpeta no aparece, es que no existe todavía: la app la creará al
+guardar (o puedes pegar su link).
 
 ### Qué carpetas crear — en "Opciones avanzadas"
 
@@ -188,13 +197,15 @@ las llamadas y cómo se manejan. **Se corre sobre las transcripciones del perío
 no en tiempo real durante la llamada.**
 
 Está detrás de un interruptor: si el cliente no lo usa, déjalo apagado y sus
-cinco campos ni siquiera aparecen. Apagado, tampoco se crea su carpeta en Drive.
+campos ni siquiera aparecen.
+
+Su carpeta de Drive **no se configura aquí**: vive en el paso 1, junto a la de
+análisis. El sidecar del comparativo (`radar-YYYY-MM.json`) va dentro de esa
+misma carpeta.
 
 | Campo | Qué hace |
 |---|---|
 | **Prompt del Radar** | Contexto del negocio para este análisis: giro, tipo de llamada, qué se está vendiendo. Si lo dejas vacío se usa un prompt genérico que funciona, pero rinde bastante menos. |
-| **Carpeta Drive de Radar** | Dónde se guarda el PDF del Radar. Se crea sola al elegir la ubicación arriba (`{Cliente} \| Radar de Objeciones IA`); solo pega un link si la quieres en otro lado. |
-| **Carpeta de respaldo Radar** | Dónde va el sidecar del Radar (`radar-YYYY-MM.json`), que habilita el comparativo mes contra mes. Vacío = se usa la misma carpeta del Radar. |
 | **Duración mínima (segundos)** | Descarta llamadas más cortas que esto. Por defecto **200**. Una llamada de 30 segundos no tiene objeciones que analizar, solo mete ruido. Requiere tener configurada la columna de duración. |
 | **Máx. caracteres (Radar)** | Igual que el límite de arriba, pero para el Radar. Por defecto **8000**, más alto porque las objeciones suelen aparecer al final de la llamada. |
 

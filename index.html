@@ -823,21 +823,28 @@
           <input class="form-control" id="cf-name" placeholder="Ej. Empresa XYZ" oninput="_wizOnNameInput()">
         </div>
         <div class="form-group">
-          <label class="form-label">Carpeta de reportes *</label>
+          <label class="form-label">Carpetas actuales *</label>
           <div class="drive-chip" id="cf-drive-chip">
-            <span class="chip-k">Se crea en</span><span id="cf-drive-chip-path"></span>
+            <span class="chip-k">Se crean en</span><span id="cf-drive-chip-path"></span>
             <button type="button" class="drive-chip-x" onclick="_dpClear()" title="Quitar ubicación">✕</button>
           </div>
           <div class="drive-chip" id="cf-folder-name-chip">
-            <span class="chip-k">Carpeta actual</span><span id="cf-folder-name-text"></span>
+            <span class="chip-k">Análisis</span><span id="cf-folder-name-text"></span>
             <button type="button" class="drive-chip-x" onclick="_clearFolderName()" title="Usar otra carpeta">✕</button>
           </div>
           <div style="display:flex; gap:8px; align-items:center;" id="cf-folder-row">
-            <input class="form-control" id="cf-folder-id" placeholder="Se crea sola al elegir la ubicación" style="flex:1 1 auto; min-width:0;">
+            <input class="form-control" id="cf-folder-id" placeholder="Análisis — se crea sola al elegir la ubicación" style="flex:1 1 auto; min-width:0;">
             <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;">📁&nbsp; Elegir ubicación</button>
           </div>
+          <div class="drive-chip" id="cf-radar-name-chip">
+            <span class="chip-k">Radar</span><span id="cf-radar-name-text"></span>
+            <button type="button" class="drive-chip-x" onclick="_clearRadarFolder()" title="Usar otra carpeta">✕</button>
+          </div>
+          <div style="display:none;" id="cf-radar-row">
+            <input class="form-control" id="cf-radar-folder-id" placeholder="Radar — pega el link si ya existe en otro sitio">
+          </div>
           <input type="hidden" id="cf-parent-folder-id">
-          <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.</div>
+          <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearlas en la Unidad Compartida. También puedes pegar el link de las que ya existan.</div>
         </div>
         <details class="form-group" style="margin-top:4px;">
           <summary style="cursor:pointer; font-size:12px; color:var(--muted);">Opciones avanzadas</summary>
@@ -955,18 +962,7 @@
           <label class="form-label">Prompt del Radar</label>
           <textarea class="form-textarea" id="cf-prompt-radar" rows="6" placeholder="Contexto del negocio para el Radar (giro, tipo de llamada, objetivo). Si lo dejas vacío, se usa un prompt genérico."></textarea>
         </div>
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label">Carpeta Drive de Radar</label>
-            <input class="form-control" id="cf-radar-folder-id" placeholder="Pega el link de la carpeta">
-            <div class="form-hint" id="cf-radar-folder-hint">Se crea sola al elegir la ubicación arriba. Pega un link solo si quieres otra carpeta.</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Carpeta de respaldo Radar</label>
-            <input class="form-control" id="cf-radar-sidecar-folder-id" placeholder="Opcional — pega el link">
-            <div class="form-hint">Para el sidecar del comparativo. Si se deja vacía, se usa la de Radar.</div>
-          </div>
-        </div>
+        <div class="form-hint" style="margin:-4px 0 12px;">Su carpeta de Drive se gestiona en el paso 1, junto a la de análisis. El respaldo del comparativo vive dentro de esa misma carpeta.</div>
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Duración mínima (segundos)</label>
@@ -3289,7 +3285,7 @@
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
       'cf-prompt-individual','cf-prompt-general',
-      'cf-prompt-radar','cf-radar-folder-id','cf-radar-sidecar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
+      'cf-prompt-radar','cf-radar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '3000';
     // Reset del wizard: paso 1, sin ubicación, ambas carpetas marcadas,
@@ -3297,8 +3293,7 @@
     document.getElementById('cf-create-reports').checked = true;
     document.getElementById('cf-create-radar').checked   = true;
     document.getElementById('cf-folder-name-chip').classList.remove('show');
-    document.getElementById('cf-radar-folder-hint').textContent =
-      'Se crea sola al elegir la ubicación arriba. Pega un link solo si quieres otra carpeta.';
+    document.getElementById('cf-radar-name-chip').classList.remove('show');
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
     _dpApplyLocation('', '');
@@ -3348,7 +3343,6 @@
         document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
         document.getElementById('cf-prompt-radar').value             = c.prompt_radar || '';
         document.getElementById('cf-radar-folder-id').value          = c.radar_folder_id || '';
-        document.getElementById('cf-radar-sidecar-folder-id').value  = c.radar_sidecar_folder_id || '';
         document.getElementById('cf-radar-min-dur').value            = c.radar_min_duration_seconds || '';
         document.getElementById('cf-radar-max-chars').value          = c.radar_transcripcion_max_chars || '';
         // Radar encendido si el cliente ya tiene algo configurado
@@ -3653,19 +3647,22 @@
     document.getElementById('cf-create-reports-label').textContent = `${nombre} | Analisis de llamadas IA`;
     document.getElementById('cf-create-radar-label').textContent   = `${nombre} | Radar de Objeciones IA`;
 
-    // El campo de pegar link sobra si la app va a crear la carpeta, o si ya
-    // estamos mostrando el nombre de la que el cliente tiene.
-    const laCrea   = !!parent && reports;
-    const conNombre = document.getElementById('cf-folder-name-chip').classList.contains('show');
-    document.getElementById('cf-folder-row').style.display = (laCrea || conNombre) ? 'none' : 'flex';
-    if (laCrea) {   // deja de ser obligatorio: quita el rojo si lo tenía
+    // Cada carpeta muestra una de tres cosas: su nombre (ya existe), nada (la
+    // va a crear la app), o el campo para pegar el link.
+    const creaAnalisis = !!parent && reports;
+    const creaRadar    = !!parent && radar;
+    const conAnalisis  = document.getElementById('cf-folder-name-chip').classList.contains('show');
+    const conRadar     = document.getElementById('cf-radar-name-chip').classList.contains('show');
+    document.getElementById('cf-folder-row').style.display = (creaAnalisis || conAnalisis) ? 'none' : 'flex';
+    document.getElementById('cf-radar-row').style.display  = (creaRadar || conRadar) ? 'none' : 'block';
+    if (creaAnalisis) {   // deja de ser obligatorio: quita el rojo si lo tenía
       const f = document.getElementById('cf-folder-id');
       f.classList.remove('field-error');
       f.closest('.form-group')?.querySelector('.form-label')?.classList.remove('field-error');
     }
 
     if (!parent) {
-      hint.textContent = 'Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.';
+      hint.textContent = 'Elige dónde crearlas en la Unidad Compartida. También puedes pegar el link de las que ya existan.';
       return;
     }
     const nuevas = [];
@@ -3673,7 +3670,7 @@
     if (radar)   nuevas.push(`“${nombre} | Radar de Objeciones IA”`);
     hint.textContent = nuevas.length
       ? `En ${path || 'la ubicación elegida'} se creará${nuevas.length > 1 ? 'n' : ''}: ${nuevas.join(' y ')}.`
-      : 'No se creará ninguna carpeta. Pega el link de la carpeta de reportes que ya existe.';
+      : 'No se creará ninguna carpeta: se usarán las que ya existen.';
   }
 
   function _wizFiltersSummary() {
@@ -3708,10 +3705,14 @@
     return hits;
   }
 
-  // Nombre resuelto de la carpeta de reportes; si Drive no lo dio, el ID.
+  // Nombre resuelto de cada carpeta; si Drive no lo dio, el ID.
   function _folderNameOrId() {
-    const nombre = document.getElementById('cf-folder-name-text').textContent;
-    return nombre || document.getElementById('cf-folder-id').value.trim();
+    return document.getElementById('cf-folder-name-text').textContent
+        || document.getElementById('cf-folder-id').value.trim();
+  }
+  function _radarNameOrId() {
+    return document.getElementById('cf-radar-name-text').textContent
+        || document.getElementById('cf-radar-folder-id').value.trim();
   }
 
   // Resumen del paso 3: qué se va a crear, con los nombres reales.
@@ -3722,28 +3723,35 @@
     const path   = document.getElementById('cf-drive-chip-path').textContent;
     const radarOn = document.getElementById('cf-radar-on').checked;
 
-    const elige = _wizFolderChoice();
-    let carpetas;
-    if (g('cf-parent-folder-id') && (elige.reports || elige.radar)) {
-      const n = _esc(nombre || 'Cliente');
-      carpetas = `${_esc(path || 'Ubicación elegida')} /`
-        + (elige.reports ? `<br>📁 ${n} | Analisis de llamadas IA` : '')
-        + (elige.radar   ? `<br>📁 ${n} | Radar de Objeciones IA` : '');
-      if (!elige.reports && g('cf-folder-id')) {
-        carpetas += `<br>Reportes: ${_esc(_folderNameOrId())}`;
-      }
-    } else if (g('cf-folder-id')) {
-      carpetas = `Se usará la carpeta existente: ${_esc(_folderNameOrId())}`;
-    } else {
-      carpetas = miss('Sin ubicación elegida');
+    // Las dos carpetas juntas, separando lo que se crea de lo que ya existe.
+    const elige  = _wizFolderChoice();
+    const parent = g('cf-parent-folder-id');
+    const n      = _esc(nombre || 'Cliente');
+    const nuevas = [], existentes = [];
+
+    if (parent && elige.reports) nuevas.push(`${n} | Analisis de llamadas IA`);
+    else if (g('cf-folder-id'))  existentes.push(_esc(_folderNameOrId()));
+
+    if (parent && elige.radar)         nuevas.push(`${n} | Radar de Objeciones IA`);
+    else if (g('cf-radar-folder-id'))  existentes.push(_esc(_radarNameOrId()));
+
+    const bloques = [];
+    if (existentes.length) {
+      bloques.push(`Se usará${existentes.length > 1 ? 'n' : ''} ${existentes.length > 1 ? 'las carpetas existentes' : 'la carpeta existente'}:`
+        + existentes.map(c => `<br>📁 ${c}`).join(''));
     }
+    if (nuevas.length) {
+      bloques.push(`Se creará${nuevas.length > 1 ? 'n' : ''} en ${_esc(path || 'la ubicación elegida')}:`
+        + nuevas.map(c => `<br>📁 ${c}`).join(''));
+    }
+    const carpetas = bloques.length ? bloques.join('<br><br>') : miss('Sin ubicación elegida');
 
     const obligatorias = ['cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis','cf-col-transcripcion'];
     const mapeadas = obligatorias.filter(id => g(id)).length;
 
     const rows = [
       ['Cliente',     nombre ? _esc(nombre) : miss('Sin nombre')],
-      ['Se crearán',  carpetas],
+      ['Carpetas',    carpetas],
       ['Fuente',      g('cf-spreadsheet-id')
                         ? `Hoja conectada · pestaña ${g('cf-sheet-name') ? _esc(g('cf-sheet-name')) : miss('sin elegir')}`
                         : miss('Sin hoja de Google')],
@@ -3829,6 +3837,18 @@
     _wizFolderHint();
   }
 
+  function _showRadarFolderName(name) {
+    document.getElementById('cf-radar-name-text').textContent = name;
+    document.getElementById('cf-radar-name-chip').classList.add('show');
+    _wizFolderHint();
+  }
+
+  function _clearRadarFolder() {
+    document.getElementById('cf-radar-name-chip').classList.remove('show');
+    document.getElementById('cf-radar-folder-id').value = '';
+    _wizFolderHint();
+  }
+
   // Rellena chips y pistas con los nombres reales. Silencioso: si Drive no
   // responde, el formulario sigue funcionando con los IDs.
   async function _fillFolderNames(c) {
@@ -3838,9 +3858,8 @@
       const { name, path } = info[c.parent_folder_id];
       document.getElementById('cf-drive-chip-path').textContent = path ? `${path} / ${name}` : name;
     }
-    const rHint = document.getElementById('cf-radar-folder-hint');
-    if (c.radar_folder_id && info[c.radar_folder_id] && rHint) {
-      rHint.textContent = `Carpeta actual: ${info[c.radar_folder_id].name}`;
+    if (c.radar_folder_id && info[c.radar_folder_id]) {
+      _showRadarFolderName(info[c.radar_folder_id].name);
     }
     _wizFolderHint();
     if (_wizStep === 3) _wizSummary();
@@ -3912,18 +3931,19 @@
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
     };
 
-    // ── Radar de Objeciones: solo si el toggle está encendido ────────────────
+    // La carpeta de Radar se gestiona en el paso 1, junto a la de análisis, así
+    // que viaja siempre: no depende de que el Radar esté activado.
+    const _radarFolder = document.getElementById('cf-radar-folder-id').value.trim();
+    if (_radarFolder) payload.radar_folder_id = _extractDriveFolderId(_radarFolder);
+
+    // ── Ajustes del Radar: solo si el toggle está encendido ──────────────────
     if (document.getElementById('cf-radar-on').checked) {
-    const _radarFolder  = document.getElementById('cf-radar-folder-id').value.trim();
-    const _radarSidecar = document.getElementById('cf-radar-sidecar-folder-id').value.trim();
-    const _radarPrompt  = document.getElementById('cf-prompt-radar').value.trim();
-    const _radarMinDur  = parseInt(document.getElementById('cf-radar-min-dur').value, 10);
-    const _radarMaxCh   = parseInt(document.getElementById('cf-radar-max-chars').value, 10);
-    if (_radarPrompt)  payload.prompt_radar = _radarPrompt;
-    if (_radarFolder)  payload.radar_folder_id = _extractDriveFolderId(_radarFolder);
-    if (_radarSidecar) payload.radar_sidecar_folder_id = _extractDriveFolderId(_radarSidecar);
-    if (!isNaN(_radarMinDur)) payload.radar_min_duration_seconds = _radarMinDur;
-    if (!isNaN(_radarMaxCh))  payload.radar_transcripcion_max_chars = _radarMaxCh;
+      const _radarPrompt = document.getElementById('cf-prompt-radar').value.trim();
+      const _radarMinDur = parseInt(document.getElementById('cf-radar-min-dur').value, 10);
+      const _radarMaxCh  = parseInt(document.getElementById('cf-radar-max-chars').value, 10);
+      if (_radarPrompt) payload.prompt_radar = _radarPrompt;
+      if (!isNaN(_radarMinDur)) payload.radar_min_duration_seconds = _radarMinDur;
+      if (!isNaN(_radarMaxCh))  payload.radar_transcripcion_max_chars = _radarMaxCh;
     }
 
     try {

@@ -296,6 +296,40 @@
     .form-modal-header{padding:24px 28px 20px;border-bottom:0.5px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
     .form-modal-body{padding:24px 28px;max-height:72vh;overflow-y:auto;}
     .form-modal-footer{padding:16px 28px;border-top:0.5px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+    /* ── Wizard de alta de cliente (3 pasos) ── */
+    .wiz-steps{display:flex;align-items:center;gap:12px;padding:14px 28px;border-bottom:0.5px solid var(--border);}
+    .wiz-step{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint);white-space:nowrap;transition:color .15s;}
+    .wiz-num{width:22px;height:22px;flex-shrink:0;border-radius:100px;border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;letter-spacing:0;}
+    .wiz-step.active{color:var(--fg);}
+    .wiz-step.active .wiz-num{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+    .wiz-step.done{color:var(--muted);cursor:pointer;}
+    .wiz-step.done .wiz-num{border-color:var(--fg);color:var(--fg);}
+    .wiz-line{flex:1;height:0.5px;background:var(--border);min-width:16px;}
+    .wiz-pane{display:none;}
+    .wiz-pane.active{display:block;}
+    /* Columnas bloqueadas hasta cargar una pestaña */
+    .cols-locked{opacity:.38;pointer-events:none;}
+    .cols-lock-msg{display:none;font-size:12px;color:var(--muted);border:0.5px dashed var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+    .cols-locked-wrap .cols-lock-msg{display:block;}
+    /* Chip de la ruta de Drive elegida */
+    .drive-chip{display:none;align-items:center;gap:8px;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--fg);}
+    .drive-chip.show{display:inline-flex;}
+    .drive-chip-x{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;}
+    .drive-chip-x:hover{color:var(--fg);}
+    /* Toggle del Radar */
+    .wiz-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;margin-bottom:14px;}
+    .wiz-toggle input{appearance:none;width:34px;height:19px;border-radius:100px;background:var(--border2);position:relative;cursor:pointer;transition:background .15s;flex-shrink:0;}
+    .wiz-toggle input::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:100px;background:var(--surface);transition:transform .15s;}
+    .wiz-toggle input:checked{background:var(--accent);}
+    .wiz-toggle input:checked::after{transform:translateX(15px);background:var(--on-accent);}
+    .wiz-toggle span{font-size:12px;color:var(--fg);}
+    /* Resumen del paso 3 */
+    .wiz-summary{border:0.5px solid var(--border2);border-radius:12px;padding:16px;background:var(--bg);}
+    .wiz-sum-row{display:flex;gap:12px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:12px;}
+    .wiz-sum-row:last-child{border-bottom:none;}
+    .wiz-sum-k{width:104px;flex-shrink:0;color:var(--faint);text-transform:uppercase;letter-spacing:0.12em;font-size:10px;padding-top:2px;}
+    .wiz-sum-v{color:var(--fg);line-height:1.55;word-break:break-word;}
+    .wiz-sum-v .miss{color:#e0684f;}
     .form-section{margin-bottom:24px;}
     .form-section-title{font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;padding-bottom:8px;border-bottom:0.5px solid var(--border);}
     .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -751,6 +785,13 @@
       </div>
       <button class="modal-close show" onclick="closeClientModal()">✕</button>
     </div>
+    <div class="wiz-steps">
+      <div class="wiz-step active" id="wiz-tab-1" onclick="wizGo(1)"><span class="wiz-num">1</span>Datos</div>
+      <div class="wiz-line"></div>
+      <div class="wiz-step" id="wiz-tab-2" onclick="wizGo(2)"><span class="wiz-num">2</span>Fuente</div>
+      <div class="wiz-line"></div>
+      <div class="wiz-step" id="wiz-tab-3" onclick="wizGo(3)"><span class="wiz-num">3</span>Análisis</div>
+    </div>
     <div class="form-modal-body">
       <input type="hidden" id="cf-id">
       <!-- Draft restore banner (shown when a draft exists for a new client) -->
@@ -762,29 +803,37 @@
           <button class="draft-banner-btn accent" onclick="restoreDraft()">Restaurar</button>
         </div>
       </div>
+      <div class="wiz-pane active" data-step="1">
       <div class="form-section">
         <div class="form-section-title">Información básica</div>
         <div class="form-group">
           <label class="form-label">Nombre del cliente *</label>
-          <input class="form-control" id="cf-name" placeholder="Ej. Empresa XYZ">
+          <input class="form-control" id="cf-name" placeholder="Ej. Empresa XYZ" oninput="_wizOnNameInput()">
         </div>
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label">Carpeta de reportes *</label>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input class="form-control" id="cf-folder-id" placeholder="Se crea sola al elegir la ubicación" style="flex:1 1 auto;">
-              <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;">📁&nbsp; Elegir ubicación</button>
-            </div>
-            <input type="hidden" id="cf-parent-folder-id">
-            <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.</div>
+        <div class="form-group">
+          <label class="form-label">Carpeta de reportes *</label>
+          <div class="drive-chip" id="cf-drive-chip">
+            <span>📁</span><span id="cf-drive-chip-path"></span>
+            <button type="button" class="drive-chip-x" onclick="_dpClear()" title="Quitar ubicación">✕</button>
           </div>
-          <div class="form-group">
-            <label class="form-label">Carpeta de PDFs (link de Drive)</label>
+          <div style="display:flex; gap:8px; align-items:center;" id="cf-folder-row">
+            <input class="form-control" id="cf-folder-id" placeholder="Se crea sola al elegir la ubicación" style="flex:1 1 auto; min-width:0;">
+            <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;">📁&nbsp; Elegir ubicación</button>
+          </div>
+          <input type="hidden" id="cf-parent-folder-id">
+          <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.</div>
+        </div>
+        <details class="form-group" style="margin-top:4px;">
+          <summary style="cursor:pointer; font-size:12px; color:var(--muted);">Opciones avanzadas</summary>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Carpeta de sidecars (link de Drive)</label>
             <input class="form-control" id="cf-sidecar-folder-id" placeholder="Opcional — pega el link">
-            <div class="form-hint">Carpeta alternativa para los PDFs (opcional)</div>
+            <div class="form-hint">Dónde guardar la memoria de cada período (archivos <code>Sidecar_*.txt</code>) que alimenta el comparativo. Si la dejas vacía se crea <code>_Sidecars</code> dentro de la carpeta de reportes.</div>
           </div>
-        </div>
+        </details>
       </div>
+      </div>
+      <div class="wiz-pane" data-step="2">
       <div class="form-section">
         <div class="form-section-title">Google Sheets</div>
         <div class="form-group">
@@ -808,10 +857,11 @@
           <div class="form-hint" id="cf-tabs-hint">En “Lista”, pega el link y pulsa “Cargar pestañas”. En “Escribir”, teclea el nombre exacto.</div>
         </div>
       </div>
-      <div class="form-section">
+      <div class="form-section cols-locked-wrap" id="cols-section">
         <div class="form-section-title">Columnas de la hoja</div>
-        <div class="form-hint" style="margin:-4px 0 12px;">Elige la pestaña arriba y las columnas se llenan solas con los encabezados de la hoja. También puedes escribir el nombre.</div>
-        <div class="form-grid-2">
+        <div class="cols-lock-msg">Carga una pestaña primero: las columnas se llenan solas con los encabezados de la hoja.</div>
+        <div class="form-hint" id="cols-detect-hint" style="margin:-4px 0 12px; display:none;"></div>
+        <div class="form-grid-2 cols-locked" id="cols-grid">
           <div class="form-group">
             <label class="form-label">Columna de fecha *</label>
             <select class="form-control-sm" id="cf-col-fecha" data-free data-placeholder="Elige o escribe la columna"></select>
@@ -843,17 +893,21 @@
         </div>
       </div>
       <div class="form-section">
-        <div class="form-section-title">Filtros y límites</div>
-        <div class="form-group">
-          <label class="form-label">Frases excluidas</label>
-          <input class="form-control" id="cf-excluded-phrases" placeholder="frase1, frase2, frase3">
-          <div class="form-hint">Separadas por comas. Llamadas que contengan estas frases serán ignoradas.</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Máx. caracteres de transcripción</label>
-          <input class="form-control" id="cf-max-chars" type="number" placeholder="3000" min="1000" max="200000">
-        </div>
+        <details>
+          <summary style="cursor:pointer; font-size:12px; color:var(--muted);">Filtros y límites — <span id="cf-filters-summary">3000 caracteres · sin filtros</span></summary>
+          <div class="form-group" style="margin-top:14px;">
+            <label class="form-label">Frases excluidas</label>
+            <input class="form-control" id="cf-excluded-phrases" placeholder="frase1, frase2, frase3">
+            <div class="form-hint">Separadas por comas. Llamadas que contengan estas frases serán ignoradas.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Máx. caracteres de transcripción</label>
+            <input class="form-control" id="cf-max-chars" type="number" placeholder="3000" min="1000" max="200000">
+          </div>
+        </details>
       </div>
+      </div>
+      <div class="wiz-pane" data-step="3">
       <div class="form-section">
         <div class="form-section-title">Prompts de IA</div>
         <div class="form-group">
@@ -867,7 +921,12 @@
       </div>
       <div class="form-section">
         <div class="form-section-title">Radar de Objeciones (opcional)</div>
-        <div class="form-hint" style="margin:-4px 0 12px;">Configura el reporte “Radar de Objeciones” para este cliente. Si no lo usas, deja los campos vacíos.</div>
+        <label class="wiz-toggle">
+          <input type="checkbox" id="cf-radar-on" onchange="_wizRadarToggle()">
+          <span>Activar Radar de Objeciones para este cliente</span>
+        </label>
+        <div id="radar-fields" style="display:none;">
+        <div class="form-hint" style="margin:-4px 0 12px;">Reporte aparte que analiza las objeciones de las llamadas del período. Se genera junto con los reportes de asesores.</div>
         <div class="form-group">
           <label class="form-label">Prompt del Radar</label>
           <textarea class="form-textarea" id="cf-prompt-radar" rows="6" placeholder="Contexto del negocio para el Radar (giro, tipo de llamada, objetivo). Si lo dejas vacío, se usa un prompt genérico."></textarea>
@@ -876,7 +935,7 @@
           <div class="form-group">
             <label class="form-label">Carpeta Drive de Radar</label>
             <input class="form-control" id="cf-radar-folder-id" placeholder="Pega el link de la carpeta">
-            <div class="form-hint">Obligatoria para generar el Radar. Detectamos el ID del link.</div>
+            <div class="form-hint">Se crea sola al elegir la ubicación arriba. Pega un link solo si quieres otra carpeta.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Carpeta de respaldo Radar</label>
@@ -894,11 +953,19 @@
             <input class="form-control" id="cf-radar-max-chars" type="number" min="100" max="50000" placeholder="8000">
           </div>
         </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Revisión</div>
+        <div class="wiz-summary" id="wiz-summary"></div>
+      </div>
       </div>
     </div>
     <div class="form-modal-footer">
       <button class="btn-sm btn-sm-cancel" onclick="closeClientModal()">Cancelar</button>
-      <button class="btn-sm btn-sm-green" onclick="saveClient()">Guardar cliente</button>
+      <button class="btn-sm btn-sm-cancel" id="wiz-back" onclick="wizGo(_wizStep - 1)" style="display:none;">← Atrás</button>
+      <button class="btn-sm btn-sm-green" id="wiz-next" onclick="wizNext()">Siguiente →</button>
+      <button class="btn-sm btn-sm-green" id="wiz-save" onclick="saveClient()" style="display:none;">Guardar cliente</button>
     </div>
   </div>
 </div>
@@ -3204,8 +3271,12 @@
       'cf-prompt-radar','cf-radar-folder-id','cf-radar-sidecar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '3000';
-    document.getElementById('cf-folder-location-hint').textContent =
-      'Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.';
+    // Reset del wizard: paso 1, sin ubicación, Radar apagado, columnas bloqueadas
+    document.getElementById('cf-radar-on').checked = false;
+    _wizRadarToggle();
+    _dpApplyLocation('', '');
+    populateColumnOptions([]);
+    wizGo(1);
 
     // Reset del selector de pestañas (se llena al pulsar "Cargar pestañas")
     const _tabsSel = document.getElementById('cf-sheet-name-select');
@@ -3253,6 +3324,14 @@
         document.getElementById('cf-radar-sidecar-folder-id').value  = c.radar_sidecar_folder_id || '';
         document.getElementById('cf-radar-min-dur').value            = c.radar_min_duration_seconds || '';
         document.getElementById('cf-radar-max-chars').value          = c.radar_transcripcion_max_chars || '';
+        // Radar encendido si el cliente ya tiene algo configurado
+        document.getElementById('cf-radar-on').checked =
+          !!(c.radar_folder_id || c.prompt_radar || c.radar_sidecar_folder_id);
+        _wizRadarToggle();
+        // Ubicación guardada: se muestra como chip (no conservamos la ruta legible)
+        if (c.parent_folder_id && !c.folder_id) _dpApplyLocation('', c.parent_folder_id);
+        _wizFolderHint();
+        wizGo(1);
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -3357,6 +3436,21 @@
       if (cur && !seen.has(cur)) sel.appendChild(new Option(cur, cur));
       sel.value = cur;                 // el setter del combobox refresca la etiqueta
     });
+
+    // Sin encabezados los selects no sirven de nada: se bloquean con mensaje en
+    // vez de quedar habilitados y vacíos.
+    const wrap = document.getElementById('cols-section');
+    const grid = document.getElementById('cols-grid');
+    const hint = document.getElementById('cols-detect-hint');
+    const n = seenAll.length;
+    if (wrap) wrap.classList.toggle('cols-locked-wrap', n === 0);
+    if (grid) grid.classList.toggle('cols-locked', n === 0);
+    if (!hint) return;
+    if (n === 0) { hint.style.display = 'none'; return; }
+    const hits = _autoDetectColumns(seenAll);
+    hint.style.display = '';
+    hint.textContent = `${n} columna(s) detectada(s)` +
+      (hits ? ` · ${hits} mapeada(s) automáticamente, confírmalas` : '');
   }
 
   // Consulta los encabezados de la pestaña elegida y llena los menús de columnas.
@@ -3423,6 +3517,168 @@
     }
   }
 
+  // ── Wizard de alta de cliente (3 pasos) ─────────────────────────────────────
+  // Los campos son los mismos de siempre y conservan sus IDs: el wizard solo
+  // agrupa las secciones en paneles y valida por paso.
+  let _wizStep = 1;
+
+  // En qué paso vive cada campo obligatorio, para validar por paso y poder
+  // saltar al paso donde quedó el error.
+  const _WIZ_STEP_OF = {
+    'cf-name': 1, 'cf-folder-id': 1,
+    'cf-spreadsheet-id': 2, 'cf-sheet-name': 2,
+    'cf-col-fecha': 2, 'cf-col-asesor': 2, 'cf-col-calif': 2,
+    'cf-col-analisis': 2, 'cf-col-transcripcion': 2,
+    'cf-prompt-individual': 3, 'cf-prompt-general': 3,
+  };
+
+  function wizGo(n) {
+    _wizStep = Math.min(3, Math.max(1, n));
+    document.querySelectorAll('#client-modal-backdrop .wiz-pane').forEach(p => {
+      p.classList.toggle('active', Number(p.dataset.step) === _wizStep);
+    });
+    for (let i = 1; i <= 3; i++) {
+      const t = document.getElementById('wiz-tab-' + i);
+      t.classList.toggle('active', i === _wizStep);
+      t.classList.toggle('done',   i <  _wizStep);
+    }
+    document.getElementById('wiz-back').style.display = _wizStep === 1 ? 'none' : '';
+    document.getElementById('wiz-next').style.display = _wizStep === 3 ? 'none' : '';
+    document.getElementById('wiz-save').style.display = _wizStep === 3 ? '' : 'none';
+    _wizFiltersSummary();
+    if (_wizStep === 3) _wizSummary();
+    const body = document.querySelector('#client-modal-backdrop .form-modal-body');
+    if (body) body.scrollTop = 0;
+  }
+
+  function wizNext() {
+    const missing = _wizValidateStep(_wizStep);
+    if (missing.length) { _wizShowMissing(missing); return; }
+    wizGo(_wizStep + 1);
+  }
+
+  function _wizValidateStep(step) {
+    _clearClientErrors();
+    const hasParent = !!document.getElementById('cf-parent-folder-id').value;
+    const missing = [];
+    _CF_REQUIRED.forEach(f => {
+      if ((_WIZ_STEP_OF[f.id] || 1) !== step) return;
+      if (f.id === 'cf-folder-id' && hasParent) return;   // se crea sola
+      const el = document.getElementById(f.id);
+      if (!el || !el.value.trim()) {
+        missing.push(f.label);
+        if (el) {
+          el.classList.add('field-error');
+          const grp = el.closest('.form-group');
+          if (grp) grp.querySelector('.form-label')?.classList.add('field-error');
+        }
+      }
+    });
+    return missing;
+  }
+
+  function _wizShowMissing(missing) {
+    const firstErr = document.querySelector('#client-modal-backdrop .field-error');
+    if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('draft-missing-list').innerHTML =
+      missing.map(m => `<div class="draft-missing-item"><div class="draft-missing-dot"></div>${_esc(m)}</div>`).join('');
+    const b = document.getElementById('draft-modal-backdrop');
+    b.style.display = 'flex'; b.classList.add('show');
+  }
+
+  function _wizRadarToggle() {
+    const on = document.getElementById('cf-radar-on').checked;
+    document.getElementById('radar-fields').style.display = on ? '' : 'none';
+    _wizFolderHint();
+    if (_wizStep === 3) _wizSummary();
+  }
+
+  function _wizOnNameInput() { _wizFolderHint(); }
+
+  // Texto bajo el campo de carpeta: qué se va a crear exactamente y dónde.
+  function _wizFolderHint() {
+    const nombre = document.getElementById('cf-name').value.trim() || 'Cliente';
+    const path   = document.getElementById('cf-drive-chip-path').textContent;
+    const hint   = document.getElementById('cf-folder-location-hint');
+    if (!document.getElementById('cf-parent-folder-id').value) {
+      hint.textContent = 'Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.';
+      return;
+    }
+    const radar = document.getElementById('cf-radar-on').checked
+      ? ` y “${nombre} | Radar de Objeciones IA”` : '';
+    hint.textContent = `En ${path || 'la ubicación elegida'} se creará “${nombre} | Analisis de llamadas IA”${radar}.`;
+  }
+
+  function _wizFiltersSummary() {
+    const ph = document.getElementById('cf-excluded-phrases').value.trim();
+    const mx = document.getElementById('cf-max-chars').value.trim() || '3000';
+    const n  = ph ? ph.split(',').filter(s => s.trim()).length : 0;
+    document.getElementById('cf-filters-summary').textContent =
+      `${mx} caracteres · ${n ? n + ' frase(s) excluida(s)' : 'sin filtros'}`;
+  }
+
+  // Auto-detección de columnas por parecido de nombre. Solo rellena campos
+  // vacíos: nunca pisa lo que el usuario ya eligió.
+  const _COL_HINTS = {
+    'cf-col-fecha':         ['fecha', 'date', 'timestamp', 'dia'],
+    'cf-col-asesor':        ['asesor', 'agente', 'agent', 'vendedor', 'ejecutivo'],
+    'cf-col-calif':         ['calif', 'score', 'puntaje', 'nota', 'rating'],
+    'cf-col-analisis':      ['analisis', 'analysis', 'resumen', 'summary'],
+    'cf-col-transcripcion': ['transcrip', 'transcript', 'conversacion', 'dialogo'],
+    'cf-col-duracion':      ['duracion', 'duration', 'segundos', 'tiempo'],
+    'cf-col-record':        ['grabacion', 'record', 'audio'],
+  };
+  function _norm(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+  function _autoDetectColumns(headers) {
+    let hits = 0;
+    Object.entries(_COL_HINTS).forEach(([id, keys]) => {
+      const sel = document.getElementById(id);
+      if (!sel || sel.value) return;
+      const match = headers.find(h => keys.some(k => _norm(h).includes(k)));
+      if (match) { sel.value = match; hits++; }
+    });
+    return hits;
+  }
+
+  // Resumen del paso 3: qué se va a crear, con los nombres reales.
+  function _wizSummary() {
+    const g = id => (document.getElementById(id).value || '').trim();
+    const miss = t => `<span class="miss">${t}</span>`;
+    const nombre = g('cf-name');
+    const path   = document.getElementById('cf-drive-chip-path').textContent;
+    const radarOn = document.getElementById('cf-radar-on').checked;
+
+    let carpetas;
+    if (g('cf-parent-folder-id')) {
+      carpetas = `${_esc(path || 'Ubicación elegida')} /<br>📁 ${_esc(nombre || 'Cliente')} | Analisis de llamadas IA`
+        + (radarOn ? `<br>📁 ${_esc(nombre || 'Cliente')} | Radar de Objeciones IA` : '');
+    } else if (g('cf-folder-id')) {
+      carpetas = `Se usará la carpeta existente <code>${_esc(g('cf-folder-id'))}</code>`;
+    } else {
+      carpetas = miss('Sin ubicación elegida');
+    }
+
+    const obligatorias = ['cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis','cf-col-transcripcion'];
+    const mapeadas = obligatorias.filter(id => g(id)).length;
+
+    const rows = [
+      ['Cliente',     nombre ? _esc(nombre) : miss('Sin nombre')],
+      ['Se crearán',  carpetas],
+      ['Fuente',      g('cf-spreadsheet-id')
+                        ? `Hoja conectada · pestaña ${g('cf-sheet-name') ? _esc(g('cf-sheet-name')) : miss('sin elegir')}`
+                        : miss('Sin hoja de Google')],
+      ['Columnas',    `${mapeadas} de 5 obligatorias mapeadas` + (mapeadas < 5 ? ' · ' + miss('faltan') : '')],
+      ['Prompts',     (g('cf-prompt-individual') && g('cf-prompt-general'))
+                        ? 'Individual y general listos'
+                        : miss('Faltan prompts')],
+      ['Radar',       radarOn ? `Activo · mínimo ${g('cf-radar-min-dur') || 200}s` : 'Desactivado'],
+      ['Filtros',     document.getElementById('cf-filters-summary').textContent],
+    ];
+    document.getElementById('wiz-summary').innerHTML = rows.map(([k, v]) =>
+      `<div class="wiz-sum-row"><div class="wiz-sum-k">${k}</div><div class="wiz-sum-v">${v}</div></div>`).join('');
+  }
+
   // ── Selector de carpeta de Drive ────────────────────────────────────────────
   // Navega con la cuenta central: raíz = Unidades Compartidas, luego subcarpetas.
   let _dpStack = [];   // ruta actual [{id,name}]; vacía = raíz
@@ -3444,15 +3700,28 @@
 
   function _dpUse() {
     if (!_dpStack.length) return;
-    const path = _dpStack.map(f => f.name).join(' / ');
-    document.getElementById('cf-parent-folder-id').value = _dpStack[_dpStack.length - 1].id;
-    document.getElementById('cf-folder-id').value = '';
-    document.getElementById('cf-folder-id').classList.remove('field-error');
-    const nombre = document.getElementById('cf-name').value.trim() || 'Cliente';
-    document.getElementById('cf-folder-location-hint').textContent =
-      `En ${path} se crearán: “${nombre} | Analisis de llamadas IA” y “${nombre} | Radar de Objeciones IA”.`;
+    _dpApplyLocation(_dpStack.map(f => f.name).join(' / '), _dpStack[_dpStack.length - 1].id);
     closeDrivePicker();
   }
+
+  // Muestra la ubicación elegida como chip en vez de dejar el campo con el
+  // placeholder. Con id vacío vuelve al campo de pegar link.
+  function _dpApplyLocation(path, id) {
+    const chip = document.getElementById('cf-drive-chip');
+    const row  = document.getElementById('cf-folder-row');
+    document.getElementById('cf-parent-folder-id').value = id || '';
+    document.getElementById('cf-drive-chip-path').textContent = id ? (path || 'Ubicación en Drive') : '';
+    chip.classList.toggle('show', !!id);
+    row.style.display = id ? 'none' : 'flex';
+    if (id) {
+      const f = document.getElementById('cf-folder-id');
+      f.value = '';
+      f.classList.remove('field-error');
+    }
+    _wizFolderHint();
+  }
+
+  function _dpClear() { _dpApplyLocation('', ''); }
 
   async function _dpLoad() {
     const list = document.getElementById('dp-list');
@@ -3477,17 +3746,15 @@
   }
 
   async function saveClient() {
-    const missing = _validateClientForm();
-    if (missing.length) {
-      // Scroll the first red field into view
-      const firstErr = document.querySelector('#client-modal-backdrop .field-error');
-      if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Show draft popup with the list of missing fields
-      document.getElementById('draft-missing-list').innerHTML =
-        missing.map(m => `<div class="draft-missing-item"><div class="draft-missing-dot"></div>${_esc(m)}</div>`).join('');
-      const b = document.getElementById('draft-modal-backdrop');
-      b.style.display = 'flex'; b.classList.add('show');
-      return;
+    // Valida paso por paso y salta al primero que tenga huecos, para que el
+    // usuario vea el campo en rojo y no un error abstracto.
+    for (let step = 1; step <= 3; step++) {
+      const missing = _wizValidateStep(step);
+      if (missing.length) {
+        if (step !== _wizStep) wizGo(step);
+        _wizShowMissing(missing);
+        return;
+      }
     }
 
     const name          = document.getElementById('cf-name').value.trim();
@@ -3516,7 +3783,8 @@
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
     };
 
-    // ── Radar de Objeciones (opcional): solo se envían los campos con valor ──
+    // ── Radar de Objeciones: solo si el toggle está encendido ────────────────
+    if (document.getElementById('cf-radar-on').checked) {
     const _radarFolder  = document.getElementById('cf-radar-folder-id').value.trim();
     const _radarSidecar = document.getElementById('cf-radar-sidecar-folder-id').value.trim();
     const _radarPrompt  = document.getElementById('cf-prompt-radar').value.trim();
@@ -3527,6 +3795,7 @@
     if (_radarSidecar) payload.radar_sidecar_folder_id = _extractDriveFolderId(_radarSidecar);
     if (!isNaN(_radarMinDur)) payload.radar_min_duration_seconds = _radarMinDur;
     if (!isNaN(_radarMaxCh))  payload.radar_transcripcion_max_chars = _radarMaxCh;
+    }
 
     try {
       const r = _editingClientId

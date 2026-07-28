@@ -4,3 +4,5 @@ dist/
 *.env.local
 # Runtime data — persist these via a mounted volume in production (set DATA_DIR env var)
 data/*.json
+# macOS
+.DS_Store

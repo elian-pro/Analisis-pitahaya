@@ -1182,7 +1182,7 @@
 <div class="draft-modal-backdrop" id="drive-picker-backdrop">
   <div class="draft-modal" style="max-width:520px; text-align:left;">
     <div class="draft-modal-title" style="text-align:left;">Elegir ubicación en Drive</div>
-    <div class="draft-modal-sub" style="text-align:left;">Navega hasta la carpeta donde debe vivir este cliente. La app creará ahí la carpeta con su nombre.</div>
+    <div class="draft-modal-sub" style="text-align:left;">Navega hasta donde deben vivir las carpetas de este cliente. La app creará ahí “<span id="dp-preview-reportes">Cliente</span> | Analisis de llamadas IA” y “<span id="dp-preview-radar">Cliente</span> | Radar de Objeciones IA”.</div>
     <div style="display:flex; gap:8px; align-items:center; margin:12px 0 8px;">
       <button type="button" class="btn-sm btn-sm-cancel" id="dp-up" onclick="_dpUp()">↑ Subir</button>
       <div id="dp-path" style="font-size:12px; opacity:.75; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
@@ -3430,6 +3430,9 @@
 
   function openDrivePicker() {
     _dpStack = []; _dpItems = [];
+    const nombre = document.getElementById('cf-name').value.trim() || 'Cliente';
+    document.getElementById('dp-preview-reportes').textContent = nombre;
+    document.getElementById('dp-preview-radar').textContent    = nombre;
     document.getElementById('drive-picker-backdrop').classList.add('show');
     _dpLoad();
   }
@@ -3445,8 +3448,9 @@
     document.getElementById('cf-parent-folder-id').value = _dpStack[_dpStack.length - 1].id;
     document.getElementById('cf-folder-id').value = '';
     document.getElementById('cf-folder-id').classList.remove('field-error');
+    const nombre = document.getElementById('cf-name').value.trim() || 'Cliente';
     document.getElementById('cf-folder-location-hint').textContent =
-      `Se creará “${document.getElementById('cf-name').value.trim() || 'Cliente'}” en: ${path}`;
+      `En ${path} se crearán: “${nombre} | Analisis de llamadas IA” y “${nombre} | Radar de Objeciones IA”.`;
     closeDrivePicker();
   }
 

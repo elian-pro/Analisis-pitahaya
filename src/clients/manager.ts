@@ -70,10 +70,18 @@ function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
   return out;
 }
 
-// Crea el árbol del cliente en Drive cuando se eligió una ubicación en el
-// selector y no se pegó carpeta a mano: "{Ubicación}/{Cliente}" para los
-// reportes y "{Cliente}/Radar" para el Radar de Objeciones. `_Sidecars` no va
-// aquí: se crea sola dentro de la carpeta de reportes en el primer reporte.
+// Nomenclatura de las carpetas de Drive. Ambas llevan el nombre del cliente
+// porque viven lado a lado dentro de la ubicación elegida.
+export function reportsFolderName(clientName: string): string {
+  return `${clientName} | Analisis de llamadas IA`;
+}
+export function radarFolderName(clientName: string): string {
+  return `${clientName} | Radar de Objeciones IA`;
+}
+
+// Crea las carpetas del cliente en Drive cuando se eligió una ubicación en el
+// selector y no se pegó carpeta a mano. `_Sidecars` no va aquí: se crea sola
+// dentro de la carpeta de reportes en el primer reporte.
 // Idempotente y sin costo cuando folder_id ya existe (no llama a Drive).
 // `mkdir` es parámetro solo para poder probar la decisión sin llamar a Drive.
 export async function ensureClientFolders<T extends Partial<ClientConfig>>(
@@ -85,8 +93,10 @@ export async function ensureClientFolders<T extends Partial<ClientConfig>>(
 ): Promise<T> {
   if (data.folder_id || !data.parent_folder_id || !data.name) return data;
   const out = { ...data };
-  out.folder_id = await mkdir(data.parent_folder_id, data.name);
-  if (!out.radar_folder_id) out.radar_folder_id = await mkdir(out.folder_id, 'Radar');
+  out.folder_id = await mkdir(data.parent_folder_id, reportsFolderName(data.name));
+  if (!out.radar_folder_id) {
+    out.radar_folder_id = await mkdir(data.parent_folder_id, radarFolderName(data.name));
+  }
   return out;
 }
 

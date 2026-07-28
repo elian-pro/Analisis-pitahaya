@@ -10,15 +10,18 @@ function fakeMkdir(calls: string[][]) {
   };
 }
 
-test('crea la carpeta del cliente y la de Radar en la ubicación elegida', async () => {
+test('crea ambas carpetas, con la nomenclatura y lado a lado en la ubicación', async () => {
   const calls: string[][] = [];
   const out = await ensureClientFolders(
     { name: 'Sofia Fractional', parent_folder_id: 'UNIDAD' } as Partial<ClientConfig>,
     fakeMkdir(calls),
   );
-  assert.deepEqual(calls, [['UNIDAD', 'Sofia Fractional'], ['id_Sofia Fractional', 'Radar']]);
-  assert.equal(out.folder_id, 'id_Sofia Fractional');
-  assert.equal(out.radar_folder_id, 'id_Radar');
+  assert.deepEqual(calls, [
+    ['UNIDAD', 'Sofia Fractional | Analisis de llamadas IA'],
+    ['UNIDAD', 'Sofia Fractional | Radar de Objeciones IA'],
+  ]);
+  assert.equal(out.folder_id, 'id_Sofia Fractional | Analisis de llamadas IA');
+  assert.equal(out.radar_folder_id, 'id_Sofia Fractional | Radar de Objeciones IA');
 });
 
 test('no toca Drive si ya hay carpeta de reportes (link pegado o cliente existente)', async () => {
@@ -37,7 +40,7 @@ test('respeta una carpeta de Radar ya configurada', async () => {
     { name: 'Sofia', parent_folder_id: 'UNIDAD', radar_folder_id: 'RADAR_MANUAL' },
     fakeMkdir(calls),
   );
-  assert.deepEqual(calls, [['UNIDAD', 'Sofia']]);
+  assert.deepEqual(calls, [['UNIDAD', 'Sofia | Analisis de llamadas IA']]);
   assert.equal(out.radar_folder_id, 'RADAR_MANUAL');
 });
 

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nuevo Cliente - Paso 2</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "surface-container-low": "#f3f3f3",
+                        "surface-container-high": "#e8e8e8",
+                        "on-tertiary-container": "#848484",
+                        "tertiary-container": "#1b1b1b",
+                        "inverse-primary": "#c6c6c6",
+                        "surface-bright": "#f9f9f9",
+                        "on-surface-variant": "#4c4546",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "surface-dim": "#dadada",
+                        "primary-container": "#1b1b1b",
+                        "primary-fixed": "#e2e2e2",
+                        "surface-tint": "#5e5e5e",
+                        "inverse-on-surface": "#f1f1f1",
+                        "primary": "#000000",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "secondary-container": "#e2dfde",
+                        "outline-variant": "#cfc4c5",
+                        "surface-container": "#eeeeee",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-secondary-container": "#636262",
+                        "on-primary-fixed-variant": "#474747",
+                        "on-surface": "#1b1b1b",
+                        "on-background": "#1b1b1b",
+                        "error-container": "#ffdad6",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "ink-600": "#4A4A4A",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#e2e2e2",
+                        "ink-400": "#8C8C8C",
+                        "surface-2": "#F5F5F5",
+                        "outline": "#7e7576",
+                        "secondary-fixed": "#e5e2e1",
+                        "tertiary": "#000000",
+                        "on-primary-container": "#848484",
+                        "secondary": "#5f5e5e",
+                        "surface": "#f9f9f9",
+                        "ink-900": "#111111",
+                        "inverse-surface": "#303030",
+                        "surface-1": "#FFFFFF",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary-fixed": "#1b1b1b",
+                        "tertiary-fixed": "#e2e2e2",
+                        "background": "#f9f9f9",
+                        "accent": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "margin-lg": "32px",
+                        "gutter": "16px",
+                        "container-max": "1280px",
+                        "margin-sm": "16px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "code-md": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "code-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface-2 text-on-surface font-body-md min-h-screen flex items-center justify-center p-gutter md:p-margin-lg">
+<!-- Main Wizard Container -->
+<main class="w-full max-w-3xl bg-surface-1 border border-outline-variant rounded-xl shadow-sm flex flex-col overflow-hidden">
+<!-- Header & Stepper -->
+<header class="px-gutter md:px-margin-lg py-6 md:py-8 border-b border-outline-variant bg-surface-container-lowest">
+<h1 class="font-headline-lg text-headline-lg mb-6">Nuevo Cliente</h1>
+<nav aria-label="Progress">
+<ol class="flex items-center" role="list">
+<!-- Step 1: Completed -->
+<li class="relative pr-8 sm:pr-20">
+<div aria-hidden="true" class="absolute inset-0 flex items-center">
+<div class="h-0.5 w-full bg-primary"></div>
+</div>
+<a class="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary hover:bg-ink-900" href="#">
+<span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'wght' 600;">check</span>
+</a>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 font-label-caps text-label-caps text-primary whitespace-nowrap">Info</span>
+</li>
+<!-- Step 2: Active -->
+<li class="relative pr-8 sm:pr-20">
+<div aria-hidden="true" class="absolute inset-0 flex items-center">
+<div class="h-0.5 w-full bg-outline-variant"></div>
+</div>
+<a aria-current="step" class="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary bg-surface-1" href="#">
+<span class="font-label-caps text-label-caps text-primary">2</span>
+</a>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 font-label-caps text-label-caps text-primary whitespace-nowrap">Fuente</span>
+</li>
+<!-- Step 3: Pending -->
+<li class="relative">
+<a class="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-outline-variant bg-surface-1 hover:border-outline" href="#">
+<span class="font-label-caps text-label-caps text-secondary">3</span>
+</a>
+<span class="absolute -bottom-6 left-1/2 -translate-x-1/2 font-label-caps text-label-caps text-secondary whitespace-nowrap">Config</span>
+</li>
+</ol>
+</nav>
+</header>
+<!-- Form Content -->
+<div class="p-gutter md:p-margin-lg flex flex-col gap-8 flex-grow">
+<!-- Section 1: Hoja de Google -->
+<section class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-secondary uppercase tracking-wider" for="google-sheet-url">Hoja de Google</label>
+<div class="relative rounded-md flex items-center">
+<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+<span class="material-symbols-outlined text-on-tertiary-container text-[20px]">link</span>
+</div>
+<input class="block w-full rounded border-outline-variant py-2.5 pl-10 pr-3 text-on-surface font-code-md text-code-md placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary sm:leading-6 bg-surface-1" id="google-sheet-url" name="google-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." type="url" value="https://docs.google.com/spreadsheets/d/1BxiMVs0XRYFgwnmhm_"/>
+</div>
+</section>
+<!-- Section 2: Pestaña -->
+<section class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-secondary uppercase tracking-wider">Pestaña</label>
+<div class="flex border border-outline-variant rounded overflow-hidden max-w-xs">
+<button class="flex-1 py-2 bg-primary text-on-primary font-label-caps text-label-caps transition-colors" type="button">Lista</button>
+<button class="flex-1 py-2 bg-surface-1 text-primary hover:bg-surface-container border-l border-outline-variant font-label-caps text-label-caps transition-colors" type="button">Escribir</button>
+</div>
+</section>
+<!-- Section 3: Mapeo de Columnas -->
+<section class="flex flex-col gap-4">
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-md text-headline-md">Mapeo de Columnas</h3>
+<p class="font-body-md text-body-md text-secondary">Asocia las columnas de tu hoja de cálculo con los campos del sistema.</p>
+</div>
+<div class="bg-surface-2 border border-outline-variant rounded-lg p-6 flex flex-col gap-6">
+<!-- Row: Fecha (Auto-detected) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 items-start sm:items-center border-b border-outline-variant pb-6">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-on-surface uppercase">Fecha</span>
+<span class="text-error">*</span>
+</div>
+<div class="flex flex-col gap-1 w-full">
+<div class="flex items-center gap-3 w-full border border-primary bg-surface-1 rounded px-3 py-2 opacity-90">
+<span class="material-symbols-outlined text-primary text-[18px]">calendar_today</span>
+<span class="font-code-md text-code-md text-on-surface truncate">Timestamp</span>
+</div>
+<div class="flex items-center gap-1 text-ink-600 mt-1">
+<span class="material-symbols-outlined text-[14px]">check</span>
+<span class="font-label-caps text-label-caps lowercase">auto-detectada</span>
+</div>
+</div>
+</div>
+<!-- Row: Asesor (Auto-detected) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 items-start sm:items-center border-b border-outline-variant pb-6">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-on-surface uppercase">Asesor</span>
+<span class="text-error">*</span>
+</div>
+<div class="flex flex-col gap-1 w-full">
+<div class="flex items-center gap-3 w-full border border-primary bg-surface-1 rounded px-3 py-2 opacity-90">
+<span class="material-symbols-outlined text-primary text-[18px]">person</span>
+<span class="font-code-md text-code-md text-on-surface truncate">Agent_Name</span>
+</div>
+<div class="flex items-center gap-1 text-ink-600 mt-1">
+<span class="material-symbols-outlined text-[14px]">check</span>
+<span class="font-label-caps text-label-caps lowercase">auto-detectada</span>
+</div>
+</div>
+</div>
+<!-- Row: Calificación (Disabled) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 items-start sm:items-center border-b border-outline-variant pb-6">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-secondary uppercase">Calificación</span>
+</div>
+<div class="flex flex-col gap-1 w-full">
+<select class="block w-full rounded border-dashed border-outline bg-surface-container-low py-2 pl-3 pr-10 font-code-md text-code-md text-on-tertiary-container focus:outline-none cursor-not-allowed opacity-60" disabled="">
+<option>Seleccionar columna...</option>
+</select>
+<span class="font-body-md text-[12px] text-secondary mt-1">Carga una pestaña primero</span>
+</div>
+</div>
+<!-- Row: Análisis (Disabled) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 items-start sm:items-center border-b border-outline-variant pb-6">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-secondary uppercase">Análisis</span>
+</div>
+<div class="flex flex-col gap-1 w-full">
+<select class="block w-full rounded border-dashed border-outline bg-surface-container-low py-2 pl-3 pr-10 font-code-md text-code-md text-on-tertiary-container focus:outline-none cursor-not-allowed opacity-60" disabled="">
+<option>Seleccionar columna...</option>
+</select>
+<span class="font-body-md text-[12px] text-secondary mt-1">Carga una pestaña primero</span>
+</div>
+</div>
+<!-- Row: Transcripción (Disabled) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 items-start sm:items-center">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-label-caps text-secondary uppercase">Transcripción</span>
+</div>
+<div class="flex flex-col gap-1 w-full">
+<select class="block w-full rounded border-dashed border-outline bg-surface-container-low py-2 pl-3 pr-10 font-code-md text-code-md text-on-tertiary-container focus:outline-none cursor-not-allowed opacity-60" disabled="">
+<option>Seleccionar columna...</option>
+</select>
+<span class="font-body-md text-[12px] text-secondary mt-1">Carga una pestaña primero</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Footer Actions -->
+<footer class="px-gutter md:px-margin-lg py-4 md:py-6 border-t border-outline-variant bg-surface-container-lowest flex justify-between items-center mt-auto">
+<button class="inline-flex items-center justify-center rounded border border-outline-variant bg-transparent px-6 py-2.5 font-label-caps text-label-caps text-primary shadow-sm hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors" type="button">
+                Atrás
+            </button>
+<button class="inline-flex items-center justify-center rounded border border-transparent bg-primary px-6 py-2.5 font-label-caps text-label-caps text-on-primary shadow-sm hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-opacity" type="button">
+                Siguiente
+            </button>
+</footer>
+</main>
+</body></html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nuevo Cliente - Zebra</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "surface-container-low": "#f3f3f3",
+                        "surface-container-high": "#e8e8e8",
+                        "on-tertiary-container": "#848484",
+                        "tertiary-container": "#1b1b1b",
+                        "inverse-primary": "#c6c6c6",
+                        "surface-bright": "#f9f9f9",
+                        "on-surface-variant": "#4c4546",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "surface-dim": "#dadada",
+                        "primary-container": "#1b1b1b",
+                        "primary-fixed": "#e2e2e2",
+                        "surface-tint": "#5e5e5e",
+                        "inverse-on-surface": "#f1f1f1",
+                        "primary": "#000000",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "secondary-container": "#e2dfde",
+                        "outline-variant": "#cfc4c5",
+                        "surface-container": "#eeeeee",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-secondary-container": "#636262",
+                        "on-primary-fixed-variant": "#474747",
+                        "on-surface": "#1b1b1b",
+                        "on-background": "#1b1b1b",
+                        "error-container": "#ffdad6",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "ink-600": "#4A4A4A",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#e2e2e2",
+                        "ink-400": "#8C8C8C",
+                        "surface-2": "#F5F5F5",
+                        "outline": "#7e7576",
+                        "secondary-fixed": "#e5e2e1",
+                        "tertiary": "#000000",
+                        "on-primary-container": "#848484",
+                        "secondary": "#5f5e5e",
+                        "surface": "#f9f9f9",
+                        "ink-900": "#111111",
+                        "inverse-surface": "#303030",
+                        "surface-1": "#FFFFFF",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary-fixed": "#1b1b1b",
+                        "tertiary-fixed": "#e2e2e2",
+                        "background": "#f9f9f9",
+                        "accent": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "margin-lg": "32px",
+                        "gutter": "16px",
+                        "container-max": "1280px",
+                        "margin-sm": "16px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "code-md": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "code-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Details marker styling for specific component look */
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-surface-2 min-h-screen flex items-center justify-center p-4 md:p-8 font-body-md text-body-md text-on-surface selection:bg-accent selection:text-on-primary">
+<main class="w-full max-w-2xl bg-surface-1 border border-outline-variant rounded-xl shadow-sm flex flex-col overflow-hidden">
+<header class="px-8 py-6 border-b border-outline-variant bg-surface-1">
+<h1 class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">Nuevo Cliente</h1>
+<p class="font-body-md text-body-md text-secondary mt-1">Paso 1 de 3 · Configuración básica y ubicación</p>
+</header>
+<div class="px-8 py-4 bg-surface-bright border-b border-outline-variant flex items-center gap-4">
+<div class="flex items-center gap-2 flex-1">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-caps text-label-caps">1</div>
+<span class="font-label-caps text-label-caps text-on-surface whitespace-nowrap">Datos</span>
+<div class="h-px bg-primary flex-1 mx-2"></div>
+</div>
+<div class="flex items-center gap-2 flex-1 opacity-50">
+<div class="w-6 h-6 rounded-full border border-outline text-secondary flex items-center justify-center font-label-caps text-label-caps">2</div>
+<span class="font-label-caps text-label-caps text-secondary whitespace-nowrap">Conexión</span>
+<div class="h-px bg-outline flex-1 mx-2"></div>
+</div>
+<div class="flex items-center gap-2 opacity-50">
+<div class="w-6 h-6 rounded-full border border-outline text-secondary flex items-center justify-center font-label-caps text-label-caps">3</div>
+<span class="font-label-caps text-label-caps text-secondary whitespace-nowrap">Revisión</span>
+</div>
+</div>
+<form class="flex flex-col flex-grow">
+<div class="p-8 flex flex-col gap-6">
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface flex items-center gap-1" for="client-name">
+                        Nombre del Cliente <span class="text-error">*</span>
+</label>
+<input class="w-full h-10 px-3 bg-surface-1 border border-outline-variant rounded focus:border-primary focus:ring-1 focus:ring-primary outline-none font-body-md text-body-md text-on-surface transition-colors placeholder:text-secondary-fixed-dim" id="client-name" placeholder="Ingresar nombre" required="" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface">Ubicación de Reportes</label>
+<div class="flex flex-col sm:flex-row gap-2">
+<button class="shrink-0 h-10 px-4 bg-surface-container-low hover:bg-surface-container border border-outline-variant text-on-surface rounded font-body-md text-body-md font-medium flex items-center justify-center gap-2 transition-colors focus:ring-2 focus:ring-primary focus:outline-none" type="button">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">folder</span> Elegir ubicación
+                        </button>
+<input class="w-full h-10 px-3 bg-surface-container-lowest border border-outline-variant rounded text-secondary font-body-md text-body-md italic outline-none cursor-not-allowed" disabled="" placeholder="Se crea sola al elegir la ubicación" type="text"/>
+</div>
+</div>
+<details class="group border border-outline-variant rounded mt-2">
+<summary class="px-4 py-3 cursor-pointer list-none flex items-center justify-between font-label-caps text-label-caps text-on-surface hover:bg-surface-container-low transition-colors rounded select-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset">
+                        Opciones avanzadas
+                        <span class="material-symbols-outlined transition-transform group-open:rotate-180 text-secondary">expand_more</span>
+</summary>
+<div class="p-4 border-t border-outline-variant bg-surface-bright flex flex-col gap-4">
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface">Carpeta de sidecars</label>
+<div class="flex flex-col sm:flex-row gap-2">
+<button class="shrink-0 h-10 px-4 bg-surface-container-low hover:bg-surface-container border border-outline-variant text-on-surface rounded font-body-md text-body-md font-medium flex items-center justify-center gap-2 transition-colors focus:ring-2 focus:ring-primary focus:outline-none" type="button">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">folder_open</span> Explorar
+                                </button>
+<input class="w-full h-10 px-3 bg-surface-1 border border-outline-variant rounded focus:border-primary outline-none font-body-md text-body-md text-on-surface transition-colors focus:ring-1 focus:ring-primary placeholder:text-secondary-fixed-dim" placeholder="Ruta personalizada..." type="text"/>
+</div>
+<p class="text-[12px] text-secondary mt-1">Si se deja en blanco, se utilizará la ubicación por defecto junto a los reportes principales.</p>
+</div>
+</div>
+</details>
+</div>
+<footer class="px-8 py-4 mt-auto border-t border-outline-variant bg-surface-bright flex items-center justify-between rounded-b-xl">
+<button class="h-10 px-6 bg-transparent border border-outline text-on-surface rounded font-body-md text-body-md font-semibold hover:bg-surface-container-low transition-colors focus:ring-2 focus:ring-primary focus:outline-none" type="button">
+                    Cancelar
+                </button>
+<button class="h-10 px-6 bg-primary text-on-primary rounded font-body-md text-body-md font-semibold hover:bg-ink-900 transition-colors flex items-center gap-2 focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none" type="submit">
+                    Siguiente
+                    <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</footer>
+</form>
+</main>
+</body></html>

@@ -60,23 +60,23 @@ function getDrive() {
   return google.drive({ version: 'v3', auth: getAuth() });
 }
 
-// ── Sidecar folder — auto-creates "_Sidecars" subfolder on first use ──────────
+// ── Carpetas: crear/ubicar y navegar ─────────────────────────────────────────
 
-const _sidecarFolderCache = new Map<string, string>();
+const MIME_FOLDER = 'application/vnd.google-apps.folder';
+const _folderCache = new Map<string, string>();
 
-export async function ensureSidecarFolder(parentFolderId: string): Promise<string> {
-  if (_sidecarFolderCache.has(parentFolderId)) {
-    return _sidecarFolderCache.get(parentFolderId)!;
-  }
+// ID de la subcarpeta `name` dentro de `parentFolderId`, creándola si no existe.
+// Idempotente: si ya está, la reusa — nunca duplica.
+export async function ensureFolder(parentFolderId: string, name: string): Promise<string> {
+  const cacheKey = `${parentFolderId}/${name}`;
+  const cached = _folderCache.get(cacheKey);
+  if (cached) return cached;
 
   const drive = getDrive();
-  const FOLDER_NAME = '_Sidecars';
-  const MIME_FOLDER  = 'application/vnd.google-apps.folder';
-
   const list = await drive.files.list({
     q: [
       `'${parentFolderId}' in parents`,
-      `name = '${FOLDER_NAME}'`,
+      `name = '${name.replace(/'/g, "\\'")}'`,
       `mimeType = '${MIME_FOLDER}'`,
       `trashed = false`,
     ].join(' and '),
@@ -86,31 +86,57 @@ export async function ensureSidecarFolder(parentFolderId: string): Promise<strin
     includeItemsFromAllDrives: true,
   });
 
-  let folderId: string;
-  if (list.data.files && list.data.files.length > 0) {
-    folderId = list.data.files[0].id!;
-    console.log(`[drive] Found existing _Sidecars folder: ${folderId}`);
+  let folderId = list.data.files?.[0]?.id;
+  if (folderId) {
+    console.log(`[drive] Found existing folder "${name}": ${folderId}`);
   } else {
     const created = await drive.files.create({
-      requestBody: { name: FOLDER_NAME, mimeType: MIME_FOLDER, parents: [parentFolderId] },
+      requestBody: { name, mimeType: MIME_FOLDER, parents: [parentFolderId] },
       fields: 'id',
       supportsAllDrives: true,
     });
     folderId = created.data.id!;
-    console.log(`[drive] Created _Sidecars folder: ${folderId}`);
+    console.log(`[drive] Created folder "${name}": ${folderId}`);
   }
 
-  _sidecarFolderCache.set(parentFolderId, folderId);
+  _folderCache.set(cacheKey, folderId);
   return folderId;
+}
+
+export function ensureSidecarFolder(parentFolderId: string): Promise<string> {
+  return ensureFolder(parentFolderId, '_Sidecars');
+}
+
+export interface DriveEntry { id: string; name: string }
+
+// Unidades compartidas visibles para la cuenta central — raíz del selector.
+export async function listSharedDrives(): Promise<DriveEntry[]> {
+  const drive = getDrive();
+  const res = await drive.drives.list({ pageSize: 100, fields: 'drives(id,name)' });
+  return (res.data.drives ?? []).map(d => ({ id: d.id!, name: d.name! }));
+}
+
+// Subcarpetas de `parentId` (el ID de una Unidad Compartida sirve como su raíz).
+export async function listFolders(parentId: string): Promise<DriveEntry[]> {
+  const drive = getDrive();
+  const res = await drive.files.list({
+    q: `'${parentId}' in parents and mimeType = '${MIME_FOLDER}' and trashed = false`,
+    fields: 'files(id,name)',
+    pageSize: 200,
+    orderBy: 'name',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  return (res.data.files ?? []).map(f => ({ id: f.id!, name: f.name! }));
 }
 
 // Read-only lookup of the "_Sidecars" subfolder. Unlike ensureSidecarFolder it
 // never creates anything — used by GET endpoints (e.g. the prior-period hint)
 // that must not have side effects. Returns null when the folder doesn't exist.
 export async function findSidecarFolder(parentFolderId: string): Promise<string | null> {
-  if (_sidecarFolderCache.has(parentFolderId)) {
-    return _sidecarFolderCache.get(parentFolderId)!;
-  }
+  const cacheKey = `${parentFolderId}/_Sidecars`;
+  const cached = _folderCache.get(cacheKey);
+  if (cached) return cached;
   const drive = getDrive();
   const list = await drive.files.list({
     q: [
@@ -125,7 +151,7 @@ export async function findSidecarFolder(parentFolderId: string): Promise<string 
     includeItemsFromAllDrives: true,
   });
   const folderId = list.data.files?.[0]?.id ?? null;
-  if (folderId) _sidecarFolderCache.set(parentFolderId, folderId);
+  if (folderId) _folderCache.set(cacheKey, folderId);
   return folderId;
 }
 

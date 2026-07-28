@@ -6,7 +6,9 @@ const router = Router();
 
 const ClientBodySchema = z.object({
   name:                    z.string().min(1),
-  folder_id:               z.string().min(1),
+  // Vacío es válido: la app la crea dentro de parent_folder_id (ver manager.ts).
+  folder_id:               z.string().default(''),
+  parent_folder_id:        z.string().optional(),
   sidecar_folder_id:       z.string().optional(),
   spreadsheet_id:          z.string().min(1),
   data_sheet_name:         z.string().min(1),
@@ -52,6 +54,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   if (!parsed.success) {
     const msg = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
     res.status(400).json({ error: msg });
+    return;
+  }
+  if (!parsed.data.folder_id && !parsed.data.parent_folder_id) {
+    res.status(400).json({ error: 'Elige la ubicación en Drive donde crear la carpeta del cliente.' });
     return;
   }
   try {

@@ -334,6 +334,9 @@
     /* ── Draft modal ── */
     .draft-modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;padding:16px;}
     .draft-modal-backdrop.show{display:flex !important;}
+    .dp-item{padding:9px 10px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center;}
+    .dp-item:hover{background:rgba(255,255,255,.08);}
+    .dp-empty{padding:14px 10px;font-size:12px;opacity:.6;}
     .draft-modal{background:var(--surface);border:0.5px solid var(--border2);border-radius:20px;width:100%;max-width:420px;padding:28px 26px;box-shadow:0 24px 80px rgba(0,0,0,0.85);}
     .draft-modal-icon{width:42px;height:42px;background:rgba(226,75,74,0.1);border:0.5px solid rgba(226,75,74,0.25);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px;}
     .draft-modal-title{font-size:15px;font-weight:500;color:var(--fg);margin-bottom:5px;letter-spacing:-0.01em;}
@@ -767,9 +770,13 @@
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label">Carpeta de reportes (link de Drive) *</label>
-            <input class="form-control" id="cf-folder-id" placeholder="Pega el link de la carpeta de Google Drive">
-            <div class="form-hint">Pega el link de la carpeta donde se guardan los reportes. Detectamos el ID solo.</div>
+            <label class="form-label">Carpeta de reportes *</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input class="form-control" id="cf-folder-id" placeholder="Se crea sola al elegir la ubicación" style="flex:1 1 auto;">
+              <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;">📁&nbsp; Elegir ubicación</button>
+            </div>
+            <input type="hidden" id="cf-parent-folder-id">
+            <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Carpeta de PDFs (link de Drive)</label>
@@ -1167,6 +1174,23 @@
     <div class="draft-modal-actions">
       <button class="confirm-cancel" style="flex:1;" onclick="closeDraftModal()">Seguir editando</button>
       <button class="confirm-ok" style="flex:1.5;" onclick="saveDraftAndClose()">💾&nbsp; Guardar borrador</button>
+    </div>
+  </div>
+</div>
+
+<!-- Selector de carpeta de Drive -->
+<div class="draft-modal-backdrop" id="drive-picker-backdrop">
+  <div class="draft-modal" style="max-width:520px; text-align:left;">
+    <div class="draft-modal-title" style="text-align:left;">Elegir ubicación en Drive</div>
+    <div class="draft-modal-sub" style="text-align:left;">Navega hasta la carpeta donde debe vivir este cliente. La app creará ahí la carpeta con su nombre.</div>
+    <div style="display:flex; gap:8px; align-items:center; margin:12px 0 8px;">
+      <button type="button" class="btn-sm btn-sm-cancel" id="dp-up" onclick="_dpUp()">↑ Subir</button>
+      <div id="dp-path" style="font-size:12px; opacity:.75; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
+    </div>
+    <div id="dp-list" style="max-height:300px; overflow-y:auto; border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:4px;"></div>
+    <div class="draft-modal-actions" style="margin-top:14px;">
+      <button class="confirm-cancel" style="flex:1;" onclick="closeDrivePicker()">Cancelar</button>
+      <button class="confirm-ok" style="flex:1.5;" id="dp-use" onclick="_dpUse()">Crear aquí</button>
     </div>
   </div>
 </div>
@@ -3173,13 +3197,15 @@
     _clearClientErrors();
     document.getElementById('client-modal-title').textContent = id ? 'Editar cliente' : 'Nuevo cliente';
 
-    const fields = ['cf-id','cf-name','cf-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
+    const fields = ['cf-id','cf-name','cf-folder-id','cf-parent-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
       'cf-prompt-individual','cf-prompt-general',
       'cf-prompt-radar','cf-radar-folder-id','cf-radar-sidecar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '3000';
+    document.getElementById('cf-folder-location-hint').textContent =
+      'Elige dónde crearla en la Unidad Compartida. También puedes pegar el link de una carpeta que ya exista.';
 
     // Reset del selector de pestañas (se llena al pulsar "Cargar pestañas")
     const _tabsSel = document.getElementById('cf-sheet-name-select');
@@ -3206,6 +3232,7 @@
         document.getElementById('cf-id').value               = c.id || '';
         document.getElementById('cf-name').value             = c.name || '';
         document.getElementById('cf-folder-id').value        = c.folder_id || '';
+        document.getElementById('cf-parent-folder-id').value = c.parent_folder_id || '';
         document.getElementById('cf-sidecar-folder-id').value= c.sidecar_folder_id || '';
         document.getElementById('cf-spreadsheet-id').value   = c.spreadsheet_id || '';
         document.getElementById('cf-sheet-name').value       = c.data_sheet_name || '';
@@ -3396,6 +3423,55 @@
     }
   }
 
+  // ── Selector de carpeta de Drive ────────────────────────────────────────────
+  // Navega con la cuenta central: raíz = Unidades Compartidas, luego subcarpetas.
+  let _dpStack = [];   // ruta actual [{id,name}]; vacía = raíz
+  let _dpItems = [];
+
+  function openDrivePicker() {
+    _dpStack = []; _dpItems = [];
+    document.getElementById('drive-picker-backdrop').classList.add('show');
+    _dpLoad();
+  }
+  function closeDrivePicker() {
+    document.getElementById('drive-picker-backdrop').classList.remove('show');
+  }
+  function _dpEnter(i) { _dpStack.push(_dpItems[i]); _dpLoad(); }
+  function _dpUp()     { _dpStack.pop(); _dpLoad(); }
+
+  function _dpUse() {
+    if (!_dpStack.length) return;
+    const path = _dpStack.map(f => f.name).join(' / ');
+    document.getElementById('cf-parent-folder-id').value = _dpStack[_dpStack.length - 1].id;
+    document.getElementById('cf-folder-id').value = '';
+    document.getElementById('cf-folder-id').classList.remove('field-error');
+    document.getElementById('cf-folder-location-hint').textContent =
+      `Se creará “${document.getElementById('cf-name').value.trim() || 'Cliente'}” en: ${path}`;
+    closeDrivePicker();
+  }
+
+  async function _dpLoad() {
+    const list = document.getElementById('dp-list');
+    const parent = _dpStack.length ? _dpStack[_dpStack.length - 1].id : '';
+    document.getElementById('dp-path').textContent =
+      _dpStack.length ? _dpStack.map(f => f.name).join(' / ') : 'Unidades Compartidas';
+    document.getElementById('dp-up').disabled  = !_dpStack.length;
+    document.getElementById('dp-use').disabled = !_dpStack.length;
+    list.innerHTML = '<div class="dp-empty">Cargando…</div>';
+    try {
+      const r = await fetch('/api/drive/folders' + (parent ? `?parent=${encodeURIComponent(parent)}` : ''));
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      _dpItems = d.items || [];
+      list.innerHTML = _dpItems.length
+        ? _dpItems.map((f, i) => `<div class="dp-item" onclick="_dpEnter(${i})">📁 ${_esc(f.name)}</div>`).join('')
+        : '<div class="dp-empty">Sin subcarpetas aquí.</div>';
+    } catch (e) {
+      list.innerHTML = `<div class="dp-empty">${_esc(e.message)}</div>`;
+      _dpItems = [];
+    }
+  }
+
   async function saveClient() {
     const missing = _validateClientForm();
     if (missing.length) {
@@ -3419,6 +3495,7 @@
     const payload = {
       name,
       folder_id:               folderId,
+      parent_folder_id:        document.getElementById('cf-parent-folder-id').value || undefined,
       sidecar_folder_id:       sidecarRaw ? _extractDriveFolderId(sidecarRaw) : undefined,
       spreadsheet_id:          spreadsheetId,
       data_sheet_name:         sheetName,
@@ -3495,7 +3572,7 @@
   // ── Client form validation & draft ────────────────────────────────────────
   const _CF_REQUIRED = [
     { id:'cf-name',             label:'Nombre del cliente' },
-    { id:'cf-folder-id',        label:'Carpeta de reportes (Drive ID)' },
+    { id:'cf-folder-id',        label:'Carpeta de reportes (elige ubicación o pega el link)' },
     { id:'cf-spreadsheet-id',   label:'ID del spreadsheet' },
     { id:'cf-sheet-name',       label:'Nombre de la pestaña' },
     { id:'cf-col-fecha',        label:'Columna de fecha' },
@@ -3520,7 +3597,11 @@
   function _validateClientForm() {
     _clearClientErrors();
     const missing = [];
+    // La carpeta de reportes se cumple de dos formas: link pegado o ubicación
+    // elegida en el selector (la app la crea al guardar).
+    const _hasParent = !!document.getElementById('cf-parent-folder-id').value;
     _CF_REQUIRED.forEach(f => {
+      if (f.id === 'cf-folder-id' && _hasParent) return;
       const el = document.getElementById(f.id);
       if (!el || !el.value.trim()) {
         missing.push(f.label);

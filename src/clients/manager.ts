@@ -16,6 +16,10 @@ export interface ClientConfig {
   id:                      string;
   name:                    string;
   folder_id:               string;
+  // Ubicación elegida en el selector de Drive: la carpeta (normalmente dentro de
+  // una Unidad Compartida) donde la app crea el árbol del cliente al darlo de
+  // alta. Se guarda solo para recordar dónde quedó.
+  parent_folder_id?:       string;
   sidecar_folder_id?:      string;
   spreadsheet_id:          string;
   data_sheet_name:         string;
@@ -51,6 +55,9 @@ function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
   const out = { ...data };
   if (typeof out.spreadsheet_id === 'string')    out.spreadsheet_id = extractSpreadsheetId(out.spreadsheet_id);
   if (typeof out.folder_id === 'string')         out.folder_id = extractDriveFolderId(out.folder_id);
+  if (typeof out.parent_folder_id === 'string' && out.parent_folder_id) {
+    out.parent_folder_id = extractDriveFolderId(out.parent_folder_id);
+  }
   if (typeof out.sidecar_folder_id === 'string' && out.sidecar_folder_id) {
     out.sidecar_folder_id = extractDriveFolderId(out.sidecar_folder_id);
   }
@@ -60,6 +67,26 @@ function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
   if (typeof out.radar_sidecar_folder_id === 'string' && out.radar_sidecar_folder_id) {
     out.radar_sidecar_folder_id = extractDriveFolderId(out.radar_sidecar_folder_id);
   }
+  return out;
+}
+
+// Crea el árbol del cliente en Drive cuando se eligió una ubicación en el
+// selector y no se pegó carpeta a mano: "{Ubicación}/{Cliente}" para los
+// reportes y "{Cliente}/Radar" para el Radar de Objeciones. `_Sidecars` no va
+// aquí: se crea sola dentro de la carpeta de reportes en el primer reporte.
+// Idempotente y sin costo cuando folder_id ya existe (no llama a Drive).
+// `mkdir` es parámetro solo para poder probar la decisión sin llamar a Drive.
+export async function ensureClientFolders<T extends Partial<ClientConfig>>(
+  data: T,
+  // Import diferido: cargar google/drive valida el env y aborta el proceso, y
+  // este módulo se usa también donde no hay credenciales (tests, CLI).
+  mkdir: (parentId: string, name: string) => Promise<string> =
+    async (p, n) => (await import('../google/drive')).ensureFolder(p, n),
+): Promise<T> {
+  if (data.folder_id || !data.parent_folder_id || !data.name) return data;
+  const out = { ...data };
+  out.folder_id = await mkdir(data.parent_folder_id, data.name);
+  if (!out.radar_folder_id) out.radar_folder_id = await mkdir(out.folder_id, 'Radar');
   return out;
 }
 
@@ -87,6 +114,7 @@ export async function getClient(id: string): Promise<ClientConfig | undefined> {
 
 export async function createClient(data: Omit<ClientConfig, 'id'>): Promise<ClientConfig> {
   data = normalizeIds(data);
+  data = await ensureClientFolders(data);
   const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 28);
   const id   = `${slug}_${crypto.randomBytes(3).toString('hex')}`;
   const client: ClientConfig = { id, ...data };
@@ -108,14 +136,14 @@ export async function updateClient(
   if (dbEnabled) {
     const existing = await dbGet<ClientConfig>(CLIENTS_TABLE, id);
     if (!existing) throw new Error(`Client '${id}' not found`);
-    const updated: ClientConfig = { ...existing, ...patch, id };
+    const updated = await ensureClientFolders({ ...existing, ...patch, id }) as ClientConfig;
     await dbUpsert(CLIENTS_TABLE, id, updated);
     return updated;
   }
   const clients = loadFromFile();
   const idx = clients.findIndex(c => c.id === id);
   if (idx === -1) throw new Error(`Client '${id}' not found`);
-  clients[idx] = { ...clients[idx], ...patch, id };
+  clients[idx] = await ensureClientFolders({ ...clients[idx], ...patch, id }) as ClientConfig;
   saveToFile(clients);
   return clients[idx];
 }

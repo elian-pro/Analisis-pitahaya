@@ -37,7 +37,8 @@ Dónde se guardan los PDFs que genera el sistema.
 
 **No hace falta crear nada a mano.** Pulsa **📁 Elegir ubicación**, navega por tus
 Unidades Compartidas hasta el lugar donde debe vivir este cliente, y pulsa
-**Crear aquí**.
+**Crear aquí**. La ruta de arriba son migas de pan: si te metes en la carpeta
+equivocada, haz clic en cualquier nivel anterior para volver ahí de un salto.
 
 ![Selector de ubicación en Drive](img/2-selector-drive.jpg)
 
@@ -59,9 +60,13 @@ directamente en el campo de texto y la app detecta el ID sola.
 > Si en el selector no aparece ninguna unidad, esa cuenta no es miembro de la
 > Unidad Compartida — es permiso, no un fallo de la app.
 
-La ubicación elegida queda visible como chip (`📁 Zebra — Clientes / 2026 ✕`), y
-debajo se lee exactamente qué carpetas se van a crear. La ✕ la quita si te
-equivocaste.
+La ubicación elegida queda visible como chip (`SE CREA EN  Material Clientes /
+Success M | Anakaren Marín ✕`), y debajo se lee exactamente qué carpetas se van
+a crear. La ✕ la quita si te equivocaste.
+
+Al editar un cliente que ya tiene carpeta, aparece un segundo chip
+(`CARPETA ACTUAL  Sofia | Analisis de llamadas IA`) con el **nombre** de la
+carpeta, no su ID. La ✕ lo suelta si quieres apuntar a otra.
 
 ### Qué carpetas crear — en "Opciones avanzadas"
 

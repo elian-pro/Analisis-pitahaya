@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { listFolders, listSharedDrives } from '../google/drive';
+import { describeFolder, listFolders, listSharedDrives } from '../google/drive';
 
 const router = Router();
 
@@ -19,6 +19,20 @@ router.get('/folders', async (req: Request, res: Response): Promise<void> => {
         : `No se pudieron leer las carpetas: ${msg}`,
     });
   }
+});
+
+// GET /api/drive/names?ids=a,b,c
+// Traduce IDs de carpeta a { name, path } para que la UI muestre nombres en vez
+// de IDs. Los que no se puedan resolver simplemente no vienen en la respuesta.
+router.get('/names', async (req: Request, res: Response): Promise<void> => {
+  const ids = String(req.query.ids ?? '')
+    .split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+  const out: Record<string, { name: string; path: string }> = {};
+  await Promise.all(ids.map(async id => {
+    const info = await describeFolder(id);
+    if (info) out[id] = { name: info.name, path: info.path };
+  }));
+  res.json(out);
 });
 
 export default router;

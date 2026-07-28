@@ -314,7 +314,9 @@
     /* Chip de la ruta de Drive elegida */
     .drive-chip{display:none;align-items:center;gap:8px;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--fg);}
     .drive-chip.show{display:inline-flex;}
-    .drive-chip-x{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;}
+    .drive-chip{margin-bottom:4px;}
+    .chip-k{font-size:9px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint);flex-shrink:0;}
+    .drive-chip-x{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;margin-left:auto;}
     .drive-chip-x:hover{color:var(--fg);}
     /* Toggle del Radar */
     .wiz-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;margin-bottom:14px;}
@@ -375,6 +377,12 @@
     .dp-item{padding:9px 10px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center;}
     .dp-item:hover{background:rgba(255,255,255,.08);}
     .dp-empty{padding:14px 10px;font-size:12px;opacity:.6;}
+    .dp-crumbs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-size:12px;min-width:0;}
+    .dp-crumb{background:none;border:none;padding:2px 4px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12px;color:var(--muted);cursor:pointer;}
+    .dp-crumb:hover{color:var(--fg);background:rgba(255,255,255,.07);}
+    .dp-crumb.current{color:var(--fg);cursor:default;}
+    .dp-crumb.current:hover{background:none;}
+    .dp-sep{color:var(--faint);font-size:11px;}
     .draft-modal{background:var(--surface);border:0.5px solid var(--border2);border-radius:20px;width:100%;max-width:420px;padding:28px 26px;box-shadow:0 24px 80px rgba(0,0,0,0.85);}
     .draft-modal-icon{width:42px;height:42px;background:rgba(226,75,74,0.1);border:0.5px solid rgba(226,75,74,0.25);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px;}
     .draft-modal-title{font-size:15px;font-weight:500;color:var(--fg);margin-bottom:5px;letter-spacing:-0.01em;}
@@ -817,8 +825,12 @@
         <div class="form-group">
           <label class="form-label">Carpeta de reportes *</label>
           <div class="drive-chip" id="cf-drive-chip">
-            <span>📁</span><span id="cf-drive-chip-path"></span>
+            <span class="chip-k">Se crea en</span><span id="cf-drive-chip-path"></span>
             <button type="button" class="drive-chip-x" onclick="_dpClear()" title="Quitar ubicación">✕</button>
+          </div>
+          <div class="drive-chip" id="cf-folder-name-chip">
+            <span class="chip-k">Carpeta actual</span><span id="cf-folder-name-text"></span>
+            <button type="button" class="drive-chip-x" onclick="_clearFolderName()" title="Usar otra carpeta">✕</button>
           </div>
           <div style="display:flex; gap:8px; align-items:center;" id="cf-folder-row">
             <input class="form-control" id="cf-folder-id" placeholder="Se crea sola al elegir la ubicación" style="flex:1 1 auto; min-width:0;">
@@ -947,7 +959,7 @@
           <div class="form-group">
             <label class="form-label">Carpeta Drive de Radar</label>
             <input class="form-control" id="cf-radar-folder-id" placeholder="Pega el link de la carpeta">
-            <div class="form-hint">Se crea sola al elegir la ubicación arriba. Pega un link solo si quieres otra carpeta.</div>
+            <div class="form-hint" id="cf-radar-folder-hint">Se crea sola al elegir la ubicación arriba. Pega un link solo si quieres otra carpeta.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Carpeta de respaldo Radar</label>
@@ -1262,10 +1274,7 @@
   <div class="draft-modal" style="max-width:520px; text-align:left;">
     <div class="draft-modal-title" style="text-align:left;">Elegir ubicación en Drive</div>
     <div class="draft-modal-sub" style="text-align:left;">Navega hasta donde deben vivir las carpetas de este cliente. La app creará ahí “<span id="dp-preview-reportes">Cliente</span> | Analisis de llamadas IA” y “<span id="dp-preview-radar">Cliente</span> | Radar de Objeciones IA”.</div>
-    <div style="display:flex; gap:8px; align-items:center; margin:12px 0 8px;">
-      <button type="button" class="btn-sm btn-sm-cancel" id="dp-up" onclick="_dpUp()">↑ Subir</button>
-      <div id="dp-path" style="font-size:12px; opacity:.75; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
-    </div>
+    <div id="dp-path" class="dp-crumbs" style="margin:12px 0 8px;"></div>
     <div id="dp-list" style="max-height:300px; overflow-y:auto; border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:4px;"></div>
     <div class="draft-modal-actions" style="margin-top:14px;">
       <button class="confirm-cancel" style="flex:1;" onclick="closeDrivePicker()">Cancelar</button>
@@ -3255,7 +3264,7 @@
             `<div class="client-row-name">${_esc(c.name)}</div>` +
             `<div class="client-row-meta">` +
               `<span>Hoja: ${_esc(c.spreadsheet_id || '—')}</span>` +
-              (c.folder_id ? `<span>·</span><span>Drive: ${_esc(c.folder_id)}</span>` : '') +
+              (c.folder_id ? `<span>·</span><a href="https://drive.google.com/drive/folders/${_esc(c.folder_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Carpeta en Drive ↗</a>` : '') +
             `</div>` +
           `</div>` +
           `<div class="client-row-actions">` +
@@ -3287,6 +3296,9 @@
     // Radar apagado, columnas bloqueadas
     document.getElementById('cf-create-reports').checked = true;
     document.getElementById('cf-create-radar').checked   = true;
+    document.getElementById('cf-folder-name-chip').classList.remove('show');
+    document.getElementById('cf-radar-folder-hint').textContent =
+      'Se crea sola al elegir la ubicación arriba. Pega un link solo si quieres otra carpeta.';
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
     _dpApplyLocation('', '');
@@ -3350,6 +3362,7 @@
         if (c.parent_folder_id) _dpApplyLocation('', c.parent_folder_id);
         _wizFolderHint();
         wizGo(1);
+        _fillFolderNames(c);   // en segundo plano: no bloquea abrir el modal
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -3640,9 +3653,11 @@
     document.getElementById('cf-create-reports-label').textContent = `${nombre} | Analisis de llamadas IA`;
     document.getElementById('cf-create-radar-label').textContent   = `${nombre} | Radar de Objeciones IA`;
 
-    // El campo de pegar link solo sobra cuando la app va a crear esa carpeta.
-    const laCrea = !!parent && reports;
-    document.getElementById('cf-folder-row').style.display = laCrea ? 'none' : 'flex';
+    // El campo de pegar link sobra si la app va a crear la carpeta, o si ya
+    // estamos mostrando el nombre de la que el cliente tiene.
+    const laCrea   = !!parent && reports;
+    const conNombre = document.getElementById('cf-folder-name-chip').classList.contains('show');
+    document.getElementById('cf-folder-row').style.display = (laCrea || conNombre) ? 'none' : 'flex';
     if (laCrea) {   // deja de ser obligatorio: quita el rojo si lo tenía
       const f = document.getElementById('cf-folder-id');
       f.classList.remove('field-error');
@@ -3693,6 +3708,12 @@
     return hits;
   }
 
+  // Nombre resuelto de la carpeta de reportes; si Drive no lo dio, el ID.
+  function _folderNameOrId() {
+    const nombre = document.getElementById('cf-folder-name-text').textContent;
+    return nombre || document.getElementById('cf-folder-id').value.trim();
+  }
+
   // Resumen del paso 3: qué se va a crear, con los nombres reales.
   function _wizSummary() {
     const g = id => (document.getElementById(id).value || '').trim();
@@ -3709,10 +3730,10 @@
         + (elige.reports ? `<br>📁 ${n} | Analisis de llamadas IA` : '')
         + (elige.radar   ? `<br>📁 ${n} | Radar de Objeciones IA` : '');
       if (!elige.reports && g('cf-folder-id')) {
-        carpetas += `<br>Reportes: carpeta existente <code>${_esc(g('cf-folder-id'))}</code>`;
+        carpetas += `<br>Reportes: ${_esc(_folderNameOrId())}`;
       }
     } else if (g('cf-folder-id')) {
-      carpetas = `Se usará la carpeta existente <code>${_esc(g('cf-folder-id'))}</code>`;
+      carpetas = `Se usará la carpeta existente: ${_esc(_folderNameOrId())}`;
     } else {
       carpetas = miss('Sin ubicación elegida');
     }
@@ -3754,7 +3775,8 @@
     document.getElementById('drive-picker-backdrop').classList.remove('show');
   }
   function _dpEnter(i) { _dpStack.push(_dpItems[i]); _dpLoad(); }
-  function _dpUp()     { _dpStack.pop(); _dpLoad(); }
+  // Salta al nivel i de las migas (0 = raíz de Unidades Compartidas).
+  function _dpJump(i)  { _dpStack = _dpStack.slice(0, i); _dpLoad(); }
 
   function _dpUse() {
     if (!_dpStack.length) return;
@@ -3783,12 +3805,57 @@
 
   function _dpClear() { _dpApplyLocation('', ''); }
 
+  // ── Nombres de carpeta en vez de IDs ────────────────────────────────────────
+  // El backend traduce los IDs guardados a { name, path } para que el formulario
+  // muestre "Sofia | Analisis de llamadas IA" y no "1IzkUr_NcOF8W…".
+  async function _resolveFolderNames(ids) {
+    const limpios = ids.filter(Boolean);
+    if (!limpios.length) return {};
+    try {
+      const r = await fetch(`/api/drive/names?ids=${encodeURIComponent(limpios.join(','))}`);
+      return r.ok ? await r.json() : {};
+    } catch { return {}; }
+  }
+
+  function _showFolderName(name) {
+    document.getElementById('cf-folder-name-text').textContent = name;
+    document.getElementById('cf-folder-name-chip').classList.add('show');
+    _wizFolderHint();
+  }
+
+  function _clearFolderName() {
+    document.getElementById('cf-folder-name-chip').classList.remove('show');
+    document.getElementById('cf-folder-id').value = '';
+    _wizFolderHint();
+  }
+
+  // Rellena chips y pistas con los nombres reales. Silencioso: si Drive no
+  // responde, el formulario sigue funcionando con los IDs.
+  async function _fillFolderNames(c) {
+    const info = await _resolveFolderNames([c.folder_id, c.parent_folder_id, c.radar_folder_id]);
+    if (c.folder_id && info[c.folder_id]) _showFolderName(info[c.folder_id].name);
+    if (c.parent_folder_id && info[c.parent_folder_id]) {
+      const { name, path } = info[c.parent_folder_id];
+      document.getElementById('cf-drive-chip-path').textContent = path ? `${path} / ${name}` : name;
+    }
+    const rHint = document.getElementById('cf-radar-folder-hint');
+    if (c.radar_folder_id && info[c.radar_folder_id] && rHint) {
+      rHint.textContent = `Carpeta actual: ${info[c.radar_folder_id].name}`;
+    }
+    _wizFolderHint();
+    if (_wizStep === 3) _wizSummary();
+  }
+
   async function _dpLoad() {
     const list = document.getElementById('dp-list');
     const parent = _dpStack.length ? _dpStack[_dpStack.length - 1].id : '';
-    document.getElementById('dp-path').textContent =
-      _dpStack.length ? _dpStack.map(f => f.name).join(' / ') : 'Unidades Compartidas';
-    document.getElementById('dp-up').disabled  = !_dpStack.length;
+    // Migas de pan: cada nivel es clickeable para volver de un salto.
+    const crumbs = [{ name: 'Unidades Compartidas' }, ..._dpStack];
+    document.getElementById('dp-path').innerHTML = crumbs.map((c, i) => {
+      const last = i === crumbs.length - 1;
+      const btn = `<button type="button" class="dp-crumb${last ? ' current' : ''}"${last ? '' : ` onclick="_dpJump(${i})"`}>${_esc(c.name)}</button>`;
+      return i ? `<span class="dp-sep">/</span>${btn}` : btn;
+    }).join('');
     document.getElementById('dp-use').disabled = !_dpStack.length;
     list.innerHTML = '<div class="dp-empty">Cargando…</div>';
     try {
@@ -3797,7 +3864,7 @@
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       _dpItems = d.items || [];
       list.innerHTML = _dpItems.length
-        ? _dpItems.map((f, i) => `<div class="dp-item" onclick="_dpEnter(${i})">📁 ${_esc(f.name)}</div>`).join('')
+        ? _dpItems.map((f, i) => `<div class="dp-item" onclick="_dpEnter(${i})"><span>📁</span><span>${_esc(f.name)}</span></div>`).join('')
         : '<div class="dp-empty">Sin subcarpetas aquí.</div>';
     } catch (e) {
       list.innerHTML = `<div class="dp-empty">${_esc(e.message)}</div>`;

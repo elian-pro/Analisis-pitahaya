@@ -116,6 +116,31 @@ export async function listSharedDrives(): Promise<DriveEntry[]> {
   return (res.data.drives ?? []).map(d => ({ id: d.id!, name: d.name! }));
 }
 
+// Nombre y ruta legible de una carpeta, para no mostrar IDs crudos en la UI.
+// La ruta se arma subiendo por los padres, con tope de saltos para no encadenar
+// llamadas sin fin. Devuelve null si la carpeta no existe o no hay acceso.
+export async function describeFolder(id: string): Promise<{ id: string; name: string; path: string } | null> {
+  const drive = getDrive();
+  try {
+    const res = await drive.files.get({
+      fileId: id, fields: 'id,name,parents', supportsAllDrives: true,
+    });
+    const trail: string[] = [];
+    let parents = res.data.parents;
+    for (let hop = 0; hop < 6 && parents && parents.length; hop++) {
+      const p = await drive.files.get({
+        fileId: parents[0], fields: 'id,name,parents', supportsAllDrives: true,
+      });
+      trail.unshift(p.data.name || '');
+      parents = p.data.parents;
+    }
+    return { id, name: res.data.name || '', path: trail.join(' / ') };
+  } catch (err) {
+    console.warn(`[drive] No se pudo describir la carpeta ${id}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 // Subcarpetas de `parentId` (el ID de una Unidad Compartida sirve como su raíz).
 export async function listFolders(parentId: string): Promise<DriveEntry[]> {
   const drive = getDrive();

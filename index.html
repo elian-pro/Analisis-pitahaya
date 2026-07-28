@@ -871,8 +871,14 @@
         <div class="form-section-title">Google Sheets</div>
         <div class="form-group">
           <label class="form-label">Hoja de Google (pega el link) *</label>
-          <input class="form-control" id="cf-spreadsheet-id" placeholder="Pega el link de Google Sheets (o el ID)">
-          <div class="form-hint">Pega el link completo de la hoja. Detectamos el ID automáticamente.</div>
+          <div class="drive-chip" id="cf-sheet-chip">
+            <span class="chip-k">Hoja</span><span id="cf-sheet-chip-title"></span>
+            <button type="button" class="drive-chip-x" onclick="_clearSheetChip()" title="Usar otra hoja">✕</button>
+          </div>
+          <div id="cf-spreadsheet-row">
+            <input class="form-control" id="cf-spreadsheet-id" placeholder="Pega el link de Google Sheets (o el ID)">
+          </div>
+          <div class="form-hint" id="cf-sheet-hint">Pega el link completo de la hoja. Detectamos el ID automáticamente.</div>
         </div>
         <div class="form-group">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
@@ -3261,7 +3267,9 @@
           `<div style="flex:1;min-width:0;">` +
             `<div class="client-row-name">${_esc(c.name)}</div>` +
             `<div class="client-row-meta">` +
-              `<span>Hoja: ${_esc(c.spreadsheet_id || '—')}</span>` +
+              (c.spreadsheet_id
+                ? `<a href="https://docs.google.com/spreadsheets/d/${_esc(c.spreadsheet_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Hoja de cálculo ↗</a>`
+                : `<span>Sin hoja</span>`) +
               (c.folder_id ? `<span>·</span><a href="https://drive.google.com/drive/folders/${_esc(c.folder_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Carpeta en Drive ↗</a>` : '') +
             `</div>` +
           `</div>` +
@@ -3296,6 +3304,9 @@
     document.getElementById('cf-create-radar').checked   = true;
     document.getElementById('cf-folder-name-chip').classList.remove('show');
     document.getElementById('cf-radar-name-chip').classList.remove('show');
+    document.getElementById('cf-sheet-chip').classList.remove('show');
+    document.getElementById('cf-spreadsheet-row').style.display = '';
+    document.getElementById('cf-sheet-hint').style.display = '';
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
     _dpApplyLocation('', '');
@@ -3339,6 +3350,7 @@
         document.getElementById('cf-col-transcripcion').value= c.col_transcripcion || '';
         document.getElementById('cf-col-duracion').value     = c.col_duracion || '';
         document.getElementById('cf-col-record').value       = c.col_record || '';
+        populateColumnOptions([]);   // re-evalúa el bloqueo: ya hay mapeo guardado
         document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
         document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 3000;
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
@@ -3358,7 +3370,9 @@
         if (c.parent_folder_id) _dpApplyLocation('', c.parent_folder_id);
         _wizFolderHint();
         wizGo(1);
-        _fillFolderNames(c);   // en segundo plano: no bloquea abrir el modal
+        // En segundo plano: no bloquean abrir el modal
+        _fillFolderNames(c);
+        _fillSheetName(c.spreadsheet_id);
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -3470,8 +3484,11 @@
     const grid = document.getElementById('cols-grid');
     const hint = document.getElementById('cols-detect-hint');
     const n = seenAll.length;
-    if (wrap) wrap.classList.toggle('cols-locked-wrap', n === 0);
-    if (grid) grid.classList.toggle('cols-locked', n === 0);
+    // Se bloquea solo si no hay encabezados NI mapeo previo: al editar un
+    // cliente sus columnas ya elegidas deben poder tocarse sin recargar nada.
+    const bloquear = n === 0 && !_COL_FIELDS.some(({ id }) => document.getElementById(id)?.value);
+    if (wrap) wrap.classList.toggle('cols-locked-wrap', bloquear);
+    if (grid) grid.classList.toggle('cols-locked', bloquear);
     if (!hint) return;
     if (n === 0) { hint.style.display = 'none'; return; }
     const hits = _autoDetectColumns(seenAll);
@@ -3755,7 +3772,8 @@
       ['Cliente',     nombre ? _esc(nombre) : miss('Sin nombre')],
       ['Carpetas',    carpetas],
       ['Fuente',      g('cf-spreadsheet-id')
-                        ? `Hoja conectada · pestaña ${g('cf-sheet-name') ? _esc(g('cf-sheet-name')) : miss('sin elegir')}`
+                        ? `${_esc(document.getElementById('cf-sheet-chip-title').textContent || 'Hoja conectada')}`
+                          + ` · pestaña ${g('cf-sheet-name') ? _esc(g('cf-sheet-name')) : miss('sin elegir')}`
                         : miss('Sin hoja de Google')],
       ['Columnas',    `${mapeadas} de 5 obligatorias mapeadas` + (mapeadas < 5 ? ' · ' + miss('faltan') : '')],
       ['Prompts',     (g('cf-prompt-individual') && g('cf-prompt-general'))
@@ -3837,6 +3855,33 @@
     document.getElementById('cf-folder-name-chip').classList.remove('show');
     document.getElementById('cf-folder-id').value = '';
     _wizFolderHint();
+  }
+
+  // ── Nombre de la hoja de Google ─────────────────────────────────────────────
+  // /api/sheets/tabs ya devuelve el título, así que sirve para mostrar el nombre
+  // real de la hoja en vez del ID guardado.
+  async function _fillSheetName(spreadsheetId) {
+    if (!spreadsheetId) return;
+    try {
+      const r = await fetch(`/api/sheets/tabs?spreadsheet=${encodeURIComponent(spreadsheetId)}`);
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.title) _showSheetName(d.title);
+    } catch { /* sin acceso: se queda el campo con el ID */ }
+  }
+
+  function _showSheetName(title) {
+    document.getElementById('cf-sheet-chip-title').textContent = title;
+    document.getElementById('cf-sheet-chip').classList.add('show');
+    document.getElementById('cf-spreadsheet-row').style.display = 'none';
+    document.getElementById('cf-sheet-hint').style.display = 'none';
+    if (_wizStep === 3) _wizSummary();
+  }
+
+  function _clearSheetChip() {
+    document.getElementById('cf-sheet-chip').classList.remove('show');
+    document.getElementById('cf-spreadsheet-row').style.display = '';
+    document.getElementById('cf-sheet-hint').style.display = '';
+    document.getElementById('cf-spreadsheet-id').value = '';
   }
 
   function _showRadarFolderName(name) {

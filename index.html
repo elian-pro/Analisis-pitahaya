@@ -324,6 +324,9 @@
     .drive-chip.show{display:inline-flex;}
     .drive-chip{margin-bottom:4px;}
     .chip-k{font-size:9px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint);flex-shrink:0;}
+    .drive-chip.trashed{border-color:var(--danger);}
+    .drive-chip.trashed .chip-k{color:var(--danger);}
+    .drive-chip-warn{color:var(--danger);font-size:11px;}
     .drive-chip.loading .drive-chip-x{display:none;}
     .drive-chip.loading::after{content:'';width:10px;height:10px;border:1.5px solid var(--border2);border-top-color:var(--muted);border-radius:50%;animation:spin .7s linear infinite;}
     .drive-chip-x{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;margin-left:auto;}
@@ -3919,6 +3922,20 @@
     chip.classList.toggle('show', on);
   }
 
+  // Una carpeta en la papelera se sigue leyendo y admite archivos nuevos, así
+  // que sin este aviso los reportes se entregarían dentro de la papelera y nada
+  // lo delataría. Idempotente: se puede reabrir el formulario sin acumular.
+  function _markTrashed(chipId, info) {
+    const chip = document.getElementById(chipId);
+    chip.querySelector('.drive-chip-warn')?.remove();
+    chip.classList.toggle('trashed', !!info?.trashed);
+    if (!info?.trashed) return;
+    const warn = document.createElement('span');
+    warn.className = 'drive-chip-warn';
+    warn.textContent = 'en la papelera';
+    chip.insertBefore(warn, chip.querySelector('.drive-chip-x'));
+  }
+
   function _showFolderName(name) {
     document.getElementById('cf-folder-name-text').textContent = name;
     document.getElementById('cf-folder-name-chip').classList.remove('loading');
@@ -3980,6 +3997,9 @@
       if (info[c.folder_id]) _showFolderName(info[c.folder_id].name);
       else _chipLoading('cf-folder-name-chip', false);
     }
+    _markTrashed('cf-folder-name-chip',  info[c.folder_id]);
+    _markTrashed('cf-radar-name-chip',   info[c.radar_folder_id]);
+    _markTrashed('cf-drive-chip',        info[c.parent_folder_id]);
     if (c.parent_folder_id && info[c.parent_folder_id]) {
       const { name, path } = info[c.parent_folder_id];
       document.getElementById('cf-drive-chip-path').textContent = path ? `${path} / ${name}` : name;

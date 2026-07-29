@@ -127,11 +127,14 @@ export async function listSharedDrives(): Promise<DriveEntry[]> {
 // llamadas sin fin. Devuelve null si la carpeta no existe o no hay acceso.
 export async function describeFolder(
   id: string,
-): Promise<{ id: string; name: string; path: string; parentId: string } | null> {
+): Promise<{ id: string; name: string; path: string; parentId: string; trashed: boolean } | null> {
   const drive = getDrive();
   try {
+    // `trashed`: una carpeta en la papelera se sigue leyendo y se puede seguir
+    // escribiendo dentro, así que sin este dato la app entregaría los reportes
+    // ahí sin que nada lo delate.
     const res = await drive.files.get({
-      fileId: id, fields: 'id,name,parents', supportsAllDrives: true,
+      fileId: id, fields: 'id,name,parents,trashed', supportsAllDrives: true,
     });
     const trail: string[] = [];
     let parents = res.data.parents;
@@ -149,6 +152,7 @@ export async function describeFolder(
       name: res.data.name || '',
       path: trail.join(' / '),
       parentId: res.data.parents?.[0] ?? '',
+      trashed: res.data.trashed === true,
     };
   } catch (err) {
     console.warn(`[drive] No se pudo describir la carpeta ${id}:`, err instanceof Error ? err.message : err);

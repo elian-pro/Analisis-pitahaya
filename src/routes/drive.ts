@@ -27,10 +27,10 @@ router.get('/folders', async (req: Request, res: Response): Promise<void> => {
 router.get('/names', async (req: Request, res: Response): Promise<void> => {
   const ids = String(req.query.ids ?? '')
     .split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
-  const out: Record<string, { name: string; path: string; parentId: string }> = {};
+  const out: Record<string, { name: string; path: string; parentId: string; trashed: boolean }> = {};
   await Promise.all(ids.map(async id => {
     const info = await describeFolder(id);
-    if (info) out[id] = { name: info.name, path: info.path, parentId: info.parentId };
+    if (info) out[id] = { name: info.name, path: info.path, parentId: info.parentId, trashed: info.trashed };
   }));
   res.json(out);
 });

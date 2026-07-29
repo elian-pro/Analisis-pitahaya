@@ -72,8 +72,9 @@ La ✕ del chip **Se crean en** hace lo mismo con la carpeta madre, por si hay q
 mudar al cliente entero de sitio.
 
 > Esto es lo que hay que hacer cuando una carpeta acaba en la papelera de Drive.
-> El cliente seguiría apuntando a ella y los reportes nuevos se crearían dentro
-> de la papelera, sin ningún aviso. Si vuelves a crear las carpetas desde cero,
+> Al editar el cliente, ese chip sale **en rojo con la etiqueta "en la
+> papelera"**: la carpeta se sigue leyendo y admite archivos nuevos, así que sin
+> ese aviso los reportes se entregarían ahí dentro. Si vuelves a crear las carpetas desde cero,
 > acuérdate de mover a las nuevas los archivos que rescates, incluida la
 > subcarpeta `_Sidecars`: sin ella, el siguiente reporte pierde la comparativa
 > contra el periodo anterior y sale como línea base.

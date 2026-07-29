@@ -170,6 +170,8 @@
     .conf-prev-icon{font-size:14px;line-height:1.3;flex-shrink:0;}
     .conf-prev-text strong{font-weight:600;}
     .confirm-warning{display:flex;align-items:flex-start;gap:9px;background:color-mix(in srgb, var(--accent) 7%, var(--surface));border:0.5px solid color-mix(in srgb, var(--accent) 35%, transparent);border-radius:10px;padding:11px 13px;margin:20px 0 22px;font-size:12px;color:var(--muted);line-height:1.5;}
+    .confirm-text{font-size:13px;color:var(--muted);line-height:1.6;margin:14px 0 22px;white-space:pre-line;}
+    .confirm-ok.danger{background:var(--danger);border-color:var(--danger);color:#fff;}
     .confirm-actions{display:flex;gap:9px;}
     .confirm-cancel{flex:1;padding:10px;background:transparent;border:0.5px solid var(--border2);color:var(--muted);border-radius:100px;font-family:'Inter',sans-serif;font-size:11px;font-weight:400;letter-spacing:0.12em;cursor:pointer;transition:all 0.15s;}
     .confirm-cancel:hover{border-color:var(--fg);color:var(--fg);}
@@ -1365,6 +1367,18 @@
 
 <!-- Confirmación del Radar: mismo patrón que el de reportes, con los datos que
      conviene ver antes de disparar (periodo anterior, carpeta de Drive, roster). -->
+<!-- Confirmación genérica (sustituye al confirm() del navegador). La abre _ask(). -->
+<div class="confirm-backdrop" id="ask-backdrop">
+  <div class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="ask-title" aria-describedby="ask-text">
+    <div class="confirm-title" id="ask-title"></div>
+    <div class="confirm-text" id="ask-text"></div>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="_askClose(false)">Cancelar</button>
+      <button class="confirm-ok" id="ask-ok" onclick="_askClose(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="confirm-backdrop" id="radar-confirm-backdrop">
   <div class="confirm-modal">
     <div class="confirm-title">Confirmar generación del Radar</div>
@@ -1427,6 +1441,37 @@
 <script>
   const REPORT_API    = '/api/report';
   const ADVISORS_API  = '/api/advisors';
+
+  // ── Confirmación propia, en vez del confirm() del navegador ────────────────
+  // Devuelve una promesa que resuelve true/false, así el llamador se lee igual
+  // que antes: `if (!await _ask(...)) return;`. Esc cancela, Enter confirma.
+  let _askResolve = null;
+
+  function _ask(title, text, { okLabel = 'Confirmar', danger = false } = {}) {
+    document.getElementById('ask-title').textContent = title;
+    document.getElementById('ask-text').textContent  = text || '';
+    const ok = document.getElementById('ask-ok');
+    ok.textContent = okLabel;
+    ok.classList.toggle('danger', danger);
+    const b = document.getElementById('ask-backdrop');
+    b.style.display = 'flex'; b.classList.add('show');
+    ok.focus();
+    return new Promise(resolve => { _askResolve = resolve; });
+  }
+
+  function _askClose(value) {
+    const b = document.getElementById('ask-backdrop');
+    b.classList.remove('show'); b.style.display = 'none';
+    const resolve = _askResolve;
+    _askResolve = null;
+    if (resolve) resolve(value);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (!_askResolve) return;
+    if (e.key === 'Escape') { e.preventDefault(); _askClose(false); }
+    if (e.key === 'Enter')  { e.preventDefault(); _askClose(true); }
+  });
 
   function toggleTheme() {
     const body  = document.body;
@@ -1867,7 +1912,8 @@
     e.stopPropagation();
     const a=advisorRoster.find(x=>x.id===id);
     const name=a?a.name:id;
-    if(!confirm(`¿Quitar a ${name} del roster? Su historial de reportes no se ve afectado; puedes reactivarlo despues desde "Inactivos".`))return;
+    if(!await _ask('Quitar del roster', `Se quitará a ${name}. Su historial de reportes no se ve afectado, y puedes reactivarlo después desde "Inactivos".`,
+      { okLabel: 'Quitar', danger: true })) return;
     try{
       const res=await fetch(`${ADVISORS_API}/${encodeURIComponent(id)}`,{
         method:'PATCH',
@@ -4144,7 +4190,8 @@
   }
 
   async function deleteClientRow(id, name) {
-    if (!confirm(`¿Eliminar al cliente "${name}"?\nEsta acción no se puede deshacer.`)) return;
+    if (!await _ask('Eliminar cliente', `Se eliminará "${name}" de la app. Esta acción no se puede deshacer.\n\nSus carpetas y reportes en Drive no se borran.`,
+      { okLabel: 'Eliminar', danger: true })) return;
     try {
       const r = await fetch(`${CLIENTS_API}/${id}`, { method:'DELETE' });
       if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.error || `HTTP ${r.status}`); }
@@ -5036,7 +5083,8 @@
   }
 
   async function deleteScheduleRow(id, name) {
-    if (!confirm(`¿Eliminar la automatización "${name}"?`)) return;
+    if (!await _ask('Eliminar automatización', `Se eliminará "${name}". Los reportes ya generados no se tocan.`,
+      { okLabel: 'Eliminar', danger: true })) return;
     try {
       const r = await fetch(`${SCHEDULES_API}/${id}`, { method:'DELETE' });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -5068,7 +5116,10 @@
   // because it costs AI tokens and posts the report message to the client's Chat.
   async function runScheduleNow(id) {
     closeAllKebabs();
-    if (!confirm('¿Ejecutar esta automatización ahora?\n\nGenerará el reporte del periodo configurado, consumirá tokens de IA y enviará el mensaje al espacio de Google Chat del cliente.')) return;
+    const ok = await _ask('¿Ejecutar esta automatización ahora?',
+      'Generará el reporte del periodo configurado, consumirá tokens de IA y enviará el mensaje al espacio de Google Chat del cliente.',
+      { okLabel: 'Ejecutar ahora' });
+    if (!ok) return;
     _showToast('Disparando automatización…');
     try {
       const r = await fetch(`${SCHEDULES_API}/${id}/run`, { method: 'POST' });

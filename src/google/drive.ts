@@ -25,6 +25,12 @@ function fmtDateShort(d: string): string {
 
 // "Sofia Fractional Residences | Análisis de Llamadas | Mayo 2026"
 // or "Sofia Fractional Residences | Análisis de Llamadas | Mayo 2026 | Semana 05/05 al 11/05"
+// Nombre del PDF del Radar: "Midstorage | Radar de Objeciones | Julio 2026".
+// El periodo llega ya con su etiqueta legible (mes o quincena).
+export function radarFilename(clientName: string, periodLabel: string): string {
+  return `${clientName} | Radar de Objeciones | ${periodLabel}`;
+}
+
 export function reportFilename(
   clientName: string,
   month: string,
@@ -199,8 +205,18 @@ export async function uploadPdf(
   dateFrom?: string,
   dateTo?: string,
 ): Promise<string> {
+  return uploadPdfNamed(folderId, reportFilename(clientName, month, dateFrom, dateTo), pdfBuffer);
+}
+
+// Sube el PDF con un nombre ya resuelto. Lo usa el Radar, que no se llama
+// "Analisis de Llamadas" y por tanto no pasa por reportFilename().
+export async function uploadPdfNamed(
+  folderId:  string,
+  baseName:  string,
+  pdfBuffer: Buffer,
+): Promise<string> {
   const drive = getDrive();
-  const name  = `${reportFilename(clientName, month, dateFrom, dateTo)}.pdf`;
+  const name  = `${baseName}.pdf`;
 
   let res;
   try {

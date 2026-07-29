@@ -46,8 +46,12 @@ Cada ejecución genera dos archivos:
 
 Plantilla: `src/pdf/templates/radar.eta`. En orden:
 
-1. **Portada / cabecera** — `Radar de Objeciones · <cliente>`, periodo, fecha de
+1. **Portada / cabecera (membrete)** — el tipo de reporte en mono, blanco pleno
+   y 11 pt (`.tipo-line`) sobre el nombre del cliente, más periodo, fecha de
    generación y los tres contadores: llamadas totales, analizadas y excluidas.
+   Esa línea es lo único que distingue este membrete del de Análisis de
+   Llamadas, que es idéntico en todo lo demás: si se toca, los dos reportes
+   vuelven a confundirse de un vistazo.
 2. **Resumen ejecutivo** — narrativa de la IA.
 3. **Preguntas más frecuentes** — tabla: pregunta, frecuencia, nº de llamadas,
    evaluación.
@@ -62,15 +66,14 @@ Plantilla: `src/pdf/templates/radar.eta`. En orden:
 
 ### Nombre del archivo en Drive
 
-Se construye con `reportFilename()` de `src/google/drive.ts`:
+Se construye con `radarFilename()` de `src/google/drive.ts`, que **no** pasa por
+`reportFilename()` (ese es el del Análisis de Llamadas):
 
-- Mensual: `Sofia Fractional · Radar | Analisis de Llamadas | Junio 2026.pdf`
-- Quincenal: `Sofia Fractional · Radar · 1ª quincena · Junio 2026 | Analisis de Llamadas | Junio 2026.pdf`
+- Mensual: `Sofia Fractional | Radar de Objeciones | Junio 2026.pdf`
+- Quincenal: `Sofia Fractional | Radar de Objeciones | 1ª quincena · Junio 2026.pdf`
 
-> El nombre quincenal repite el mes porque `uploadPdf` recibe la etiqueta del
-> periodo dentro del "nombre de cliente". Es una rareza conocida, no un bug con
-> consecuencias: si el rediseño toca nombres de archivo, es un buen momento para
-> limpiarlo.
+La etiqueta del periodo es lo que evita que los dos cortes de un mismo mes se
+pisen en la carpeta.
 
 La descarga en el navegador usa otro nombre, más simple:
 `Radar_<cliente_saneado>_<YYYY-MM>.pdf`.
@@ -404,6 +407,5 @@ existiendo: `onRadarClientChange`, `onRadarPeriodChange`, `setRadarHalf`,
   excluidas) aunque `reportData` los trae; solo dice "generado y descargado".
 - No hay **historial**: no se puede ver qué Radares se generaron ya sin abrir
   Drive.
-- El **nombre del PDF quincenal** repite el mes (ver §2).
 - El modal de confirmación todavía usa emojis (⚠️ 📁 ✅) en los badges, que el
   DS pide sustituir por iconos monolínea.

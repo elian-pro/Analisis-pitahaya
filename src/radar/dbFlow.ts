@@ -2,7 +2,7 @@ import type { ClientConfig } from '../clients/manager';
 import { listAdvisors } from '../advisors/store';
 import { rosterMatcher } from '../advisors/match';
 import { getCallData, type SheetColumns } from '../google/sheets';
-import { monthLabel, previousMonth, uploadPdf, findRadarSidecar, uploadRadarSidecar } from '../google/drive';
+import { monthLabel, previousMonth, uploadPdfNamed, radarFilename, findRadarSidecar, uploadRadarSidecar } from '../google/drive';
 import { resolveRadarPrompt, type RadarCall, type RadarPeriodMeta } from '../claude/radar';
 import { parseRadarSidecar } from './sidecar';
 import { processRadarReport } from './process';
@@ -148,12 +148,13 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
   const systemPrompt = resolveRadarPrompt(client.prompt_radar ?? null);
   const result = await processRadarReport(systemPrompt, meta, calls, prevSidecar);
 
-  // Nombre del PDF: mensual conserva el nombre histórico; quincenal añade la
-  // etiqueta de la quincena para que ambos cortes del mes no colisionen.
-  const pdfLabel = period.periodKey === period.month
-    ? `${client.name} · Radar`
-    : `${client.name} · Radar · ${period.periodLabel}`;
-  const driveUrl = await uploadPdf(client.radar_folder_id, pdfLabel, period.month, result.pdfBuffer);
+  // La etiqueta del periodo distingue los dos cortes de un mismo mes, así que
+  // el PDF de la 1ª quincena no pisa al de la 2ª.
+  const driveUrl = await uploadPdfNamed(
+    client.radar_folder_id,
+    radarFilename(client.name, period.periodLabel),
+    result.pdfBuffer,
+  );
   await uploadRadarSidecar(sidecarFolder, period.periodKey, result.sidecarJson);
 
   return {

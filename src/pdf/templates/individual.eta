@@ -41,6 +41,9 @@
   .membrete .motif { position: absolute; inset: 0 0 0 auto; width: 42%; height: 100%; background-image: url("data:image/png;base64,<%= it._motifB64 %>"); background-size: cover; background-position: right center; opacity: .10; z-index: -1; }
   .membrete img.logo { height: 22pt; display: block; margin: 0 0 12pt -1pt; }
   .membrete .eyebrow { color: rgba(255,255,255,.62); }
+  /* Tipo de reporte: es lo que distingue un membrete de otro, asi que va en
+     blanco pleno y por encima del nombre, no escondido en el eyebrow. */
+  .membrete .tipo-line { font-family: var(--mono); font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: .16em; color: #fff; display: block; margin-bottom: 3pt; }
   .membrete .titulo { font-size: 21pt; font-weight: 600; letter-spacing: -.02em; margin: 14pt 0 2pt 0; }
   .membrete .sub { font-size: 9.5pt; color: rgba(255,255,255,.72); font-family: var(--mono); letter-spacing: .02em; }
   .membrete .meta { margin-top: 16pt; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10pt; display: flex; gap: 28pt; font-size: 8pt; color: rgba(255,255,255,.6); }
@@ -161,7 +164,8 @@ const tipoLabel = it.tipo_asesor === 'desconocido' ? 'asesor' : it.tipo_asesor;
   <% if (it._logoB64) { %>
     <img class="logo" src="data:image/png;base64,<%= it._logoB64 %>" alt="ZEBRA">
   <% } %>
-  <span class="eyebrow">Inteligencia Comercial · Análisis de Llamadas</span>
+  <span class="tipo-line">Análisis de Llamadas</span>
+  <span class="eyebrow">Inteligencia Comercial</span>
   <div class="titulo"><%= it.asesor %></div>
   <div class="sub"><%= it.mes_label %><% if (it.period_label) { %> · <%= it.period_label %><% } %> · <%= it.call_count %> videollamada<%= it.call_count !== 1 ? 's' : '' %></div>
   <div class="meta">

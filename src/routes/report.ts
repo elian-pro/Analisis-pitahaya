@@ -11,7 +11,7 @@ import { parseRadarMarkdown } from '../ingest/radarMarkdown';
 import { parseRadarSidecar } from '../radar/sidecar';
 import { processRadarReport } from '../radar/process';
 import { resolveRadarPrompt, type RadarPeriodMeta } from '../claude/radar';
-import { runRadarForClient } from '../radar/dbFlow';
+import { runRadarForClient, runRadarForClientFortnight, fortnightFor } from '../radar/dbFlow';
 
 const router = Router();
 
@@ -22,6 +22,8 @@ const RADAR_MAX_CHARS_DEFAULT     = 8000;
 // 'YYYY-MM-DD' → "Semana del 15/06".
 function periodKeyLabel(key: string): string {
   if (/^\d{4}-\d{2}$/.test(key)) return monthLabel(key);
+  const q = key.match(/^(\d{4}-\d{2})-(Q[12])$/);
+  if (q) return `${q[2] === 'Q1' ? '1ª' : '2ª'} quincena · ${monthLabel(q[1])}`;
   const [, m, d] = key.split('-');
   return `Semana del ${d}/${m}`;
 }
@@ -69,6 +71,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 const RadarBodySchema = z.object({
   client_id: z.string().min(1),
   month:     z.string().regex(/^\d{4}-\d{2}$/, 'month debe ser YYYY-MM'),
+  // Sin `half` el periodo es el mes completo; con él, esa quincena del mes.
+  half:      z.enum(['Q1', 'Q2']).optional(),
 });
 
 router.post('/radar', async (req: Request, res: Response): Promise<void> => {
@@ -77,15 +81,17 @@ router.post('/radar', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
     return;
   }
-  const { client_id, month } = parsed.data;
+  const { client_id, month, half } = parsed.data;
   try {
     const client = await getClient(client_id);
     if (!client) { res.status(404).json({ error: `Cliente '${client_id}' no encontrado` }); return; }
     if (!client.radar_folder_id) {
-      res.status(400).json({ error: 'El cliente no tiene "Carpeta Drive de Radar" configurada. Agrégala en la pestaña Reportes.' });
+      res.status(400).json({ error: 'El cliente no tiene carpeta de Drive para el Radar. Agrégala en Ajustes → Clientes → paso 1, Datos.' });
       return;
     }
-    const result = await runRadarForClient(client, month);
+    const result = half
+      ? await runRadarForClientFortnight(client, fortnightFor(month, half))
+      : await runRadarForClient(client, month);
     res.json({
       reportData:    result.reportData,
       driveUrl:      result.driveUrl,
@@ -324,6 +330,8 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
 router.get('/radar-preflight', async (req: Request, res: Response): Promise<void> => {
   const client_id = String(req.query.client_id ?? '');
   const month     = String(req.query.month ?? '');
+  const halfRaw   = String(req.query.half ?? '');
+  const half      = halfRaw === 'Q1' || halfRaw === 'Q2' ? halfRaw : null;
   if (!client_id || !/^\d{4}-\d{2}$/.test(month)) {
     res.status(400).json({ error: 'client_id y month (YYYY-MM) son obligatorios' });
     return;
@@ -351,8 +359,9 @@ router.get('/radar-preflight', async (req: Request, res: Response): Promise<void
     console.warn('[radar preflight] roster lookup failed:', (e as Error).message);
   }
 
-  // Sin carpeta no hay donde buscar el sidecar del periodo anterior.
-  const prevKey = previousMonth(month);
+  // Sin carpeta no hay donde buscar el sidecar del periodo anterior. El periodo
+  // anterior de una quincena es la quincena previa, no el mes previo.
+  const prevKey = half ? fortnightFor(month, half).prevPeriodKey : previousMonth(month);
   let previous: Record<string, unknown> = { has_previous: false };
   if (folderId) {
     try {

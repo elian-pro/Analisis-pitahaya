@@ -192,37 +192,40 @@ export interface Fortnight {
   prevPeriodKey: string;
 }
 
+// Describe una quincena concreta de un mes. Es la pieza que necesita el flujo
+// manual (el usuario elige mes + quincena); el scheduler solo usa el atajo de
+// abajo, que resuelve cuál acaba de cerrar.
+export function fortnightFor(month: string, half: 'Q1' | 'Q2'): Fortnight {
+  const [y, m] = month.split('-').map(Number);
+  if (half === 'Q1') {
+    return {
+      periodKey:     `${month}-Q1`,
+      periodLabel:   `1ª quincena · ${monthLabel(month)}`,
+      dateFrom:      `${month}-01`,
+      dateTo:        `${month}-15`,
+      month,
+      prevPeriodKey: `${previousMonth(month)}-Q2`,
+    };
+  }
+  return {
+    periodKey:     `${month}-Q2`,
+    periodLabel:   `2ª quincena · ${monthLabel(month)}`,
+    dateFrom:      `${month}-16`,
+    dateTo:        `${month}-${pad(new Date(y, m, 0).getDate())}`,
+    month,
+    prevPeriodKey: `${month}-Q1`,
+  };
+}
+
 // Devuelve la quincena que ACABA de cerrar antes de `today` (YYYY-MM-DD):
 //   • si hoy es día 1–15  → 2ª quincena del mes anterior.
 //   • si hoy es día ≥16   → 1ª quincena del mes actual.
 export function fortnightForRun(today: string): Fortnight {
   const [y, m, d] = today.split('-').map(Number);
-  const ML = (mm: string) => monthLabel(mm);
-
-  if (d >= 16) {
-    // 1ª quincena del mes actual (1–15)
-    const mkey = `${y}-${pad(m)}`;
-    return {
-      periodKey:     `${mkey}-Q1`,
-      periodLabel:   `1ª quincena · ${ML(mkey)}`,
-      dateFrom:      `${mkey}-01`,
-      dateTo:        `${mkey}-15`,
-      month:         mkey,
-      prevPeriodKey: `${previousMonth(mkey)}-Q2`,
-    };
-  }
-  // 2ª quincena del mes anterior (16–fin)
-  const prev = previousMonth(`${y}-${pad(m)}`);
-  const [py, pm] = prev.split('-').map(Number);
-  const lastDay = new Date(py, pm, 0).getDate();
-  return {
-    periodKey:     `${prev}-Q2`,
-    periodLabel:   `2ª quincena · ${ML(prev)}`,
-    dateFrom:      `${prev}-16`,
-    dateTo:        `${prev}-${pad(lastDay)}`,
-    month:         prev,
-    prevPeriodKey: `${prev}-Q1`,
-  };
+  const thisMonth = `${y}-${pad(m)}`;
+  return d >= 16
+    ? fortnightFor(thisMonth, 'Q1')
+    : fortnightFor(previousMonth(thisMonth), 'Q2');
 }
 
 export async function runRadarForClientFortnight(client: ClientConfig, f: Fortnight): Promise<RadarDbResult> {

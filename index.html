@@ -44,6 +44,14 @@
     .advisors-empty{padding:12px 0;font-size:12px;color:var(--faint);text-align:center;}
     .spin-xs{width:12px;height:12px;border:1.5px solid var(--border2);border-top-color:var(--fg);border-radius:50%;animation:spin 0.75s linear infinite;flex-shrink:0;}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+    /* Radar: la columna del archivo .md pide más ancho que la del cliente. */
+    .radar-cols{display:grid;grid-template-columns:1fr 1.35fr;gap:16px;align-items:start;}
+    .radar-status{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--faint);letter-spacing:0.04em;line-height:1.5;margin-top:14px;}
+    .radar-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--border2);flex-shrink:0;}
+    .radar-note{display:flex;gap:10px;font-size:11.5px;color:var(--muted);line-height:1.55;background:var(--surface2);border-left:2px solid var(--border2);border-radius:0 8px 8px 0;padding:12px 14px;margin-top:18px;}
+    /* La columna del cliente es estrecha: el segmentado ocupa el ancho completo. */
+    .radar-cols .form-toggle-row{width:100%;}
+    .radar-cols .form-toggle-btn{flex:1;padding:0 8px;font-size:10.5px;}
     .card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:24px;transition:border-color 0.25s;}
     .card:hover{border-color:var(--border2);}
     .card-title{font-size:15px;font-weight:500;margin-bottom:5px;letter-spacing:-0.01em;}
@@ -196,7 +204,7 @@
     .cal-wk-row.cal-sel .cal-cell.out-mo{color:var(--muted);}
     @keyframes fadeSlideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
     @keyframes spin{to{transform:rotate(360deg);}}
-    @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
+    @media(max-width:720px){.grid-2,.radar-cols{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
     /* ── Token counter ── */
     .token-card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:22px 24px;}
     .token-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;}
@@ -702,89 +710,108 @@
       </div>
     </div>
 
-    <!-- Flujo A: desde un cliente en la base -->
-    <div class="card" style="margin-bottom:20px;">
-      <div class="section-label">Generar desde un cliente</div>
-      <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
-        <div class="field" style="flex:1 1 220px;">
+    <div class="radar-cols">
+      <!-- Flujo A: desde un cliente en la base -->
+      <div class="card">
+        <div class="section-label">Generar desde un cliente</div>
+        <div class="field" style="margin-bottom:14px;">
           <label class="field-label">Cliente</label>
           <select id="radar-client-select" onchange="onRadarClientChange()"></select>
         </div>
-        <div class="field" style="flex:1 1 160px;">
-          <label class="field-label">Mes</label>
-          <select id="radar-month-select"></select>
+        <div class="field" style="margin-bottom:14px;">
+          <label class="field-label">Mes de reporte</label>
+          <select id="radar-month-select" onchange="onRadarPeriodChange()"></select>
         </div>
-        <button class="btn-sm btn-sm-green" id="radar-gen-btn" onclick="generateRadarFromClient()">Generar Radar</button>
-      </div>
-      <div class="form-hint" style="margin-top:8px;">Usa la hoja del cliente (llamadas &gt; 200 s). Requiere que el cliente tenga configurada su "Carpeta Drive de Radar" en Ajustes.</div>
-      <!-- Carpeta de Radar del cliente: mismo bloque que en Reportes, pero apunta a
-           radar_folder_id. A diferencia de Reportes, cuando falta no se oculta en
-           silencio: se explica que hay que configurarla. -->
-      <div id="radar-drive-wrap" style="display:none;margin-top:14px;">
-        <a id="radar-drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
-          <div class="drive-block-left">
-            <div class="drive-block-icon">📁</div>
-            <div>
-              <div class="drive-block-title">Carpeta de Google Drive</div>
-              <div class="drive-block-sub" id="radar-drive-client"></div>
-            </div>
+        <!-- Corte del periodo: el mes completo o una de sus dos quincenas. El
+             motor ya soportaba quincenas por automatización; aquí se elige a mano. -->
+        <div class="field" style="margin-bottom:18px;">
+          <label class="field-label">Corte</label>
+          <div class="form-toggle-row">
+            <button class="form-toggle-btn active" id="radar-half-full" onclick="setRadarHalf('')">Mes completo</button>
+            <button class="form-toggle-btn" id="radar-half-q1" onclick="setRadarHalf('Q1')">1ª quincena</button>
+            <button class="form-toggle-btn" id="radar-half-q2" onclick="setRadarHalf('Q2')">2ª quincena</button>
           </div>
-          <div class="drive-block-arrow">Abrir ↗</div>
-        </a>
+        </div>
+        <button class="btn-primary" id="radar-gen-btn" onclick="generateRadarFromClient()"><i class="ti ti-chart-bar"></i> Generar Radar</button>
+        <!-- Carpeta de Radar del cliente: mismo bloque que en Reportes, pero apunta a
+             radar_folder_id. A diferencia de Reportes, cuando falta no se oculta en
+             silencio: se explica que hay que configurarla. -->
+        <div id="radar-drive-wrap" style="display:none;margin-top:16px;">
+          <a id="radar-drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
+            <div class="drive-block-left">
+              <div class="drive-block-icon"><i class="ti ti-folder"></i></div>
+              <div>
+                <div class="drive-block-title">Carpeta de Google Drive</div>
+                <div class="drive-block-sub" id="radar-drive-client"></div>
+              </div>
+            </div>
+            <div class="drive-block-arrow">Abrir ↗</div>
+          </a>
+        </div>
+        <div class="radar-note" id="radar-drive-missing" style="display:none;border-left-color:var(--danger);">
+          <i class="ti ti-alert-triangle" style="color:var(--danger);"></i>
+          <span>Este cliente no tiene carpeta de Radar. Agrégala en <strong>Ajustes → Clientes → paso 1, Datos</strong>; sin ella el reporte no se puede entregar.</span>
+        </div>
+        <div id="radar-client-status" class="radar-status">Listo para analizar.</div>
+        <div class="radar-note">
+          <i class="ti ti-info-circle"></i>
+          <span id="radar-source-note">Analiza las llamadas de la hoja del cliente que superen su duración mínima, y solo las de sus asesores registrados.</span>
+        </div>
       </div>
-      <div class="form-hint" id="radar-drive-missing" style="display:none;margin-top:14px;color:var(--danger);">
-        ⚠️ Este cliente no tiene carpeta de Radar. Agrégala en <strong>Ajustes → Carpeta Drive de Radar</strong> para poder entregar el reporte.
-      </div>
-      <div id="radar-client-status" style="margin-top:12px;"></div>
-    </div>
 
-    <!-- Flujo B: desde archivo .md -->
-    <div class="card">
-      <div class="section-label">Radar desde archivo (.md)</div>
-      <p class="card-desc">Sube un Markdown con las transcripciones ya compiladas. Funciona con o sin cliente en la base.</p>
-      <div class="form-field" style="margin-bottom:12px;">
-        <label>Archivo .md *</label>
-        <div class="file-picker">
-          <input type="file" id="radar-md-file" accept=".md,text/markdown" onchange="_fpUpdate(this)">
-          <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-md-file')"><i class="ti ti-paperclip"></i> Adjuntar .md</button>
-          <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
-          <button type="button" class="file-picker-clear" onclick="_fpClear('radar-md-file')" title="Quitar archivo">✕</button>
+      <!-- Flujo B: desde archivo .md -->
+      <div class="card">
+        <div class="section-label">Radar desde archivo (.md)</div>
+        <p class="card-desc">Sube un Markdown con las transcripciones ya compiladas. Funciona con o sin cliente en la base.</p>
+        <div class="form-field" style="margin-bottom:12px;">
+          <label>Archivo .md *</label>
+          <div class="file-picker">
+            <input type="file" id="radar-md-file" accept=".md,text/markdown" onchange="_fpUpdate(this)">
+            <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-md-file')"><i class="ti ti-paperclip"></i> Adjuntar .md</button>
+            <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
+            <button type="button" class="file-picker-clear" onclick="_fpClear('radar-md-file')" title="Quitar archivo">✕</button>
+          </div>
         </div>
-      </div>
-      <div class="form-grid-2">
-        <div class="form-field">
-          <label>Cliente (opcional)</label>
-          <select id="radar-upload-client"></select>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label>Cliente (opcional)</label>
+            <select id="radar-upload-client"></select>
+          </div>
+          <div class="form-field">
+            <label>Entrega</label>
+            <select id="radar-deliver">
+              <option value="download">Descargar</option>
+              <option value="drive">Subir a Drive</option>
+              <option value="both">Ambas</option>
+            </select>
+          </div>
         </div>
-        <div class="form-field">
-          <label>Entrega</label>
-          <select id="radar-deliver">
-            <option value="download">Descargar</option>
-            <option value="drive">Subir a Drive</option>
-            <option value="both">Ambas</option>
-          </select>
+        <!-- Los tres overrides van plegados: solo hacen falta cuando el archivo no
+             trae frontmatter o hay que corregirlo. -->
+        <details class="form-field" style="margin-top:16px;">
+          <summary style="cursor:pointer;font-size:10px;font-weight:500;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);">Opciones de reemplazo</summary>
+          <div class="form-grid-2" style="margin-top:14px;">
+            <div class="form-field"><label>Nombre del cliente</label><input id="radar-ov-name" class="form-control" placeholder="Si no viene en el archivo"></div>
+            <div class="form-field"><label>Periodo</label><input id="radar-ov-period" class="form-control" placeholder="Ej. Junio 2026"></div>
+          </div>
+          <div class="form-field" style="margin-top:12px;">
+            <label>Contexto del negocio</label>
+            <textarea id="radar-ov-contexto" class="form-control" rows="3" placeholder="Giro, tipo de llamada y objetivo. Si no lo pones, se toma del archivo o de un default."></textarea>
+          </div>
+        </details>
+        <div class="form-field" style="margin-top:16px;">
+          <label>Sidecar del periodo anterior (.json, opcional)</label>
+          <div class="file-picker">
+            <input type="file" id="radar-prev-sidecar" accept=".json,application/json" onchange="_fpUpdate(this)">
+            <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-prev-sidecar')"><i class="ti ti-history"></i> Adjuntar .json</button>
+            <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
+            <button type="button" class="file-picker-clear" onclick="_fpClear('radar-prev-sidecar')" title="Quitar archivo">✕</button>
+          </div>
+          <div class="form-hint" style="margin-top:6px;">Adjúntalo para habilitar el comparativo vs. el periodo anterior.</div>
         </div>
+        <button class="btn-primary" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:18px;"><i class="ti ti-file-analytics"></i> Generar desde archivo</button>
+        <div id="radar-upload-status" class="radar-status">Sube un archivo markdown para comenzar el análisis.</div>
       </div>
-      <div class="form-grid-2" style="margin-top:12px;">
-        <div class="form-field"><label>Nombre del cliente (override)</label><input id="radar-ov-name" class="form-control" placeholder="Si no viene en el archivo"></div>
-        <div class="form-field"><label>Periodo (override)</label><input id="radar-ov-period" class="form-control" placeholder="Ej. Junio 2026"></div>
-      </div>
-      <div class="form-field" style="margin-top:12px;">
-        <label>Contexto del negocio (override)</label>
-        <textarea id="radar-ov-contexto" class="form-control" rows="3" placeholder="Giro, tipo de llamada y objetivo. Si no lo pones, se toma del archivo o de un default."></textarea>
-      </div>
-      <div class="form-field" style="margin-top:12px;">
-        <label>Sidecar del periodo anterior (.json, opcional)</label>
-        <div class="file-picker">
-          <input type="file" id="radar-prev-sidecar" accept=".json,application/json" onchange="_fpUpdate(this)">
-          <button type="button" class="file-picker-btn" onclick="_fpOpen('radar-prev-sidecar')"><i class="ti ti-paperclip"></i> Adjuntar .json</button>
-          <span class="file-picker-name" data-empty="Ningún archivo seleccionado">Ningún archivo seleccionado</span>
-          <button type="button" class="file-picker-clear" onclick="_fpClear('radar-prev-sidecar')" title="Quitar archivo">✕</button>
-        </div>
-        <div class="form-hint" style="margin-top:6px;">Adjúntalo para habilitar el comparativo vs. el periodo anterior.</div>
-      </div>
-      <button class="btn-sm btn-sm-green" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:14px;">Generar desde archivo</button>
-      <div id="radar-upload-status" style="margin-top:12px;"></div>
     </div>
   </div>
 </main>
@@ -3049,6 +3076,30 @@
   // ── Radar de Objeciones ────────────────────────────────────────────────────
   const RADAR_MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+  const RADAR_IDLE = 'Listo para analizar.';
+  // '' = mes completo · 'Q1' | 'Q2' = quincena de ese mes.
+  let _radarHalf = '';
+
+  function setRadarHalf(h) {
+    _radarHalf = h;
+    document.getElementById('radar-half-full').classList.toggle('active', h === '');
+    document.getElementById('radar-half-q1').classList.toggle('active',   h === 'Q1');
+    document.getElementById('radar-half-q2').classList.toggle('active',   h === 'Q2');
+    onRadarPeriodChange();
+  }
+
+  // Etiqueta legible del periodo elegido, para el modal y el nombre del PDF.
+  function _radarPeriodLabel() {
+    const mes = document.getElementById('radar-month-select').selectedOptions[0]?.textContent || '';
+    if (!_radarHalf) return mes;
+    return `${_radarHalf === 'Q1' ? '1ª' : '2ª'} quincena · ${mes}`;
+  }
+
+  // Cambiar de periodo invalida el resultado anterior: se limpia el estado.
+  function onRadarPeriodChange() {
+    document.getElementById('radar-client-status').textContent = RADAR_IDLE;
+  }
+
   let _radarClients = [];
   async function populateRadarSelectors() {
     let clients = [];
@@ -3072,6 +3123,9 @@
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         mSel.appendChild(new Option(`${RADAR_MONTHS_ES[d.getMonth()]} ${d.getFullYear()}`, key));
       }
+      // Arranca en el mes anterior: el actual todavía está a medias y no es el
+      // periodo que se reporta.
+      mSel.selectedIndex = 1;
     }
     onRadarClientChange();   // el selector arranca con el primer cliente ya elegido
   }
@@ -3081,14 +3135,18 @@
     const wrap    = document.getElementById('radar-drive-wrap');
     const missing = document.getElementById('radar-drive-missing');
     const client  = _radarClients.find(c => c.id === document.getElementById('radar-client-select').value);
-    document.getElementById('radar-client-status').innerHTML = '';
+    document.getElementById('radar-client-status').textContent = RADAR_IDLE;
+    // El umbral de duración es por cliente: se muestra el suyo, no un 200 fijo.
+    const minDur = (client && client.radar_min_duration_seconds) || 200;
+    document.getElementById('radar-source-note').textContent =
+      `Analiza las llamadas de la hoja del cliente de más de ${minDur} s, y solo las de sus asesores registrados.`;
     if (client && client.radar_folder_id) {
       document.getElementById('radar-drive-link').href = `https://drive.google.com/drive/folders/${client.radar_folder_id}`;
       document.getElementById('radar-drive-client').textContent = client.name;
       wrap.style.display = 'block'; missing.style.display = 'none';
     } else {
       wrap.style.display = 'none';
-      missing.style.display = client ? 'block' : 'none';   // sin cliente no hay nada que pedir
+      missing.style.display = client ? 'flex' : 'none';   // sin cliente no hay nada que pedir
     }
   }
 
@@ -3128,8 +3186,7 @@
 
     status.innerHTML = '';
     document.getElementById('rconf-client').textContent = cSel.selectedOptions[0]?.textContent || '—';
-    document.getElementById('rconf-period').textContent =
-      document.getElementById('radar-month-select').selectedOptions[0]?.textContent || month;
+    document.getElementById('rconf-period').textContent = _radarPeriodLabel() || month;
     document.getElementById('rconf-advisors').textContent = 'Verificando…';
     setRadarBadge('rconf-prev-badge', 'neutral', '⏳', 'Verificando el Radar del periodo anterior…');
     setRadarBadge('rconf-folder-badge', 'hidden');
@@ -3141,7 +3198,8 @@
 
     const seq = ++_radarPreflightSeq;
     try {
-      const r = await fetch(`${REPORT_API}/radar-preflight?client_id=${encodeURIComponent(clientId)}&month=${encodeURIComponent(month)}`);
+      const r = await fetch(`${REPORT_API}/radar-preflight?client_id=${encodeURIComponent(clientId)}&month=${encodeURIComponent(month)}`
+        + (_radarHalf ? `&half=${_radarHalf}` : ''));
       if (seq !== _radarPreflightSeq) return;
       const data = await r.json().catch(() => null);
       if (seq !== _radarPreflightSeq) return;
@@ -3198,12 +3256,13 @@
     try {
       const r = await fetch(`${REPORT_API}/radar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, month }),
+        body: JSON.stringify({ client_id: clientId, month, ...(_radarHalf && { half: _radarHalf }) }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       const clientName = document.getElementById('radar-client-select').selectedOptions[0]?.textContent || 'cliente';
-      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(clientName)}_${month}.pdf`, 'application/pdf');
+      const periodKey  = month + (_radarHalf ? `-${_radarHalf}` : '');
+      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(clientName)}_${periodKey}.pdf`, 'application/pdf');
       status.innerHTML = '<span style="color:var(--success);font-size:12px;">✓ Radar generado y descargado.'
         + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : '') + '</span>';
     } catch (e) {

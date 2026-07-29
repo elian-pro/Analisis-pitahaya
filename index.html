@@ -316,6 +316,8 @@
     .drive-chip.show{display:inline-flex;}
     .drive-chip{margin-bottom:4px;}
     .chip-k{font-size:9px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint);flex-shrink:0;}
+    .drive-chip.loading .drive-chip-x{display:none;}
+    .drive-chip.loading::after{content:'';width:10px;height:10px;border:1.5px solid var(--border2);border-top-color:var(--muted);border-radius:50%;animation:spin .7s linear infinite;}
     .drive-chip-x{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;margin-left:auto;}
     .drive-chip-x:hover{color:var(--fg);}
     /* Toggle del Radar */
@@ -3270,7 +3272,7 @@
               (c.spreadsheet_id
                 ? `<a href="https://docs.google.com/spreadsheets/d/${_esc(c.spreadsheet_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Hoja de cálculo ↗</a>`
                 : `<span>Sin hoja</span>`) +
-              (c.folder_id ? `<span>·</span><a href="https://drive.google.com/drive/folders/${_esc(c.folder_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Carpeta en Drive ↗</a>` : '') +
+              ((c.parent_folder_id || c.folder_id) ? `<span>·</span><a href="https://drive.google.com/drive/folders/${_esc(c.parent_folder_id || c.folder_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Carpeta en Drive ↗</a>` : '') +
             `</div>` +
           `</div>` +
           `<div class="client-row-actions">` +
@@ -3304,6 +3306,8 @@
     document.getElementById('cf-create-radar').checked   = true;
     document.getElementById('cf-folder-name-chip').classList.remove('show');
     document.getElementById('cf-radar-name-chip').classList.remove('show');
+    document.getElementById('cf-folder-name-text').textContent = '';
+    document.getElementById('cf-radar-name-text').textContent  = '';
     document.getElementById('cf-sheet-chip').classList.remove('show');
     document.getElementById('cf-spreadsheet-row').style.display = '';
     document.getElementById('cf-sheet-hint').style.display = '';
@@ -3368,6 +3372,9 @@
         document.getElementById('cf-create-radar').checked   = !c.radar_folder_id;
         // Ubicación guardada: se muestra como chip (no conservamos la ruta legible)
         if (c.parent_folder_id) _dpApplyLocation('', c.parent_folder_id);
+        // Chips en "cargando" para no enseñar el ID crudo mientras Drive responde
+        if (c.folder_id)       _chipLoading('cf-folder-name-chip', true);
+        if (c.radar_folder_id) _chipLoading('cf-radar-name-chip', true);
         _wizFolderHint();
         wizGo(1);
         // En segundo plano: no bloquean abrir el modal
@@ -3845,8 +3852,17 @@
     } catch { return {}; }
   }
 
+  // Chip a la espera del nombre: tapa el campo con el ID crudo y gira. Si Drive
+  // no responde se apaga y vuelve a verse el campo, que es el comportamiento viejo.
+  function _chipLoading(chipId, on) {
+    const chip = document.getElementById(chipId);
+    chip.classList.toggle('loading', on);
+    chip.classList.toggle('show', on);
+  }
+
   function _showFolderName(name) {
     document.getElementById('cf-folder-name-text').textContent = name;
+    document.getElementById('cf-folder-name-chip').classList.remove('loading');
     document.getElementById('cf-folder-name-chip').classList.add('show');
     _wizFolderHint();
   }
@@ -3886,6 +3902,7 @@
 
   function _showRadarFolderName(name) {
     document.getElementById('cf-radar-name-text').textContent = name;
+    document.getElementById('cf-radar-name-chip').classList.remove('loading');
     document.getElementById('cf-radar-name-chip').classList.add('show');
     _wizFolderHint();
   }
@@ -3900,7 +3917,10 @@
   // responde, el formulario sigue funcionando con los IDs.
   async function _fillFolderNames(c) {
     const info = await _resolveFolderNames([c.folder_id, c.parent_folder_id, c.radar_folder_id]);
-    if (c.folder_id && info[c.folder_id]) _showFolderName(info[c.folder_id].name);
+    if (c.folder_id) {
+      if (info[c.folder_id]) _showFolderName(info[c.folder_id].name);
+      else _chipLoading('cf-folder-name-chip', false);
+    }
     if (c.parent_folder_id && info[c.parent_folder_id]) {
       const { name, path } = info[c.parent_folder_id];
       document.getElementById('cf-drive-chip-path').textContent = path ? `${path} / ${name}` : name;
@@ -3911,8 +3931,9 @@
       const a = info[c.folder_id];
       _dpApplyLocation(a.path, a.parentId);
     }
-    if (c.radar_folder_id && info[c.radar_folder_id]) {
-      _showRadarFolderName(info[c.radar_folder_id].name);
+    if (c.radar_folder_id) {
+      if (info[c.radar_folder_id]) _showRadarFolderName(info[c.radar_folder_id].name);
+      else _chipLoading('cf-radar-name-chip', false);
     }
     _wizFolderHint();
     if (_wizStep === 3) _wizSummary();

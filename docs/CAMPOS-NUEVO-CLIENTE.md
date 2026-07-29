@@ -59,6 +59,25 @@ en vez de duplicarlas.
 Si el cliente ya tiene su carpeta creada de antes, también puedes pegar el link
 directamente en el campo de texto y la app detecta el ID sola.
 
+#### Soltar una carpeta y vincular otra
+
+La **✕** de cada chip suelta esa carpeta y deja a la vista el campo para pegar
+el link de otra. Desde ahí tienes dos salidas:
+
+- **Pegar el link** de una carpeta que ya existe, y guardar.
+- **Dejarlo vacío** y marcar esa carpeta en *Opciones avanzadas → Qué carpetas
+  crear*, para que la app cree una nueva en la ubicación elegida.
+
+La ✕ del chip **Se crean en** hace lo mismo con la carpeta madre, por si hay que
+mudar al cliente entero de sitio.
+
+> Esto es lo que hay que hacer cuando una carpeta acaba en la papelera de Drive.
+> El cliente seguiría apuntando a ella y los reportes nuevos se crearían dentro
+> de la papelera, sin ningún aviso. Si vuelves a crear las carpetas desde cero,
+> acuérdate de mover a las nuevas los archivos que rescates, incluida la
+> subcarpeta `_Sidecars`: sin ella, el siguiente reporte pierde la comparativa
+> contra el periodo anterior y sale como línea base.
+
 > Las carpetas se crean con la cuenta de Google central (la del `oauth:setup`).
 > Si en el selector no aparece ninguna unidad, esa cuenta no es miembro de la
 > Unidad Compartida — es permiso, no un fallo de la app.

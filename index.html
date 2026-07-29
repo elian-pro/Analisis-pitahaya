@@ -4045,10 +4045,13 @@
     const payload = {
       name,
       folder_id:               folderId,
-      parent_folder_id:        document.getElementById('cf-parent-folder-id').value || undefined,
+      // Los IDs de carpeta viajan siempre, vacíos incluidos: el update fusiona
+      // con lo guardado, así que un campo omitido conserva el valor anterior y
+      // no habría forma de soltar una carpeta (p. ej. si acabó en la papelera).
+      parent_folder_id:        document.getElementById('cf-parent-folder-id').value,
       create_reports_folder:   _wizFolderChoice().reports,
       create_radar_folder:     _wizFolderChoice().radar,
-      sidecar_folder_id:       sidecarRaw ? _extractDriveFolderId(sidecarRaw) : undefined,
+      sidecar_folder_id:       sidecarRaw ? _extractDriveFolderId(sidecarRaw) : '',
       spreadsheet_id:          spreadsheetId,
       data_sheet_name:         sheetName,
       col_fecha:               document.getElementById('cf-col-fecha').value.trim(),
@@ -4065,9 +4068,11 @@
     };
 
     // La carpeta de Radar se gestiona en el paso 1, junto a la de análisis, así
-    // que viaja siempre: no depende de que el Radar esté activado.
+    // que viaja siempre: no depende de que el Radar esté activado. Y viaja
+    // TAMBIÉN vacía, que es la única forma de desvincularla: el update fusiona
+    // con lo guardado, así que omitir el campo conserva la carpeta anterior.
     const _radarFolder = document.getElementById('cf-radar-folder-id').value.trim();
-    if (_radarFolder) payload.radar_folder_id = _extractDriveFolderId(_radarFolder);
+    payload.radar_folder_id = _radarFolder ? _extractDriveFolderId(_radarFolder) : '';
 
     // ── Ajustes del Radar: solo si el toggle está encendido ──────────────────
     if (document.getElementById('cf-radar-on').checked) {

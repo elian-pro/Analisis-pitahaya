@@ -1,4 +1,4 @@
-import type { ClientConfig } from '../clients/manager';
+import { clientFileLabel, type ClientConfig } from '../clients/manager';
 import { listAdvisors } from '../advisors/store';
 import { rosterMatcher } from '../advisors/match';
 import { getCallData, type SheetColumns } from '../google/sheets';
@@ -152,7 +152,7 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
   // el PDF de la 1ª quincena no pisa al de la 2ª.
   const driveUrl = await uploadPdfNamed(
     client.radar_folder_id,
-    radarFilename(client.name, period.periodLabel),
+    radarFilename(clientFileLabel(client), period.periodLabel),
     result.pdfBuffer,
   );
   await uploadRadarSidecar(sidecarFolder, period.periodKey, result.sidecarJson);

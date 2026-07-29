@@ -1,5 +1,5 @@
 import { getJob, updateJob, type Job } from './store';
-import { getClient } from '../clients/manager';
+import { getClient, clientFileLabel } from '../clients/manager';
 
 class CancelledError extends Error {
   constructor() { super('cancelled'); this.name = 'CancelledError'; }
@@ -210,7 +210,7 @@ export async function runJob(job: Job): Promise<void> {
     console.log(`[runner] Step 7: uploading combined PDF to Drive folder ${client.folder_id}...`);
     const combinedUrl = await uploadPdf(
       client.folder_id,
-      client.name,
+      clientFileLabel(client),
       job.month,
       mergedBuffer,
       job.period_type === 'weekly' ? job.date_from : undefined,

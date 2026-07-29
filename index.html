@@ -883,6 +883,11 @@
         <details class="form-group" style="margin-top:4px;">
           <summary style="cursor:pointer; font-size:12px; color:var(--muted);">Opciones avanzadas</summary>
           <div class="form-group" style="margin-top:14px;">
+            <label class="form-label">Nombre corto (carpetas y archivos)</label>
+            <input class="form-control" id="cf-short-name" placeholder="Vacío = el nombre completo" oninput="_wizOnNameInput()">
+            <div class="form-hint" id="cf-short-name-hint"></div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
             <label class="form-label">Qué carpetas crear en esa ubicación</label>
             <label class="wiz-check"><input type="checkbox" id="cf-create-reports" checked onchange="_wizOnFolderChoice()">
               <span id="cf-create-reports-label">Cliente | Analisis de llamadas IA</span></label>
@@ -3355,7 +3360,7 @@
     _clearClientErrors();
     document.getElementById('client-modal-title').textContent = id ? 'Editar cliente' : 'Nuevo cliente';
 
-    const fields = ['cf-id','cf-name','cf-folder-id','cf-parent-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
+    const fields = ['cf-id','cf-name','cf-short-name','cf-folder-id','cf-parent-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
       'cf-prompt-individual','cf-prompt-general',
@@ -3376,6 +3381,7 @@
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
     _dpApplyLocation('', '');
+    _wizOnNameInput();
     populateColumnOptions([]);
     wizGo(1);
 
@@ -3403,6 +3409,7 @@
         const c = await r.json();
         document.getElementById('cf-id').value               = c.id || '';
         document.getElementById('cf-name').value             = c.name || '';
+        document.getElementById('cf-short-name').value       = c.short_name || '';
         document.getElementById('cf-folder-id').value        = c.folder_id || '';
         document.getElementById('cf-parent-folder-id').value = c.parent_folder_id || '';
         document.getElementById('cf-sidecar-folder-id').value= c.sidecar_folder_id || '';
@@ -3434,6 +3441,7 @@
         document.getElementById('cf-create-radar').checked   = !c.radar_folder_id;
         // Ubicación guardada: se muestra como chip (no conservamos la ruta legible)
         if (c.parent_folder_id) _dpApplyLocation('', c.parent_folder_id);
+        _wizOnNameInput();
         // Chips en "cargando" para no enseñar el ID crudo mientras Drive responde
         if (c.folder_id)       _chipLoading('cf-folder-name-chip', true);
         if (c.radar_folder_id) _chipLoading('cf-radar-name-chip', true);
@@ -3708,7 +3716,20 @@
     if (_wizStep === 3) _wizSummary();
   }
 
-  function _wizOnNameInput() { _wizFolderHint(); }
+  // El nombre con el que el cliente aparece en Drive: el corto si lo hay, si no
+  // el completo. Espeja clientFileLabel() del backend.
+  function _clientFileLabel() {
+    return document.getElementById('cf-short-name').value.trim()
+        || document.getElementById('cf-name').value.trim();
+  }
+
+  function _wizOnNameInput() {
+    const label = _clientFileLabel() || 'Cliente';
+    document.getElementById('cf-short-name-hint').textContent =
+      `Así se llamarán sus carpetas y PDFs: “${label} | Analisis de Llamadas | Junio 2026”. `
+      + 'Dentro del reporte se sigue viendo el nombre completo.';
+    _wizFolderHint();
+  }
 
   // Qué carpetas va a crear la app: las casillas de "Opciones avanzadas" mandan.
   // Un cliente que ya tiene la de análisis desmarca esa y recibe solo el Radar.
@@ -3726,7 +3747,7 @@
 
   // Etiquetas de las casillas, visibilidad del campo de link y texto de ayuda.
   function _wizFolderHint() {
-    const nombre = document.getElementById('cf-name').value.trim() || 'Cliente';
+    const nombre = _clientFileLabel() || 'Cliente';
     const path   = document.getElementById('cf-drive-chip-path').textContent;
     const hint   = document.getElementById('cf-folder-location-hint');
     const parent = document.getElementById('cf-parent-folder-id').value;
@@ -4064,6 +4085,7 @@
     const rawPhrases    = document.getElementById('cf-excluded-phrases').value;
     const payload = {
       name,
+      short_name:              document.getElementById('cf-short-name').value.trim(),
       folder_id:               folderId,
       // Los IDs de carpeta viajan siempre, vacíos incluidos: el update fusiona
       // con lo guardado, así que un campo omitido conserva el valor anterior y

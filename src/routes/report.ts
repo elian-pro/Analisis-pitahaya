@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
-import { getClient } from '../clients/manager';
+import { getClient, clientFileLabel } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { findSidecarFolder, findPreviousPeriodKey, findRadarSidecar, monthLabel, previousMonth, uploadPdfNamed, radarFilename } from '../google/drive';
@@ -217,7 +217,8 @@ router.post('/radar-upload', (req: Request, res: Response): void => {
       if (wantDrive) {
         if (targetFolder) {
           driveUrl = await uploadPdfNamed(targetFolder,
-            radarFilename(meta.client_name, meta.period_label), result.pdfBuffer);
+            radarFilename(client ? clientFileLabel(client) : meta.client_name, meta.period_label),
+            result.pdfBuffer);
         } else {
           parsed.warnings.push('No hay carpeta de Drive (ni del cliente ni de staging): el PDF solo se entrega como descarga.');
         }

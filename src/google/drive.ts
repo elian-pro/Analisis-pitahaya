@@ -255,6 +255,59 @@ export async function uploadPdfNamed(
   return res.data.webViewLink;
 }
 
+// ── Renombrado al cambiar el nombre corto del cliente ─────────────────────────
+// Todo lo que la app crea empieza por el nombre del cliente: la carpeta
+// ("Cliente | Analisis de llamadas IA") y cada PDF ("Cliente | Analisis de
+// Llamadas | Junio 2026"). Cambiar ese nombre renombra el prefijo de lo que ya
+// existe, para que la carpeta no acabe con dos convenciones mezcladas.
+//
+// Solo se toca lo que empieza por el nombre anterior: un archivo renombrado a
+// mano no encaja y se queda como está. Nada de esto afecta a dónde se entregan
+// los reportes, que va por ID de carpeta, así que un fallo aquí es cosmético.
+export function withNewPrefix(current: string, from: string, to: string): string | null {
+  return current.startsWith(from) ? to + current.slice(from.length) : null;
+}
+
+export async function renameClientArtifacts(
+  folderIds: string[],
+  from:      string,
+  to:        string,
+): Promise<number> {
+  const drive = getDrive();
+  let renamed = 0;
+
+  const rename = async (fileId: string, current: string): Promise<void> => {
+    const next = withNewPrefix(current, from, to);
+    if (!next || next === current) return;
+    await drive.files.update({ fileId, requestBody: { name: next }, supportsAllDrives: true });
+    console.log(`[drive] Renombrado: "${current}" -> "${next}"`);
+    renamed++;
+  };
+
+  for (const folderId of folderIds.filter(Boolean)) {
+    try {
+      const meta = await drive.files.get({ fileId: folderId, fields: 'id,name', supportsAllDrives: true });
+      if (meta.data.name) await rename(folderId, meta.data.name);
+
+      let pageToken: string | undefined;
+      do {
+        const list = await drive.files.list({
+          q: [`'${folderId}' in parents`, `mimeType = 'application/pdf'`, `trashed = false`].join(' and '),
+          fields: 'nextPageToken, files(id,name)', pageSize: 200, pageToken,
+          supportsAllDrives: true, includeItemsFromAllDrives: true,
+        });
+        for (const f of list.data.files ?? []) {
+          if (f.id && f.name) await rename(f.id, f.name);
+        }
+        pageToken = list.data.nextPageToken ?? undefined;
+      } while (pageToken);
+    } catch (err) {
+      console.warn(`[drive] No se pudo renombrar el contenido de ${folderId}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return renamed;
+}
+
 // ── Previous report lookup ────────────────────────────────────────────────────
 
 const MIME_GDOC = 'application/vnd.google-apps.document';

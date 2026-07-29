@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { loadClients, getClient, createClient, updateClient, deleteClient } from '../clients/manager';
+import { loadClients, getClient, createClient, updateClient, deleteClient, clientFileLabel } from '../clients/manager';
 
 const router = Router();
 
 const ClientBodySchema = z.object({
   name:                    z.string().min(1),
+  // Nombre corto para Drive. Vacío => se usa `name`.
+  short_name:              z.string().optional(),
   // Vacío es válido: la app la crea dentro de parent_folder_id (ver manager.ts).
   folder_id:               z.string().default(''),
   parent_folder_id:        z.string().optional(),
@@ -88,10 +90,29 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   // crea nada. Editar un cliente no debe crear carpetas por sorpresa.
   const { create_reports_folder, create_radar_folder, ...patch } = parsed.data;
   try {
-    res.json(await updateClient(req.params.id, patch, {
+    const before  = await getClient(req.params.id);
+    const updated = await updateClient(req.params.id, patch, {
       reports: create_reports_folder ?? false,
       radar:   create_radar_folder   ?? false,
-    }));
+    });
+    res.json(updated);
+
+    // Cambió el nombre con el que este cliente aparece en Drive: se arrastra a
+    // sus carpetas y a los PDFs ya generados. Va DESPUÉS de responder y sin
+    // await: un cliente con historial puede tener cientos de archivos y el
+    // formulario no debe quedarse esperando. Los reportes se entregan por ID de
+    // carpeta, así que si esto falla el daño es solo cosmético.
+    const antes  = before ? clientFileLabel(before) : '';
+    const ahora  = clientFileLabel(updated);
+    if (antes && ahora && antes !== ahora) {
+      void (async () => {
+        const { renameClientArtifacts } = await import('../google/drive');
+        const n = await renameClientArtifacts(
+          [updated.folder_id, updated.radar_folder_id ?? ''], antes, ahora,
+        );
+        console.log(`[clients] '${updated.id}': ${n} elemento(s) renombrados de "${antes}" a "${ahora}".`);
+      })().catch(e => console.warn('[clients] Renombrado en Drive fallido:', (e as Error).message));
+    }
   } catch (e) {
     res.status(404).json({ error: (e as Error).message });
   }

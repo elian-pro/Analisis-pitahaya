@@ -15,6 +15,10 @@ import {
 export interface ClientConfig {
   id:                      string;
   name:                    string;
+  // Versión corta del nombre para carpetas y archivos de Drive. Los nombres
+  // comerciales largos producen archivos incómodos; el nombre completo se sigue
+  // usando en la app y dentro del PDF. Vacío => se usa `name`.
+  short_name?:             string;
   folder_id:               string;
   // Ubicación elegida en el selector de Drive: la carpeta (normalmente dentro de
   // una Unidad Compartida) donde la app crea el árbol del cliente al darlo de
@@ -72,6 +76,12 @@ function normalizeIds<T extends Partial<ClientConfig>>(data: T): T {
 
 // Nomenclatura de las carpetas de Drive. Ambas llevan el nombre del cliente
 // porque viven lado a lado dentro de la ubicación elegida.
+// El nombre con el que este cliente aparece en Drive: carpetas y nombres de
+// archivo. Un solo sitio del que tiran todos, para que no se desincronicen.
+export function clientFileLabel(client: { name?: string; short_name?: string }): string {
+  return (client.short_name || '').trim() || (client.name || '').trim();
+}
+
 export function reportsFolderName(clientName: string): string {
   return `${clientName} | Analisis de llamadas IA`;
 }
@@ -99,13 +109,14 @@ export async function ensureClientFolders<T extends Partial<ClientConfig>>(
     async (p, n) => (await import('../google/drive')).ensureFolder(p, n),
 ): Promise<T> {
   const parent = data.parent_folder_id;
-  if (!parent || !data.name) return data;
+  const label  = clientFileLabel(data);
+  if (!parent || !label) return data;
   const out = { ...data };
   if (!out.folder_id && choice.reports !== false) {
-    out.folder_id = await mkdir(parent, reportsFolderName(data.name));
+    out.folder_id = await mkdir(parent, reportsFolderName(label));
   }
   if (!out.radar_folder_id && choice.radar !== false) {
-    out.radar_folder_id = await mkdir(parent, radarFolderName(data.name));
+    out.radar_folder_id = await mkdir(parent, radarFolderName(label));
   }
   return out;
 }

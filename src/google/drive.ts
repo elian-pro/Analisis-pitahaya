@@ -257,25 +257,34 @@ const MIME_GDOC = 'application/vnd.google-apps.document';
 const MIME_TEXT = 'text/plain';
 const MIME_JSON = 'application/json';
 
-// ── Sidecar del Radar de Objeciones: radar-YYYY-MM.json en la carpeta de Radar ─
-// Se guarda separado de los sidecars de asesores (prefijo distinto) para no
-// confundir a findPreviousReport. Habilita el comparativo mes contra mes.
+// ── Sidecar del Radar: _Sidecars/radar-YYYY-MM.json dentro de la carpeta Radar ─
+// Mismo esquema que los sidecars de asesores, para que la carpeta que ve el
+// cliente tenga solo PDFs. El nombre lleva prefijo propio para no confundir a
+// findPreviousReport. Habilita el comparativo periodo contra periodo.
+//
+// Los clientes anteriores a esta subcarpeta los tienen sueltos en la raíz: la
+// lectura mira los dos sitios y la escritura se los lleva a _Sidecars.
 function radarSidecarName(periodKey: string): string {
   return `radar-${periodKey}.json`;
 }
 
+async function filesNamed(folderId: string, name: string): Promise<Array<{ id: string; mimeType?: string }>> {
+  const list = await getDrive().files.list({
+    q: [`'${folderId}' in parents`, `name = '${name}'`, `trashed = false`].join(' and '),
+    fields: 'files(id,mimeType)', pageSize: 10,
+    supportsAllDrives: true, includeItemsFromAllDrives: true,
+  });
+  return (list.data.files ?? []).filter(f => f.id).map(f => ({ id: f.id!, mimeType: f.mimeType ?? undefined }));
+}
+
 export async function findRadarSidecar(folderId: string, periodKey: string): Promise<string | null> {
-  const drive = getDrive();
   const name = radarSidecarName(periodKey);
   try {
-    const list = await drive.files.list({
-      q: [`'${folderId}' in parents`, `name = '${name}'`, `trashed = false`].join(' and '),
-      fields: 'files(id,mimeType)', pageSize: 1,
-      supportsAllDrives: true, includeItemsFromAllDrives: true,
-    });
-    const f = list.data.files?.[0];
-    if (!f?.id) return null;
-    return await downloadText(f.id, f.mimeType || MIME_JSON);
+    const sub = await findSidecarFolder(folderId);
+    const hit = (sub ? (await filesNamed(sub, name))[0] : undefined)
+             ?? (await filesNamed(folderId, name))[0];   // legado: suelto en la raíz
+    if (!hit) return null;
+    return await downloadText(hit.id, hit.mimeType || MIME_JSON);
   } catch (err) {
     console.warn(`[drive] Could not read radar sidecar ${name}:`, err instanceof Error ? err.message : err);
     return null;
@@ -285,24 +294,43 @@ export async function findRadarSidecar(folderId: string, periodKey: string): Pro
 export async function uploadRadarSidecar(folderId: string, periodKey: string, json: string): Promise<void> {
   const drive = getDrive();
   const name = radarSidecarName(periodKey);
-  // Borra la versión previa del mismo mes para que re-generar no deje duplicados.
+  const target = await ensureSidecarFolder(folderId);
   try {
-    const existing = await drive.files.list({
-      q: [`'${folderId}' in parents`, `name = '${name}'`, `trashed = false`].join(' and '),
-      fields: 'files(id)', pageSize: 10,
-      supportsAllDrives: true, includeItemsFromAllDrives: true,
-    });
-    for (const f of existing.data.files ?? []) {
-      if (f.id) await drive.files.delete({ fileId: f.id, supportsAllDrives: true });
+    // Borra la versión previa del mismo periodo (en _Sidecars y en la raíz, por
+    // si venía de antes) para que re-generar no deje duplicados.
+    for (const parent of [target, folderId]) {
+      for (const f of await filesNamed(parent, name)) {
+        await drive.files.delete({ fileId: f.id, supportsAllDrives: true });
+      }
     }
+    await moveLooseRadarSidecars(folderId, target);
   } catch (err) {
     console.warn(`[drive] Could not clean old radar sidecar ${name}:`, err instanceof Error ? err.message : err);
   }
   await drive.files.create({
-    requestBody: { name, parents: [folderId] },
+    requestBody: { name, parents: [target] },
     media: { mimeType: MIME_JSON, body: Readable.from(Buffer.from(json, 'utf-8')) },
     supportsAllDrives: true,
   });
+}
+
+// Arrastra a _Sidecars los radar-*.json que quedaron sueltos en la carpeta del
+// Radar. Corre al generar, así cada cliente se limpia solo en su siguiente
+// reporte y no hace falta migrar nada a mano.
+async function moveLooseRadarSidecars(folderId: string, sidecarFolderId: string): Promise<void> {
+  const drive = getDrive();
+  const list = await drive.files.list({
+    q: [`'${folderId}' in parents`, `mimeType = '${MIME_JSON}'`, `trashed = false`].join(' and '),
+    fields: 'files(id,name)', pageSize: 200,
+    supportsAllDrives: true, includeItemsFromAllDrives: true,
+  });
+  for (const f of list.data.files ?? []) {
+    if (!f.id || !/^radar-.+\.json$/.test(f.name ?? '')) continue;
+    await drive.files.update({
+      fileId: f.id, addParents: sidecarFolderId, removeParents: folderId, supportsAllDrives: true,
+    });
+    console.log(`[drive] Sidecar del Radar movido a _Sidecars: ${f.name}`);
+  }
 }
 
 async function downloadText(fileId: string, mimeType: string): Promise<string> {

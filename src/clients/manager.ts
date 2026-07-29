@@ -86,8 +86,8 @@ export interface FolderChoice { reports?: boolean; radar?: boolean }
 
 // Crea las carpetas del cliente en Drive cuando se eligió una ubicación en el
 // selector. Cada carpeta se evalúa por separado: tener folder_id no impide
-// crear la de Radar. `_Sidecars` no va aquí: se crea sola dentro de la carpeta
-// de reportes en el primer reporte.
+// crear la de Radar. `_Sidecars` no va aquí: cada carpeta crea la suya sola al
+// generar su primer reporte.
 // Idempotente y sin costo cuando la carpeta ya está (no llama a Drive).
 // `mkdir` es parámetro solo para poder probar la decisión sin llamar a Drive.
 export async function ensureClientFolders<T extends Partial<ClientConfig>>(

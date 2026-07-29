@@ -40,7 +40,7 @@ Cada ejecución genera dos archivos:
 | Archivo | Qué es | Dónde va |
 |---|---|---|
 | **PDF del reporte** | El entregable para el cliente | Carpeta de Radar en Drive (`radar_folder_id`) + descarga en el navegador |
-| **`radar-YYYY-MM.json`** (sidecar) | Memoria del periodo: taxonomía, resumen y recomendaciones | `radar_sidecar_folder_id` si existe; si no, la misma carpeta de Radar |
+| **`radar-YYYY-MM.json`** (sidecar) | Memoria del periodo: taxonomía, resumen y recomendaciones | Subcarpeta **`_Sidecars`** dentro de la carpeta de Radar, igual que en Análisis de Llamadas |
 
 ### Secciones del PDF
 
@@ -115,7 +115,7 @@ Lo que aporta cada pieza de la configuración del cliente:
 | `radar_transcripcion_max_chars` | Recorte por llamada (default **8000**) |
 | `prompt_radar` | System prompt; si está vacío se usa `DEFAULT_RADAR_PROMPT` |
 | `radar_folder_id` | Carpeta de entrega del PDF. **Obligatoria** en este flujo |
-| `radar_sidecar_folder_id` | Carpeta del sidecar; si falta, se usa la de Radar |
+| `radar_sidecar_folder_id` | Carpeta base del sidecar; si falta (lo normal, ya no se expone en el formulario) se usa la de Radar. El JSON acaba en su subcarpeta `_Sidecars` |
 
 Dos reglas del filtrado que importan para la UI:
 
@@ -276,6 +276,20 @@ defensas** para que ese slug no se mueva:
    (Jaccard sobre palabras de contenido + Levenshtein, umbral **0.62**) cuando
    la IA inventó un slug nuevo para una pregunta que ya existía, y lo re-mapea.
    Sin esto, el comparativo se llenaría de falsas "nuevas" y "desaparecidas".
+
+### Dónde vive el sidecar
+
+`_Sidecars`, dentro de la carpeta de Radar. La subcarpeta se crea sola al subir
+el primer sidecar (`ensureSidecarFolder`), no en el alta del cliente.
+
+Los clientes anteriores a esa subcarpeta tienen sus JSON sueltos en la raíz de
+la carpeta de Radar, así que:
+
+- **Lectura** (`findRadarSidecar`): busca primero en `_Sidecars` y, si no está,
+  en la raíz. Un cliente sin migrar nunca pierde su comparativo.
+- **Escritura** (`uploadRadarSidecar`): antes de subir, arrastra a `_Sidecars`
+  todos los `radar-*.json` que encuentre sueltos. Cada cliente se limpia solo
+  en su siguiente reporte; no hay que mover nada a mano.
 
 ### Estados posibles del reporte
 

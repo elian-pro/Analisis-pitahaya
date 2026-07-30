@@ -256,7 +256,7 @@
     .icon-btn{padding:7px;background:transparent;border:0.5px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;transition:all .15s;display:flex;align-items:center;}
     .icon-btn:hover{border-color:var(--border2);color:var(--fg);}
     .icon-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
-    .schedule-card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:border-color .15s;}
+    .schedule-card{--when-w:236px;position:relative;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:border-color .15s;}
     .schedule-card:hover{border-color:var(--border2);}
     .schedule-card.disabled{opacity:0.5;}
     /* Avatar del tipo de automatización: la forma del icono (barras / radar /
@@ -303,9 +303,12 @@
     .sched-name{font-size:14px;font-weight:500;}
     .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}
     .sched-kind{font-size:10px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-top:3px;}
-    /* Ancho mínimo para que el icono de calendario quede en la misma columna en
-       todas las tarjetas: la lista se lee de arriba abajo, no tarjeta por tarjeta. */
-    .sched-when-col{flex-shrink:0;min-width:212px;}
+    /* Columna de horario clavada al centro de la tarjeta, con ancho FIJO: la lista
+       se lee de arriba abajo, así que el calendario debe caer en la misma columna
+       en todas las filas, sin importar qué tan largo sea el nombre del cliente ni
+       si la fila lleva badge. Ancho fijo y no mínimo: centrada, un texto más largo
+       correría el borde izquierdo y volvería a desalinear. */
+    .sched-when-col{position:absolute;left:50%;transform:translateX(-50%);width:var(--when-w);}
     .sched-when{font-size:12.5px;color:var(--fg);display:flex;align-items:center;gap:7px;white-space:nowrap;}
     .sched-when i{font-size:14px;color:var(--muted);}
     .sched-next{font-size:10.5px;color:var(--muted);margin-top:3px;padding-left:21px;white-space:nowrap;}
@@ -315,13 +318,21 @@
       .sched-when,.sched-next{white-space:normal;}
       .schedule-card{flex-wrap:wrap;}
       .sched-badge-slot:empty{display:none;}   /* en móvil no sobra espacio que reservar */
+      /* En pantalla angosta no hay centro que respetar: la columna vuelve al flujo. */
+      .sched-when-col{position:static;transform:none;width:auto;}
+      .sched-main{max-width:none;}
     }
     .sched-badge{padding:3px 10px;border-radius:100px;font-size:10px;font-weight:500;letter-spacing:0.12em;background:color-mix(in srgb, var(--accent) 12%, var(--surface));color:var(--accent);border:0.5px solid color-mix(in srgb, var(--accent) 35%, transparent);white-space:nowrap;}
     .sched-badge.off{background:var(--surface2);color:var(--faint);border-color:var(--border);}
     /* Hueco de ancho fijo para el badge: se reserva aunque la automatización esté
        activa y no lo lleve. Si no, las tarjetas con badge empujan la columna de
        horario y las fechas dejan de alinearse entre filas. */
-    .sched-badge-slot{width:88px;flex-shrink:0;display:flex;justify-content:flex-end;}
+    .sched-badge-slot{width:88px;flex-shrink:0;display:flex;justify-content:flex-end;margin-left:auto;}
+    /* Se corta antes de donde empieza la columna de horario: la mitad de esa
+       columna, más los 72px que quedan a su izquierda (avatar, gaps y el padding
+       de la tarjeta). Sin este tope, un cliente de nombre largo se mete debajo. */
+    .sched-main{flex:1;min-width:0;max-width:calc(50% - var(--when-w)/2 - 72px);}
+    .sched-main .sched-name,.sched-main .sched-kind{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     /* ── Large form modal ── */
     .form-modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9997;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;}
     .form-modal-backdrop.show{display:flex !important;}
@@ -4515,7 +4526,7 @@
         card.innerHTML =
           runOverlay +
           `<div class="sched-icon"><i class="ti ti-${kind.icon}"></i><div class="sched-dot ${health}" title="${_esc(healthTitle)}"></div></div>` +
-          `<div style="flex:1;min-width:0;">` +
+          `<div class="sched-main">` +
             `<div class="sched-name">${_esc(clientName)}</div>` +
             `<div class="sched-kind">${kind.label}${alsoRadar}${chat}</div>` +
             errNote +

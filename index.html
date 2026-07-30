@@ -259,6 +259,11 @@
     .schedule-card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:border-color .15s;}
     .schedule-card:hover{border-color:var(--border2);}
     .schedule-card.disabled{opacity:0.5;}
+    /* Avatar del tipo de automatización: la forma del icono (barras / radar /
+       mensaje) es lo que distingue de un vistazo. La paleta es monocroma por
+       diseño, así que el color queda reservado a estado (verde/rojo), no a tipo. */
+    .sched-icon{width:36px;height:36px;flex-shrink:0;position:relative;border-radius:50%;background:var(--surface2);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--fg);}
+    .sched-icon .sched-dot{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;box-shadow:none !important;border:2px solid var(--surface);}
     .sched-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;transition:background .2s,box-shadow .2s;}
     .sched-dot.off{background:var(--faint);box-shadow:none;}
     /* Health indicator: subtle green when active & healthy, red when the last run failed. */
@@ -297,6 +302,19 @@
     }
     .sched-name{font-size:14px;font-weight:500;}
     .sched-desc{font-size:11px;color:var(--muted);margin-top:3px;}
+    .sched-kind{font-size:10px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-top:3px;}
+    /* Ancho mínimo para que el icono de calendario quede en la misma columna en
+       todas las tarjetas: la lista se lee de arriba abajo, no tarjeta por tarjeta. */
+    .sched-when-col{flex-shrink:0;min-width:212px;}
+    .sched-when{font-size:12.5px;color:var(--fg);display:flex;align-items:center;gap:7px;white-space:nowrap;}
+    .sched-when i{font-size:14px;color:var(--muted);}
+    .sched-next{font-size:10.5px;color:var(--muted);margin-top:3px;padding-left:21px;white-space:nowrap;}
+    .sched-next.warn{color:var(--danger);}
+    .schedule-card .client-row-actions{border-left:0.5px solid var(--border);padding-left:12px;}
+    @media (max-width:720px){
+      .sched-when,.sched-next{white-space:normal;}
+      .schedule-card{flex-wrap:wrap;}
+    }
     .sched-badge{padding:3px 10px;border-radius:100px;font-size:10px;font-weight:500;letter-spacing:0.12em;background:color-mix(in srgb, var(--accent) 12%, var(--surface));color:var(--accent);border:0.5px solid color-mix(in srgb, var(--accent) 35%, transparent);white-space:nowrap;}
     .sched-badge.off{background:var(--surface2);color:var(--faint);border-color:var(--border);}
     /* ── Large form modal ── */
@@ -1054,8 +1072,8 @@
       <div class="form-section">
         <div class="form-section-title">Configuración básica</div>
         <div class="form-group">
-          <label class="form-label">Nombre de la automatización *</label>
-          <input class="form-control" id="sf-name" placeholder="Ej. Reporte semanal Empresa XYZ">
+          <label class="form-label">Nombre de la automatización</label>
+          <input class="form-control" id="sf-name" placeholder="Opcional — se arma solo con el cliente y el tipo">
         </div>
         <div class="form-group">
           <label class="form-label">Cliente *</label>
@@ -4363,26 +4381,83 @@
   const SCHEDULES_API = '/api/schedules';
   const _DOW = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
-  function _describeSchedule(s) {
-    const freq = s.frequency === 'weekly'   ? `Cada ${_DOW[s.day_of_week ?? 1]}`
-               : s.frequency === 'once'     ? `Una vez el ${s.run_date || '—'}`
-               : s.frequency === 'daily'    ? 'Todos los días'
-               : s.frequency === 'biweekly' ? 'Quincenal (días 1 y 16)'
-               :                              `Día ${s.day_of_month ?? 1} de cada mes`;
-    const h = String(s.hour).padStart(2,'0');
-    const m = String(s.minute ?? 0).padStart(2,'0');
-    // "Último" es el último ÉXITO. Si el último intento es de otro día, se
-    // muestran los dos: esa diferencia es la señal de que algo se disparó y no
-    // llegó a entregar, que de otro modo solo se ve consultando la base.
-    const _run = s.last_run ? s.last_run.slice(0,10) : null;
-    const _try = s.last_attempt ? s.last_attempt.slice(0,10) : null;
-    let last = _run ? `Último: ${_run}` : 'Nunca ejecutado';
-    if (_try && _try !== _run) last += ` · Último intento: ${_try}`;
-    const kind  = s.notify_only ? ' · 💬 Mensaje'
-                : s.report_kind === 'radar' ? ' · 📡 Radar de Objeciones'
-                : ' · 📊 Análisis de Llamadas';
-    const chat  = s.chat_space_id ? ' · Chat ✓' : '';
-    return `${freq} a las ${h}:${m} · ${last}${kind}${chat}`;
+  // Qué genera la automatización. Los iconos son los mismos de las pestañas
+  // (chart-bar = Análisis, radar = Radar), para que la tarjeta y la navegación
+  // hablen el mismo idioma.
+  const _SCHED_KIND = {
+    message:  { icon:'message-2', label:'Mensaje de Chat' },
+    radar:    { icon:'radar',     label:'Radar de Objeciones' },
+    analisis: { icon:'chart-bar', label:'Análisis de Llamadas' },
+  };
+  const _schedKind = s => s.notify_only            ? _SCHED_KIND.message
+                        : s.report_kind === 'radar' ? _SCHED_KIND.radar
+                        :                             _SCHED_KIND.analisis;
+
+  function _freqLabel(s) {
+    const hm = `${String(s.hour).padStart(2,'0')}:${String(s.minute ?? 0).padStart(2,'0')}`;
+    switch (s.frequency) {
+      case 'daily':    return `Diaria · ${hm}`;
+      case 'weekly':   return `Semanal · ${_DOW[s.day_of_week ?? 1]} ${hm}`;
+      case 'biweekly': return `Quincenal · Días 1 y 16, ${hm}`;
+      case 'once':     return `Una vez · ${s.run_date || '—'}, ${hm}`;
+      default:         return `Mensual · Día ${s.day_of_month ?? 1}, ${hm}`;
+    }
+  }
+
+  // Próxima ejecución, con las mismas reglas que isDue() en src/schedules/runner.ts:
+  // día que corresponde a la frecuencia, una sola corrida por día, y todo juzgado
+  // en la zona horaria de la automatización (no la del navegador). Devuelve
+  // YYYY-MM-DD, o null si no volverá a correr (pausada, o 'once' ya vencida).
+  function _nextRunDate(s) {
+    if (!s.enabled) return null;
+    const tz = s.timezone || 'America/Mexico_City';
+    let todayStr, nowMin, ranToday;
+    try {
+      const now = new Date();
+      todayStr = now.toLocaleDateString('sv-SE', { timeZone: tz });
+      const [hh, mm] = now.toLocaleTimeString('en-GB', { timeZone: tz, hour12: false }).split(':');
+      nowMin = +hh * 60 + +mm;
+      ranToday = !!s.last_attempt &&
+        new Date(s.last_attempt).toLocaleDateString('sv-SE', { timeZone: tz }) === todayStr;
+    } catch { return null; }
+    const schedMin = s.hour * 60 + (s.minute ?? 0);
+    const [Y, M, D] = todayStr.split('-').map(Number);
+    const d = new Date(Y, M - 1, D);
+    for (let i = 0; i < 400; i++, d.setDate(d.getDate() + 1)) {
+      const dom = d.getDate();
+      const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(dom).padStart(2,'0')}`;
+      const isRunDay = s.frequency === 'daily'    ? true
+                     : s.frequency === 'weekly'   ? d.getDay() === (s.day_of_week ?? 1)
+                     : s.frequency === 'biweekly' ? (dom === 1 || dom === 16)
+                     : s.frequency === 'once'     ? iso === s.run_date
+                     :                              dom === (s.day_of_month ?? 1);
+      if (!isRunDay) continue;
+      if (i === 0 && (ranToday || nowMin >= schedMin)) continue;  // hoy ya pasó su turno
+      return iso;
+    }
+    return null;
+  }
+
+  const _fmtDay = iso => {
+    const [Y, M, D] = iso.split('-').map(Number);
+    const d = new Date(Y, M - 1, D);
+    const txt = d.toLocaleDateString('es-MX', { weekday:'short', day:'numeric', month:'short' }).replace(' de ', ' ');
+    return Y === new Date().getFullYear() ? txt : `${txt} ${Y}`;
+  };
+
+  // Segunda línea de la columna de horario. Prioriza la señal de fallo silencioso:
+  // markAttempt() sella `last_attempt` al disparar y solo markRan() mueve `last_run`,
+  // así que un intento posterior al último éxito significa que algo se disparó y no
+  // entregó — con el proceso caído a media corrida ni siquiera queda `last_status`.
+  function _whenNote(s) {
+    const run = s.last_run     ? s.last_run.slice(0,10)     : null;
+    const att = s.last_attempt ? s.last_attempt.slice(0,10) : null;
+    if (att && att !== run && s.last_status !== 'error')
+      return { text: `Intento del ${_fmtDay(att)} sin entregar`, warn: true };
+    if (!s.enabled) return { text: run ? `Último: ${_fmtDay(run)}` : 'Nunca ejecutada', warn: false };
+    const next = _nextRunDate(s);
+    return next ? { text: `Próximo: ${_fmtDay(next)}`, warn: false }
+                : { text: 'Sin próxima ejecución', warn: false };
   }
 
   async function renderScheduleList() {
@@ -4406,9 +4481,13 @@
         card.id = 'sched-card-' + s.id;
         card.className = 'schedule-card' + (s.enabled ? '' : ' disabled') + (s.running ? ' running' : '');
         const clientName = cMap[s.client_id] || s.client_id;
-        const health = !s.enabled ? 'off' : (s.last_status === 'error' ? 'err' : 'ok');
+        const when = _whenNote(s);
+        // El punto no puede quedarse verde cuando la propia tarjeta avisa de un
+        // intento que no entregó: es el mismo hecho contado dos veces.
+        const health = !s.enabled ? 'off' : (s.last_status === 'error' || when.warn ? 'err' : 'ok');
         const healthTitle = !s.enabled ? 'Pausada'
           : s.last_status === 'error' ? `Error en la última ejecución: ${s.last_error || 'sin detalle'}`
+          : when.warn ? 'Se disparó y no llegó a entregar'
           : (s.last_run ? 'Activa · última ejecución correcta' : 'Activa · aún no se ejecuta');
         const errNote = (s.enabled && s.last_status === 'error')
           ? `<div class="sched-desc" style="color:var(--danger);margin-top:3px;">Último intento falló: ${_esc((s.last_error || '').slice(0,140))}</div>`
@@ -4419,15 +4498,27 @@
               `<rect class="zr-head" pathLength="100"></rect>` +
             `</svg>`
           : '';
+        const kind = _schedKind(s);
+        // Un Análisis mensual puede además generar el Radar: son dos entregas en
+        // una misma automatización, y sin esta marca la tarjeta miente por omisión.
+        const alsoRadar = (kind === _SCHED_KIND.analisis && s.include_radar) ? ' + Radar' : '';
+        const chat = s.chat_space_id ? ' · Chat ✓' : '';
+        // El badge solo aparece cuando el estado NO es el normal: con la
+        // automatización activa y sana, el punto verde ya lo dice.
+        const badge = !s.enabled ? '<span class="sched-badge off">PAUSADA</span>' : '';
         card.innerHTML =
           runOverlay +
-          `<div class="sched-dot ${health}" title="${_esc(healthTitle)}"></div>` +
+          `<div class="sched-icon"><i class="ti ti-${kind.icon}"></i><div class="sched-dot ${health}" title="${_esc(healthTitle)}"></div></div>` +
           `<div style="flex:1;min-width:0;">` +
-            `<div class="sched-name">${_esc(s.name)}</div>` +
-            `<div class="sched-desc">${_esc(clientName)} · ${_esc(_describeSchedule(s))}</div>` +
+            `<div class="sched-name">${_esc(clientName)}</div>` +
+            `<div class="sched-kind">${kind.label}${alsoRadar}${chat}</div>` +
             errNote +
           `</div>` +
-          `<span class="sched-badge${s.enabled ? '' : ' off'}">${s.enabled ? 'ACTIVA' : 'PAUSADA'}</span>` +
+          `<div class="sched-when-col">` +
+            `<div class="sched-when"><i class="ti ti-calendar"></i>${_esc(_freqLabel(s))}</div>` +
+            `<div class="sched-next${when.warn ? ' warn' : ''}">${_esc(when.text)}</div>` +
+          `</div>` +
+          badge +
           `<div class="client-row-actions" style="position:relative;">` +
             `<button class="icon-btn" title="${s.enabled ? 'Pausar' : 'Activar'}" onclick="toggleSchedule('${s.id}',${!s.enabled})"><i class="ti ti-${s.enabled ? 'player-pause' : 'player-play'}"></i></button>` +
             `<button class="icon-btn" title="Más acciones" aria-haspopup="true" onclick="toggleKebab(event,'${s.id}')"><i class="ti ti-dots-vertical"></i></button>` +
@@ -5005,8 +5096,7 @@
   }
 
   async function saveSchedule() {
-    const name = document.getElementById('sf-name').value.trim();
-    if (!name) { alert('El nombre es obligatorio.'); return; }
+    const typedName = document.getElementById('sf-name').value.trim();
     const clientId = document.getElementById('sf-client-id').value;
     if (!clientId) { alert('Selecciona un cliente.'); return; }
     const hour = parseInt(document.getElementById('sf-hour').value);
@@ -5033,6 +5123,15 @@
     if (_scheduleErrorNotify && !document.getElementById('sf-err-space').value) {
       alert('Selecciona un espacio para la notificación de errores o desactívala.'); return;
     }
+
+    // La tarjeta ya no muestra el nombre (cliente + tipo + frecuencia la identifican),
+    // así que el campo es opcional. Pero los mensajes de Chat y los logs del scheduler
+    // sí lo usan, y la API lo exige: si el usuario no escribe uno, se arma solo.
+    const kindName = isMsg ? 'Mensaje de Chat'
+                   : isRadar ? 'Radar de Objeciones'
+                   : 'Análisis de Llamadas';
+    const clientName = document.getElementById('sf-client-id').selectedOptions[0]?.text || clientId;
+    const name = typedName || `${kindName} — ${clientName}`;
 
     const payload = {
       name,

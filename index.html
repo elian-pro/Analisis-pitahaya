@@ -314,9 +314,14 @@
     @media (max-width:720px){
       .sched-when,.sched-next{white-space:normal;}
       .schedule-card{flex-wrap:wrap;}
+      .sched-badge-slot:empty{display:none;}   /* en móvil no sobra espacio que reservar */
     }
     .sched-badge{padding:3px 10px;border-radius:100px;font-size:10px;font-weight:500;letter-spacing:0.12em;background:color-mix(in srgb, var(--accent) 12%, var(--surface));color:var(--accent);border:0.5px solid color-mix(in srgb, var(--accent) 35%, transparent);white-space:nowrap;}
     .sched-badge.off{background:var(--surface2);color:var(--faint);border-color:var(--border);}
+    /* Hueco de ancho fijo para el badge: se reserva aunque la automatización esté
+       activa y no lo lleve. Si no, las tarjetas con badge empujan la columna de
+       horario y las fechas dejan de alinearse entre filas. */
+    .sched-badge-slot{width:88px;flex-shrink:0;display:flex;justify-content:flex-end;}
     /* ── Large form modal ── */
     .form-modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9997;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;}
     .form-modal-backdrop.show{display:flex !important;}
@@ -4504,8 +4509,9 @@
         const alsoRadar = (kind === _SCHED_KIND.analisis && s.include_radar) ? ' + Radar' : '';
         const chat = s.chat_space_id ? ' · Chat ✓' : '';
         // El badge solo aparece cuando el estado NO es el normal: con la
-        // automatización activa y sana, el punto verde ya lo dice.
-        const badge = !s.enabled ? '<span class="sched-badge off">PAUSADA</span>' : '';
+        // automatización activa y sana, el punto verde ya lo dice. El hueco se
+        // reserva siempre para que la columna de horario no se mueva de fila a fila.
+        const badge = `<span class="sched-badge-slot">${!s.enabled ? '<span class="sched-badge off">PAUSADA</span>' : ''}</span>`;
         card.innerHTML =
           runOverlay +
           `<div class="sched-icon"><i class="ti ti-${kind.icon}"></i><div class="sched-dot ${health}" title="${_esc(healthTitle)}"></div></div>` +

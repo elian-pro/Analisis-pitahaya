@@ -25,6 +25,12 @@ export async function recordReportMetrics(
   sidecarText:  string,
 ): Promise<void> {
   if (!dbEnabled) return;
+  // Las tres columnas son INTEGER, pero de los tres valores solo avg_score llega
+  // redondeado: pct_siguiente y talk_ratio los produce Claude como z.number(),
+  // sin .int(), así que un 62.5 perfectamente válido reventaba el INSERT con
+  // "invalid input syntax for type integer" y el catch de abajo se lo tragaba.
+  // Resultado: el cliente se quedaba sin fila y sin ninguna señal.
+  const round = (n: number) => (Number.isFinite(n) ? Math.round(n) : 0);
   try {
     await pool!.query(
       `INSERT INTO ${REPORT_METRICS_TABLE}
@@ -37,10 +43,17 @@ export async function recordReportMetrics(
          talk_ratio   = EXCLUDED.talk_ratio,
          sidecar_text = EXCLUDED.sidecar_text,
          created_at   = now()`,
-      [clientId, advisor, periodKey, keyStartDate(periodKey), avgScore, pctSiguiente, talkRatio, sidecarText],
+      [clientId, advisor, periodKey, keyStartDate(periodKey),
+       round(avgScore), round(pctSiguiente), round(talkRatio), sidecarText],
     );
   } catch (e) {
-    console.warn(`[metrics] DB record failed for ${advisor} (${periodKey}):`, (e as Error).message);
+    // Se traga el error a propósito (el reporte ya está entregado y Drive tiene
+    // el sidecar), pero se registra con el cliente delante: sin eso, un fallo
+    // sistemático se ve como un Dashboard vacío y nada más.
+    console.warn(
+      `[metrics] DB record FAILED for client=${clientId} advisor=${advisor} period=${periodKey}: ` +
+      `${(e as Error).message} — ese periodo no aparecerá en el Dashboard.`,
+    );
   }
 }
 

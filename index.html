@@ -2881,6 +2881,15 @@
 
     if (_dashView === 'team') renderDashTeamView(body);
     else renderDashAdvisorView(body);
+
+    // Este cliente solo tiene reportes semanales, así que una vista mensual (o
+    // más gruesa) está agrupando semanas. Conviene decirlo en vez de dejar que
+    // parezca que hay un dato mensual que no existe.
+    if (dashData.period_type === 'weekly' && dashData.granularity !== 'weekly') {
+      body.insertAdjacentHTML('beforeend',
+        '<div class="form-hint" style="margin-top:14px;">Este cliente solo tiene reportes semanales: '
+        + 'cada punto agrupa las semanas que caen dentro del periodo.</div>');
+    }
   }
 
   function renderDashTeamView(body) {

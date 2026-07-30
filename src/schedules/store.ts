@@ -114,6 +114,16 @@ export async function deleteSchedule(id: string): Promise<void> {
   saveToFile(schedules);
 }
 
+// Registra que la automatización se DISPARÓ. Es lo único que puede afirmarse en
+// ese momento: el job corre después y puede tardar minutos. El guard de "ya
+// corrió hoy" mira este campo, así que un reinicio a mitad del job no provoca
+// una tormenta de reintentos, pero tampoco deja el estado en verde mintiendo.
+export async function markAttempt(id: string): Promise<void> {
+  await updateSchedule(id, { last_attempt: new Date().toISOString() });
+}
+
+// Registra el ÉXITO: el job termino y entregó. Solo aquí se mueve `last_run`,
+// que es lo que la UI muestra como "Último".
 export async function markRan(id: string): Promise<void> {
   const now = new Date().toISOString();
   await updateSchedule(id, { last_run: now, last_attempt: now, last_status: 'ok', last_error: null });

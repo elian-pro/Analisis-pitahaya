@@ -118,6 +118,7 @@ export interface ReportMetricRow {
 // dedicated column for period type (Sprint 0, Ticket 0.2), so it is inferred
 // from this shape.
 const MONTHLY_PERIOD_KEY = /^\d{4}-\d{2}$/;
+const WEEKLY_PERIOD_KEY  = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Reads raw report_metrics rows for a client within a [from, to] range over
@@ -125,22 +126,46 @@ const MONTHLY_PERIOD_KEY = /^\d{4}-\d{2}$/;
  * bucketing by granularity happens in a separate, pure layer (aggregate.ts)
  * so this query stays simple and testable.
  *
- * Only monthly rows (period_key = 'YYYY-MM') are included. Weekly rows are
- * excluded to avoid double-counting the same calls under both a weekly and a
- * monthly row for an overlapping range (Sprint 0, Ticket 0.3) — nothing in
- * the system prevents both period types from coexisting for the same client.
+ * Nunca se mezclan los dos tipos de periodo en una misma respuesta: un cliente
+ * puede tener filas semanales ('YYYY-MM-DD') y mensuales ('YYYY-MM') que cubren
+ * las MISMAS llamadas, y sumarlas contaría dos veces el mismo trabajo. Se elige
+ * un conjunto según la granularidad pedida (semanal → semanas, el resto →
+ * meses) y, si ese conjunto está vacío, se cae al otro: un cliente que solo
+ * genera reportes semanales tiene que poder ver su Dashboard en cualquier
+ * granularidad, y aggregate.ts agrupa por period_start, así que las semanas
+ * caen en su mes o trimestre sin problema.
+ *
+ * `period_type` dice cuál de los dos conjuntos se devolvió, para que la UI
+ * pueda avisar de que está agregando semanas.
  *
  * Returns [] when DATABASE_URL is not set (this module is DB-only, see the
  * header comment — there is no JSON fallback for report_metrics).
  */
 export async function queryReportMetrics(
-  clientId: string,
-  from:     string,
-  to:       string,
-  advisor?: string,
+  clientId:    string,
+  from:        string,
+  to:          string,
+  advisor?:    string,
+  granularity: 'weekly' | string = 'monthly',
+): Promise<ReportMetricRow[] & { period_type?: 'weekly' | 'monthly' }> {
+  const preferred: 'weekly' | 'monthly' = granularity === 'weekly' ? 'weekly' : 'monthly';
+  const rows = await queryByPeriodType(clientId, from, to, advisor, preferred);
+  if (rows.length > 0) return Object.assign(rows, { period_type: preferred });
+  const other: 'weekly' | 'monthly' = preferred === 'weekly' ? 'monthly' : 'weekly';
+  const fallback = await queryByPeriodType(clientId, from, to, advisor, other);
+  return Object.assign(fallback, { period_type: fallback.length ? other : preferred });
+}
+
+async function queryByPeriodType(
+  clientId:   string,
+  from:       string,
+  to:         string,
+  advisor:    string | undefined,
+  periodType: 'weekly' | 'monthly',
 ): Promise<ReportMetricRow[]> {
   if (!dbEnabled) return [];
-  const params: unknown[] = [clientId, from, to, MONTHLY_PERIOD_KEY.source];
+  const shape = periodType === 'weekly' ? WEEKLY_PERIOD_KEY : MONTHLY_PERIOD_KEY;
+  const params: unknown[] = [clientId, from, to, shape.source];
   let advisorFilter = '';
   if (advisor) {
     params.push(advisor);

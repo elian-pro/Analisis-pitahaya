@@ -1,4 +1,4 @@
-import { listSchedules, getSchedule, markRan, markFailed, updateSchedule, type Schedule } from './store';
+import { listSchedules, getSchedule, markAttempt, markRan, markFailed, updateSchedule, type Schedule } from './store';
 
 // Result of a single fire attempt's SYNCHRONOUS phase (advisor read + job
 // enqueue). The report job itself runs asynchronously afterwards; its outcome
@@ -156,7 +156,7 @@ function isDue(schedule: Schedule): boolean {
   // 'daily' no tiene filtro de día: corre todos los días (sujeto a hora + 1×/día).
 
   // Already ran today (judged in the schedule's timezone)? Skip.
-  if (schedule.last_run && dateStrInTz(schedule.last_run, tz) === now.dateStr) return false;
+  if (schedule.last_attempt && dateStrInTz(schedule.last_attempt, tz) === now.dateStr) return false;
 
   // Catch-up semantics: fire once the scheduled time has ARRIVED OR PASSED today,
   // not only at the exact target minute. This survives deploys, restarts, and
@@ -195,9 +195,10 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
 
   // ── Notify-only mode: just send a Chat message ────────────────────────────
   if (schedule.notify_only) {
-    await markRan(schedule.id);
+    await markAttempt(schedule.id);
     if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
     await notifyChat(schedule, client.name, getNowInTz(tz).dateStr, '');
+    await markRan(schedule.id);
     _running.delete(schedule.id);
     return { ok: true };
   }
@@ -220,12 +221,13 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
       radarRun = () => runRadarForClient(client, month);
     }
 
-    await markRan(schedule.id);
+    await markAttempt(schedule.id);
     if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
     console.log(`[scheduler] Radar run started for '${schedule.name}' (${periodLabel})`);
 
     radarRun()
       .then(async (res) => {
+        await markRan(schedule.id);
         await notifyChat(schedule, client.name, periodLabel, res.driveUrl);
       })
       .catch(async (err) => {
@@ -312,7 +314,7 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
   // El Radar de Objeciones es MENSUAL: solo se propaga en automatizaciones mensuales.
   const includeRadar = schedule.include_radar === true && schedule.frequency === 'monthly';
   const job = createJob(schedule.client_id, month, reportType, advisors, periodType, dateFrom, dateTo, includeRadar);
-  await markRan(schedule.id);
+  await markAttempt(schedule.id);
   if (schedule.frequency === 'once') await updateSchedule(schedule.id, { enabled: false });
 
   console.log(`[scheduler] Job ${job.id} created for '${schedule.name}'`);
@@ -329,6 +331,8 @@ async function fireSchedule(schedule: Schedule): Promise<FireResult> {
           done.error || 'La generación del reporte falló.');
         return;
       }
+
+      await markRan(schedule.id);
 
       if (!schedule.chat_space_id) return;
       const url = done?.results?.combined?.driveUrl

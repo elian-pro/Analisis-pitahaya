@@ -31,13 +31,16 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
   const { client_id, from, to, granularity, advisor } = parsed.data;
   try {
-    const rows = await queryReportMetrics(client_id, from, to, advisor);
+    const rows = await queryReportMetrics(client_id, from, to, advisor, granularity);
     const aggregated = aggregateMetrics(rows, granularity);
     res.json({
       client_id,
       from,
       to,
       granularity,
+      // Qué tipo de fila se está agregando: si el cliente solo genera reportes
+      // semanales, una vista mensual está sumando semanas y hay que decirlo.
+      period_type: rows.period_type,
       advisors:   aggregated.advisors,
       buckets:    aggregated.buckets,
       team:       aggregated.team,
@@ -79,7 +82,7 @@ router.post('/pdf', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const rows = await queryReportMetrics(client_id, from, to);
+    const rows = await queryReportMetrics(client_id, from, to, undefined, granularity);
     const aggregated = aggregateMetrics(rows, granularity);
 
     const pdfBuffer = await renderPdf('dashboard.eta', {

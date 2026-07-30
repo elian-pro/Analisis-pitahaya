@@ -58,6 +58,33 @@ export async function recordReportMetrics(
 }
 
 /**
+ * Inserta una fila SOLO si ese (cliente, asesor, periodo) no existe ya, y
+ * devuelve true si la escribió. Es lo que necesita el backfill: reconstruir lo
+ * que se perdió sin pisar lo que sí se guardó.
+ */
+export async function insertMetricsIfAbsent(
+  clientId:     string,
+  advisor:      string,
+  periodKey:    string,
+  avgScore:     number,
+  pctSiguiente: number,
+  talkRatio:    number,
+  sidecarText:  string,
+): Promise<boolean> {
+  if (!dbEnabled) return false;
+  const round = (n: number) => (Number.isFinite(n) ? Math.round(n) : 0);
+  const { rowCount } = await pool!.query(
+    `INSERT INTO ${REPORT_METRICS_TABLE}
+       (client_id, advisor, period_key, period_start, avg_score, pct_siguiente, talk_ratio, sidecar_text)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (client_id, advisor, period_key) DO NOTHING`,
+    [clientId, advisor, periodKey, keyStartDate(periodKey),
+     round(avgScore), round(pctSiguiente), round(talkRatio), sidecarText],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
  * Returns the full sidecar text of the most recent period STRICTLY BEFORE the
  * current one for an advisor, or null if the DB is disabled, has no such row, or
  * errors (so the caller falls back to Drive). The text is in the same format as

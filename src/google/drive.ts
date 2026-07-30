@@ -444,6 +444,34 @@ export function keyStartDate(periodKey: string): string {
 // This makes the period-over-period comparison resilient to: non-contiguous
 // weeks, switching between monthly/weekly cadence, and month-boundary date
 // clamping. Returns null only when no earlier sidecar exists at all.
+// Todos los sidecars de una carpeta, con su texto ya descargado. Lo usa el
+// backfill de métricas (src/cli/backfill-metrics.ts): Drive es la copia
+// redundante que sobrevivió cuando el INSERT en report_metrics fallaba.
+export async function listSidecars(
+  sidecarFolderId: string,
+): Promise<Array<{ name: string; text: string }>> {
+  const drive = getDrive();
+  const out: Array<{ name: string; text: string }> = [];
+  let pageToken: string | undefined;
+  do {
+    const list = await drive.files.list({
+      q: [`'${sidecarFolderId}' in parents`, `name contains 'Sidecar_'`, `trashed = false`].join(' and '),
+      fields: 'nextPageToken, files(id,name,mimeType)', pageSize: 200, pageToken,
+      supportsAllDrives: true, includeItemsFromAllDrives: true,
+    });
+    for (const f of list.data.files ?? []) {
+      if (!f.id || !f.name) continue;
+      try {
+        out.push({ name: f.name, text: await downloadText(f.id, f.mimeType || MIME_TEXT) });
+      } catch (err) {
+        console.warn(`[drive] No se pudo leer el sidecar ${f.name}:`, err instanceof Error ? err.message : err);
+      }
+    }
+    pageToken = list.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return out;
+}
+
 export async function findPreviousReport(
   sidecarFolderId: string,
   advisorName:     string,

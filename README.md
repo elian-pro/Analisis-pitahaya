@@ -172,6 +172,17 @@ A partir de ahí, todo lo que crees o edites desde la interfaz se guarda en Post
 > ```
 > Es idempotente: puedes correrla varias veces sin duplicar datos (hace upsert por `id`).
 
+> **Reconstruir métricas del Dashboard:** si un cliente tiene reportes generados pero no
+> aparece en el Dashboard, sus filas de `report_metrics` se pueden reconstruir desde los
+> sidecars de Drive, que son la copia redundante:
+> ```bash
+> DATABASE_URL=postgres://... npm run backfill:metrics -- --dry-run          # sin escribir
+> DATABASE_URL=postgres://... npm run backfill:metrics -- <client_id>        # un cliente
+> DATABASE_URL=postgres://... npm run backfill:metrics                       # todos
+> ```
+> No gasta tokens de IA (no vuelve a analizar nada) y nunca pisa una fila existente, así
+> que se puede repetir sin riesgo.
+
 ### Modelo de datos
 
 Cada cliente/automatización se guarda como una fila con su objeto completo en una columna

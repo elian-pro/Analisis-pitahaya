@@ -4371,7 +4371,13 @@
                :                              `Día ${s.day_of_month ?? 1} de cada mes`;
     const h = String(s.hour).padStart(2,'0');
     const m = String(s.minute ?? 0).padStart(2,'0');
-    const last  = s.last_run ? `Último: ${s.last_run.slice(0,10)}` : 'Nunca ejecutado';
+    // "Último" es el último ÉXITO. Si el último intento es de otro día, se
+    // muestran los dos: esa diferencia es la señal de que algo se disparó y no
+    // llegó a entregar, que de otro modo solo se ve consultando la base.
+    const _run = s.last_run ? s.last_run.slice(0,10) : null;
+    const _try = s.last_attempt ? s.last_attempt.slice(0,10) : null;
+    let last = _run ? `Último: ${_run}` : 'Nunca ejecutado';
+    if (_try && _try !== _run) last += ` · Último intento: ${_try}`;
     const kind  = s.notify_only ? ' · 💬 Mensaje'
                 : s.report_kind === 'radar' ? ' · 📡 Radar de Objeciones'
                 : ' · 📊 Análisis de Llamadas';

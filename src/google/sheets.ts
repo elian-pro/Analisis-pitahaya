@@ -165,7 +165,10 @@ export async function getAdvisorsForMonth(
  * short calls and excluded phrases: a "0 calls" flag driven by that would
  * conflate "no calls at all" with "calls filtered out", a different situation).
  */
-export async function getAdvisorNamesWithCalls(
+// Cuántas llamadas registró cada asesor en el periodo, por nombre tal como
+// aparece en el Sheet. La UI lo muestra junto a cada asesor y el scheduler lo
+// usa para resolver el modo "solo los que tuvieron llamadas".
+export async function getAdvisorCallCounts(
   spreadsheetId: string,
   dataSheetName: string,
   colFecha: string,
@@ -173,16 +176,16 @@ export async function getAdvisorNamesWithCalls(
   month: string,
   dateFrom?: string,
   dateTo?: string,
-): Promise<Set<string>> {
+): Promise<Map<string, number>> {
   const rows = await readSheet(spreadsheetId, dataSheetName);
-  if (rows.length < 2) return new Set();
+  const counts = new Map<string, number>();
+  if (rows.length < 2) return counts;
 
   const headers   = rows[0].map(String);
   const fechaIdx  = headerIndex(headers, colFecha);
   const asesorIdx = headerIndex(headers, colAsesor);
-  if (asesorIdx === -1) return new Set();
+  if (asesorIdx === -1) return counts;
 
-  const names = new Set<string>();
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
 
@@ -193,9 +196,24 @@ export async function getAdvisorNamesWithCalls(
     if (!dateOk) continue;
 
     const name = String(row[asesorIdx] ?? '').trim();
-    if (name) names.add(name);
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
-  return names;
+  return counts;
+}
+
+export async function getAdvisorNamesWithCalls(
+  spreadsheetId: string,
+  dataSheetName: string,
+  colFecha: string,
+  colAsesor: string,
+  month: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<Set<string>> {
+  const counts = await getAdvisorCallCounts(
+    spreadsheetId, dataSheetName, colFecha, colAsesor, month, dateFrom, dateTo,
+  );
+  return new Set(counts.keys());
 }
 
 export async function getAdvisors(

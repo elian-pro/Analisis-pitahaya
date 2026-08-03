@@ -35,7 +35,9 @@ export interface Schedule {
   report_type:   'selected' | 'general';
   include_general: boolean;
   include_radar?:  boolean;   // genera además el Radar de Objeciones (solo frecuencia mensual)
-  advisors:      'all' | string[];
+  // 'all' = todo el roster · 'active' = solo quienes tuvieron llamadas en el
+  // periodo · lista = nombres fijos. El [] legacy se lee como 'active'.
+  advisors:      'all' | 'active' | string[];
   notify_only?:   boolean;   // skip report, just send Chat message
   chat_space_id?: string;    // Google Chat space, e.g. "spaces/AAAA"
   chat_message?:  string;    // message template with {{variables}}
@@ -136,8 +138,34 @@ export async function markFailed(id: string, error: string): Promise<void> {
   await updateSchedule(id, {
     last_attempt: new Date().toISOString(),
     last_status:  'error',
-    last_error:   (error || 'Error desconocido').slice(0, 500),
+    last_error:   errorDetail(error),
   });
+}
+
+// Cómo se guarda un error: recortado, con texto por defecto si viene vacío.
+// Comparar contra `last_error` exige pasar por aquí, o un error de 501 caracteres
+// nunca se reconocería como repetido.
+export function errorDetail(error: string): string {
+  return (error || 'Error desconocido').slice(0, 500);
+}
+
+// ¿Este fallo es el mismo que el anterior? Lo usa el aviso de Chat para mandar
+// un recordatorio corto en vez de repetir el error completo día tras día.
+export function isRepeatError(
+  schedule: Pick<Schedule, 'last_status' | 'last_error'>,
+  error: string,
+): boolean {
+  return schedule.last_status === 'error' &&
+    !!schedule.last_error &&
+    schedule.last_error === errorDetail(error);
+}
+
+// Cómo hay que resolver `advisors` al disparar. La lista vacía es el caso
+// delicado: la UI la escribía para "solo los que tuvieron llamadas", pero el
+// runner la leía como "no hay nadie" y la automatización fallaba siempre.
+export function advisorMode(advisors: Schedule['advisors']): 'explicit' | 'all' | 'active' {
+  if (Array.isArray(advisors)) return advisors.length > 0 ? 'explicit' : 'active';
+  return advisors === 'all' ? 'all' : 'active';
 }
 
 /**

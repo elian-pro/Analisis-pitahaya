@@ -24,7 +24,11 @@ const ScheduleBaseSchema = z.object({
   report_type:     z.enum(['selected', 'general']),
   include_general: z.boolean().default(true),
   include_radar:   z.boolean().default(false),
-  advisors:        z.union([z.literal('all'), z.array(z.string().min(1))]).default('all'),
+  // Una lista vacía era guardable y producía una automatización que no podía
+  // correr nunca: se normaliza a 'active' (los que tuvieron llamadas).
+  advisors:        z.union([z.literal('all'), z.literal('active'), z.array(z.string().min(1))])
+                     .default('all')
+                     .transform(v => (Array.isArray(v) && v.length === 0 ? 'active' as const : v)),
   notify_only:     z.boolean().default(false),
   chat_space_id:   z.string().optional(),
   chat_message:    z.string().optional(),

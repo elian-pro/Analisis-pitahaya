@@ -2,15 +2,10 @@ import { google } from 'googleapis';
 import { Readable } from 'stream';
 import { getAuth } from './auth';
 
-const MONTHS_ES = [
-  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
-  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
-];
-
-export function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return `${MONTHS_ES[m - 1]} ${y}`;
-}
+// Las etiquetas de periodo viven en './labels' (sin dependencias, testeables).
+// Se re-exportan aquí porque medio proyecto ya las importa desde este módulo.
+import { monthLabel } from './labels';
+export { monthLabel, weekLabel } from './labels';
 
 export function previousMonth(month: string): string {
   const [y, m] = month.split('-').map(Number);

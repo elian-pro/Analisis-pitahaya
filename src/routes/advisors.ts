@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getClient } from '../clients/manager';
-import { getAdvisorNamesWithCalls } from '../google/sheets';
+import { getAdvisorCallCounts } from '../google/sheets';
 import {
   listAdvisors,
   createAdvisor,
@@ -55,12 +55,12 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const advisors = await listAdvisors(client_id, { includeInactive: include_inactive });
 
-    let callNames: Set<string> | null = null;
+    let callCounts: Map<string, number> | null = null;
     if (month) {
       try {
         const dateFrom = period_type === 'weekly' ? date_from : undefined;
         const dateTo   = period_type === 'weekly' ? date_to   : undefined;
-        callNames = await getAdvisorNamesWithCalls(
+        callCounts = await getAdvisorCallCounts(
           client.spreadsheet_id, client.data_sheet_name, client.col_fecha, client.col_asesor,
           month, dateFrom, dateTo,
         );
@@ -71,7 +71,9 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
     res.json(advisors.map(a => ({
       ...a,
-      has_calls: callNames ? callNames.has(a.name) : null,
+      // null = no se pudo consultar el Sheet, distinto de 0 = sin llamadas.
+      call_count: callCounts ? (callCounts.get(a.name) ?? 0) : null,
+      has_calls:  callCounts ? callCounts.has(a.name) : null,
     })));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });

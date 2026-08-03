@@ -70,6 +70,9 @@
     .advisor-name{font-size:13px;font-weight:400;flex:1;}
     .advisor-name-col{display:flex;flex-direction:column;flex:1;min-width:0;gap:1px;}
     .advisor-warn{font-size:10px;color:var(--danger);font-weight:500;}
+    /* Va antes del botón de quitar, que aparece al pasar el mouse; el margen
+       izquierdo automático lo mantiene pegado a la derecha en ambos estados. */
+    .advisor-calls{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap;}
     .inactive-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;color:var(--muted);}
     .inactive-row .link-btn{margin-left:auto;}
     .remove-btn{font-size:16px;color:var(--faint);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;}
@@ -1254,9 +1257,9 @@
           <label class="form-label">Asesores a incluir</label>
           <div class="form-toggle-row">
             <button class="form-toggle-btn active" id="sf-advisors-all" onclick="setScheduleAdvisors('all')">Todos los asesores</button>
-            <button class="form-toggle-btn"        id="sf-advisors-sel" onclick="setScheduleAdvisors('selected')">Solo activos del período</button>
+            <button class="form-toggle-btn"        id="sf-advisors-sel" onclick="setScheduleAdvisors('active')">Solo los que tuvieron llamadas</button>
           </div>
-          <div class="form-hint" style="margin-top:6px;">"Todos" usa los asesores con llamadas en el período analizado.</div>
+          <div class="form-hint" style="margin-top:6px;">"Todos" incluye el roster completo del cliente (los de la pestaña Reportes). La otra opción lo recorta a quienes registraron al menos una llamada en el período analizado.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Reporte ejecutivo del equipo</label>
@@ -1287,8 +1290,8 @@
           <div class="form-group" style="margin-top:8px;">
             <label class="form-label">Mensaje</label>
             <textarea class="form-textarea" id="sf-chat-message" rows="4"
-              placeholder="📊 *Reporte listo*: {{nombre_cliente}} | {{periodo}}&#10;🔗 {{link}}"></textarea>
-            <div class="form-hint">Variables disponibles: <code>{{nombre_cliente}}</code>, <code>{{periodo}}</code>, <code>{{link}}</code>, <code>{{nombre}}</code>. Deja vacío para usar el mensaje predeterminado.</div>
+              placeholder="📊 *{{tipo}}* · {{periodicidad}}&#10;{{nombre_cliente}} · {{periodo}}&#10;🔗 {{link}}"></textarea>
+            <div class="form-hint">Variables disponibles: <code>{{nombre_cliente}}</code>, <code>{{periodo}}</code>, <code>{{link}}</code>, <code>{{nombre}}</code>, <code>{{tipo}}</code>, <code>{{periodicidad}}</code>. Deja vacío para usar el mensaje predeterminado, que ya distingue Análisis de Radar.</div>
           </div>
         </div>
       </div>
@@ -1878,7 +1881,10 @@
       r.className='advisor-check checked';
       r.dataset.name=a.name;
       const warn=a.has_calls===false?'<div class="advisor-warn">Sin llamadas en este periodo</div>':'';
-      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><div class="advisor-name-col"><span class="advisor-name">${_esc(a.name)}</span>${warn}</div><button class="remove-btn" onclick="rm('${a.id}',event)">×</button>`;
+      // call_count es null cuando no se pudo leer el Sheet: ahí no se dice nada,
+      // porque "0 llamadas" y "no pude contar" no son lo mismo.
+      const calls=a.call_count>0?`<span class="advisor-calls">${a.call_count} ${a.call_count===1?'llamada':'llamadas'}</span>`:'';
+      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><div class="advisor-name-col"><span class="advisor-name">${_esc(a.name)}</span>${warn}</div>${calls}<button class="remove-btn" onclick="rm('${a.id}',event)">×</button>`;
       r.addEventListener('click',e=>{if(e.target.closest('.remove-btn'))return;e.preventDefault();ta(r);});
       g.appendChild(r);
     });
@@ -3154,6 +3160,13 @@
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
   }
+
+  // Deep link: abrir directo una pestaña con #automation, #dashboard, etc. Lo usa
+  // el link "Ver detalles" de los avisos de error en Google Chat.
+  (function openTabFromHash(){
+    const t = (location.hash || '').slice(1);
+    if (_APP_TABS.includes(t)) setTab(t);
+  })();
 
   // ── File picker ad-hoc (botón + nombre de archivo) ─────────────────────────
   function _fpOpen(id){ document.getElementById(id).click(); }
@@ -4913,7 +4926,7 @@
   function setScheduleAdvisors(v) {
     _scheduleAdvisors = v;
     document.getElementById('sf-advisors-all').classList.toggle('active', v === 'all');
-    document.getElementById('sf-advisors-sel').classList.toggle('active', v === 'selected');
+    document.getElementById('sf-advisors-sel').classList.toggle('active', v === 'active');
   }
 
   function setScheduleGeneral(v) {
@@ -5086,7 +5099,10 @@
         setScheduleType(s.notify_only ? 'message' : 'report');
         if (!s.notify_only) setScheduleReportKind(s.report_kind || 'analisis');
         setScheduleFreq(s.frequency || 'weekly');
-        setScheduleAdvisors(s.advisors === 'all' || !Array.isArray(s.advisors) ? 'all' : 'selected');
+        // Las automatizaciones viejas guardaban [] para "solo los que tuvieron
+        // llamadas"; el formulario las mostraba como "Todos" y por eso el modo
+        // real nunca se veía al editar.
+        setScheduleAdvisors(s.advisors === 'all' ? 'all' : 'active');
         setScheduleGeneral(s.include_general !== false);
         setScheduleEnabled(s.enabled !== false);
         if (s.chat_space_id) {
@@ -5161,7 +5177,7 @@
       timezone:        document.getElementById('sf-timezone').value.trim() || 'America/Mexico_City',
       report_type:     'selected',
       include_general: _scheduleGeneral,
-      advisors:        _scheduleAdvisors === 'all' ? 'all' : [],
+      advisors:        _scheduleAdvisors === 'all' ? 'all' : 'active',
       notify_only:     isMsg,
       chat_space_id:   _scheduleChat ? document.getElementById('sf-chat-space').value : undefined,
       chat_message:    _scheduleChat ? document.getElementById('sf-chat-message').value.trim() || undefined : undefined,

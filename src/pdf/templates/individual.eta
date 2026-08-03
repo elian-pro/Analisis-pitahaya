@@ -204,7 +204,7 @@ const tipoLabel = it.tipo_asesor === 'desconocido' ? 'asesor' : it.tipo_asesor;
         <span class="eyebrow label">Logra siguiente paso</span>
         <div class="value"><%= it.pct_logra_siguiente_paso %><span class="unit">%</span></div>
         <div class="foot">
-          de las llamadas
+          de las llamadas calificadas
           <% if (it.has_previous && it.delta_siguiente_paso !== undefined) { %>
             · <span class="<%= it.delta_siguiente_paso >= 0 ? 'up-txt' : 'down-txt' %>"><%= fmtDelta(it.delta_siguiente_paso) %> pp</span>
           <% } %>
@@ -361,7 +361,23 @@ const tipoLabel = it.tipo_asesor === 'desconocido' ? 'asesor' : it.tipo_asesor;
           <tr><td>Firma</td><td><%= it.cierres.firma %></td></tr>
           <tr><td>Fecha de decisión</td><td><%= it.cierres.fecha_decision %></td></tr>
           <tr><td>Sin siguiente paso</td><td><span class="<%= it.cierres.sin_siguiente_paso > 0 ? 'down-txt' : '' %>"><%= it.cierres.sin_siguiente_paso %></span></td></tr>
+          <%
+            /* Descartar bien no se pinta en rojo: es trabajo hecho, no un cierre
+               perdido. El juicio va en el porcentaje justificado de al lado. */
+            const desc = it.cierres.descartado_no_califica || 0;
+          %>
+          <tr><td>Descartado por no calificar</td><td><%= desc %></td></tr>
         </table>
+        <% if (desc > 0) { %>
+          <div class="nota <%= it.pct_descarte_justificado >= 70 ? '' : 'warn' %>">
+            <b>Descartes con criterio: <%= it.pct_descarte_justificado %>%.</b>
+            <% if (it.pct_descarte_justificado >= 70) { %>
+              Indagó presupuesto, tiempo o capacidad de decisión antes de cerrar. Filtrar rápido con criterio libera tiempo para leads reales.
+            <% } else { %>
+              En el resto cerró sin indagar presupuesto, tiempo ni capacidad de decisión: ahí el descarte pudo dejar ir a un lead que sí compraba.
+            <% } %>
+          </div>
+        <% } %>
       </div>
     </div>
   </section>

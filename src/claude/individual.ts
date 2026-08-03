@@ -7,6 +7,8 @@ import {
   type ClaudeIndividualOutput,
   type IndividualReportData,
 } from '../schemas/individual';
+import { SIDECAR_METRICS_VERSION, type PreviousMetrics } from '../schemas/individual';
+export { parseSidecarMetrics, SIDECAR_METRICS_VERSION, type PreviousMetrics } from '../schemas/individual';
 import type { CallRow } from '../google/sheets';
 import { renderPdf } from '../pdf/renderer';
 import { monthLabel } from '../google/drive';
@@ -15,14 +17,27 @@ interface ClientForAnalysis {
   prompt_individual: string;
 }
 
-export interface PreviousMetrics {
-  avg_score:                number;
-  pct_logra_siguiente_paso: number;
-  talk_ratio:               number;
-}
-
 const MAX_RETRIES = 3;
 const MODEL       = 'claude-sonnet-4-6';
+
+// Va en el system de TODOS los clientes, no en el prompt de cada uno: es una
+// regla de como se mide a un asesor, no una preferencia de un cliente. Sin
+// esto, descartar bien un lead se contaba como cierre fallido y castigaba
+// justo la habilidad que se quiere premiar.
+const CALIFICACION_INSTRUCTION =
+  '\n\nCALIFICACION DEL LEAD. Descartar un lead que no califica es un resultado CORRECTO, ' +
+  'no un fracaso de cierre: un asesor tambien se mide por detectar rapido a quien no va a comprar ' +
+  'y liberar su tiempo. Aplica esto al analizar:\n' +
+  '- Una llamada cerrada porque el lead no calificaba va en cierres.descartado_no_califica, NUNCA en ' +
+  'cierres.sin_siguiente_paso (que es para leads que SI calificaban y aun asi no avanzaron).\n' +
+  '- pct_logra_siguiente_paso se calcula solo sobre las llamadas con lead calificado: excluye del ' +
+  'denominador las descartadas. Si todas las llamadas fueron descartes, devuelve 0.\n' +
+  '- pct_descarte_justificado mide, de esas descartadas, en cuantas el asesor pregunto por criterios ' +
+  'reales (presupuesto, tiempo, capacidad de decision, encaje del producto) ANTES de cerrar. ' +
+  'Descartar sin indagar no es criterio, es quitarse la llamada de encima: eso NO cuenta como ' +
+  'justificado. Si no hubo descartes, devuelve 0.\n' +
+  '- Un descarte rapido y bien fundamentado es una FORTALEZA. Un descarte sin indagar, o seguir ' +
+  'invirtiendo tiempo en un lead claramente no calificado, es una DEBILIDAD.';
 
 const NO_DASH_INSTRUCTION =
   '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningún texto generado. ' +
@@ -61,30 +76,6 @@ function computeMetrics(calls: CallRow[]) {
   };
 }
 
-// ── Sidecar parsing ───────────────────────────────────────────────────────────
-
-export function parseSidecarMetrics(text: string): PreviousMetrics | null {
-  const match = text.match(/=== METRICAS_JSON ===\n(\{[^\n]+\})/);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[1]);
-    if (
-      typeof parsed.avg_score === 'number' &&
-      typeof parsed.pct_logra_siguiente_paso === 'number' &&
-      typeof parsed.talk_ratio === 'number'
-    ) {
-      return {
-        avg_score:                parsed.avg_score,
-        pct_logra_siguiente_paso: parsed.pct_logra_siguiente_paso,
-        talk_ratio:               parsed.talk_ratio,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // ── Prompt construction ───────────────────────────────────────────────────────
 
 function formatCalls(calls: CallRow[]): string {
@@ -107,7 +98,11 @@ function buildUserMessage(
     ? [
         ``,
         `=== COMPARATIVO PERIODO ANTERIOR ===`,
-        `Score anterior: ${prevMetrics.avg_score}/100 | Sig. paso anterior: ${prevMetrics.pct_logra_siguiente_paso}% | Talk ratio anterior: ${prevMetrics.talk_ratio}%`,
+        prevMetrics.metrics_version >= SIDECAR_METRICS_VERSION
+          ? `Score anterior: ${prevMetrics.avg_score}/100 | Sig. paso anterior: ${prevMetrics.pct_logra_siguiente_paso}% | Talk ratio anterior: ${prevMetrics.talk_ratio}%`
+          // El % anterior se midio con otra regla (incluia los descartes en el
+          // denominador): darselo a Claude solo le invita a comparar lo incomparable.
+          : `Score anterior: ${prevMetrics.avg_score}/100 | Talk ratio anterior: ${prevMetrics.talk_ratio}%\nEl porcentaje de siguiente paso del periodo anterior se midio con otra definicion: no lo compares.`,
       ].join('\n')
     : '';
 
@@ -140,7 +135,7 @@ const REPORT_TOOL: Anthropic.Tool = {
     type: 'object',
     required: [
       'tipo_asesor','objeciones_por_llamada','tasa_resolucion_global',
-      'pct_logra_siguiente_paso','resumen','criterios','elementos_producto',
+      'pct_logra_siguiente_paso','pct_descarte_justificado','resumen','criterios','elementos_producto',
       'elementos_subutilizados','objeciones','categorias_peor_manejadas','sesgos',
       'sesgos_subutilizados','talk_ratio','preguntas_promedio','cierres',
       'fortalezas','debilidades','mejor_llamada','mejor_llamada_indice','peor_llamada','recomendaciones',
@@ -149,7 +144,8 @@ const REPORT_TOOL: Anthropic.Tool = {
       tipo_asesor:              { type: 'string', enum: ['linner','cerrador','desconocido'] },
       objeciones_por_llamada:   { type: 'number' },
       tasa_resolucion_global:   { type: 'number' },
-      pct_logra_siguiente_paso: { type: 'number' },
+      pct_logra_siguiente_paso: { type: 'number', description: 'Porcentaje SOLO sobre llamadas con lead calificado. Excluye del calculo las llamadas descartadas por no calificar.' },
+      pct_descarte_justificado: { type: 'number', description: 'De las llamadas descartadas por no calificar, en que porcentaje el asesor pregunto por criterios reales (presupuesto, tiempo, capacidad de decision, encaje) antes de cerrar. 0 si no descarto ninguna.' },
       resumen:                  { type: 'string' },
       criterios: {
         type: 'array', items: {
@@ -194,10 +190,12 @@ const REPORT_TOOL: Anthropic.Tool = {
       preguntas_promedio: { type: 'number' },
       cierres: {
         type: 'object',
-        required: ['apartado','cita_seguimiento','firma','fecha_decision','sin_siguiente_paso'],
+        required: ['apartado','cita_seguimiento','firma','fecha_decision','sin_siguiente_paso','descartado_no_califica'],
         properties: {
           apartado:{type:'integer'}, cita_seguimiento:{type:'integer'},
-          firma:{type:'integer'}, fecha_decision:{type:'integer'}, sin_siguiente_paso:{type:'integer'},
+          firma:{type:'integer'}, fecha_decision:{type:'integer'},
+          sin_siguiente_paso:{type:'integer', description:'Llamadas con lead CALIFICADO que terminaron sin avanzar.'},
+          descartado_no_califica:{type:'integer', description:'Llamadas cerradas porque el lead no calificaba. No cuentan como cierre fallido.'},
         },
       },
       fortalezas: {
@@ -261,7 +259,7 @@ async function callClaudeWithRetry(
       const res = await getClaude().messages.create({
         model:      MODEL,
         max_tokens: 8192,
-        system:     systemPrompt + NO_DASH_INSTRUCTION,
+        system:     systemPrompt + CALIFICACION_INSTRUCTION + NO_DASH_INSTRUCTION,
         messages:   [{ role: 'user', content: userMessage }],
         tools:      [REPORT_TOOL],
         tool_choice: { type: 'tool', name: TOOL_NAME },
@@ -305,7 +303,7 @@ export function buildSidecar(d: IndividualReportData, periodKey: string): string
   return [
     `REPORTE INDIVIDUAL: ${d.asesor}: ${d.mes_label}${d.period_label ? ` (${d.period_label})` : ''}`,
     `Nivel: ${nivelLabel(d.nivel)} | Score: ${d.avg_score}/100 (${d.score_min} a ${d.score_max}, sigma=${d.score_sigma})`,
-    `Llamadas: ${d.call_count} | Talk ratio: ${d.talk_ratio}% | Sig. paso: ${d.pct_logra_siguiente_paso}%`,
+    `Llamadas: ${d.call_count} | Talk ratio: ${d.talk_ratio}% | Sig. paso (calificadas): ${d.pct_logra_siguiente_paso}%`,
     `Periodo clave: ${periodKey}`,
     ``,
     `RESUMEN:`,
@@ -319,8 +317,13 @@ export function buildSidecar(d: IndividualReportData, periodKey: string): string
     ``,
     `=== METRICAS_JSON ===`,
     JSON.stringify({
+      // v2 = pct_logra_siguiente_paso excluye del denominador las llamadas
+      // descartadas por no calificar. Comparar un v2 contra un v1 daria una
+      // variacion inventada, asi que el delta se omite cuando no coinciden.
+      metrics_version:          SIDECAR_METRICS_VERSION,
       avg_score:                d.avg_score,
       pct_logra_siguiente_paso: d.pct_logra_siguiente_paso,
+      pct_descarte_justificado: d.pct_descarte_justificado,
       talk_ratio:               d.talk_ratio,
     }),
   ].join('\n');
@@ -370,7 +373,11 @@ export async function processAdvisor(
 
   const has_previous           = prevMetrics !== null;
   const delta_score            = prevMetrics ? metrics.avg_score - prevMetrics.avg_score : undefined;
-  const delta_siguiente_paso   = prevMetrics ? claudeOut.pct_logra_siguiente_paso - prevMetrics.pct_logra_siguiente_paso : undefined;
+  // El score se compara siempre (su definicion no cambio); el porcentaje de
+  // siguiente paso solo contra un periodo medido con la misma regla.
+  const delta_siguiente_paso   = prevMetrics && prevMetrics.metrics_version >= SIDECAR_METRICS_VERSION
+    ? claudeOut.pct_logra_siguiente_paso - prevMetrics.pct_logra_siguiente_paso
+    : undefined;
   const delta_talk_ratio       = prevMetrics ? claudeOut.talk_ratio - prevMetrics.talk_ratio : undefined;
 
   const reportData: IndividualReportData = {

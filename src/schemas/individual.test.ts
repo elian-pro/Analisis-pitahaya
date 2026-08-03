@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nivelFromScore, nivelLabel } from './individual';
+import { nivelFromScore, nivelLabel, parseSidecarMetrics, SIDECAR_METRICS_VERSION } from './individual';
 
 test('cada umbral cae del lado correcto', () => {
   assert.equal(nivelFromScore(100), 'elite');
@@ -36,4 +36,28 @@ test('ningun nivel se queda sin etiqueta', () => {
     const label = nivelLabel(nivelFromScore(s));
     assert.ok(label && !label.includes('_'), `score ${s} → "${label}"`);
   }
+});
+
+// ── Sidecar: comparativo entre periodos ──────────────────────────────────────
+
+
+const sidecar = (json: string) => `REPORTE INDIVIDUAL: Ana\n\n=== METRICAS_JSON ===\n${json}`;
+
+test('un sidecar sin metrics_version es de la definicion vieja', () => {
+  // Los sidecars ya escritos en Drive contaban los descartes dentro del
+  // denominador de "logra siguiente paso": compararlos con los nuevos daria
+  // una caida inventada.
+  const m = parseSidecarMetrics(sidecar('{"avg_score":70,"pct_logra_siguiente_paso":40,"talk_ratio":55}'));
+  assert.equal(m?.metrics_version, 1);
+  assert.ok(m!.metrics_version < SIDECAR_METRICS_VERSION);
+});
+
+test('un sidecar nuevo declara su version', () => {
+  const m = parseSidecarMetrics(sidecar('{"metrics_version":2,"avg_score":70,"pct_logra_siguiente_paso":40,"talk_ratio":55}'));
+  assert.equal(m?.metrics_version, 2);
+  assert.ok(m!.metrics_version >= SIDECAR_METRICS_VERSION);
+});
+
+test('sin bloque de metricas no hay comparativo', () => {
+  assert.equal(parseSidecarMetrics('REPORTE INDIVIDUAL: Ana\nsin json'), null);
 });

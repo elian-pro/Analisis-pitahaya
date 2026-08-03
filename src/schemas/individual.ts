@@ -41,7 +41,14 @@ export const ClaudeIndividualOutputSchema = z.object({
   tipo_asesor:              z.enum(['linner', 'cerrador', 'desconocido']),
   objeciones_por_llamada:   z.number().nonnegative(),
   tasa_resolucion_global:   z.number().min(0).max(100),
+  // Solo sobre llamadas CALIFICADAS: descartar un lead que no califica es un
+  // resultado correcto, no un cierre fallido, y antes hundia este porcentaje.
   pct_logra_siguiente_paso: z.number().min(0).max(100),
+  // De las llamadas descartadas, en cuantas el asesor se apoyo en criterios
+  // reales (presupuesto, tiempo, decision, encaje) antes de cortar. Sin esto,
+  // "descarte" seria una salida gratis para quien se quita las llamadas de
+  // encima; aqui se mide el criterio, no el volumen de descartes.
+  pct_descarte_justificado: z.number().min(0).max(100),
   resumen:                  z.string().min(1),
 
   criterios: z.array(z.object({
@@ -87,7 +94,12 @@ export const ClaudeIndividualOutputSchema = z.object({
     cita_seguimiento:   z.number().int().nonnegative(),
     firma:              z.number().int().nonnegative(),
     fecha_decision:     z.number().int().nonnegative(),
+    // Cerro sin avanzar teniendo un lead que SI calificaba: eso es lo que se
+    // le puede reprochar al asesor.
     sin_siguiente_paso: z.number().int().nonnegative(),
+    // Cerro porque el lead no calificaba. Categoria aparte a proposito: iba
+    // mezclada con la anterior y las dos son cosas opuestas.
+    descartado_no_califica: z.number().int().nonnegative().default(0),
   }),
 
   fortalezas: z.array(z.object({
@@ -136,3 +148,44 @@ export interface IndividualReportData extends ClaudeIndividualOutput {
   delta_talk_ratio?:       number;
   mejor_llamada_record_url?: string;   // link de la grabacion de la mejor llamada (si la hoja tiene la columna)
 }
+
+// ── Sidecar de metricas ──────────────────────────────────────────────────────
+// Lo que se escribe en Drive al cerrar un periodo y se relee en el siguiente
+// para el comparativo. Vive aqui, sin dependencias, porque es un contrato de
+// datos: probarlo no deberia exigir credenciales de Google ni de Anthropic.
+
+export interface PreviousMetrics {
+  avg_score:                number;
+  pct_logra_siguiente_paso: number;
+  talk_ratio:               number;
+  metrics_version:          number;   // 1 = antes de separar los descartes
+}
+
+// Sube cuando cambia el SIGNIFICADO de una metrica del sidecar, no cuando se
+// agrega una nueva: es lo que decide si el comparativo con el periodo anterior
+// esta midiendo lo mismo.
+export const SIDECAR_METRICS_VERSION = 2;
+
+export function parseSidecarMetrics(text: string): PreviousMetrics | null {
+  const match = text.match(/=== METRICAS_JSON ===\n(\{[^\n]+\})/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    if (
+      typeof parsed.avg_score === 'number' &&
+      typeof parsed.pct_logra_siguiente_paso === 'number' &&
+      typeof parsed.talk_ratio === 'number'
+    ) {
+      return {
+        avg_score:                parsed.avg_score,
+        pct_logra_siguiente_paso: parsed.pct_logra_siguiente_paso,
+        talk_ratio:               parsed.talk_ratio,
+        metrics_version:          typeof parsed.metrics_version === 'number' ? parsed.metrics_version : 1,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+

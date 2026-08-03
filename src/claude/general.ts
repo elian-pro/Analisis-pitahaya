@@ -67,6 +67,7 @@ function summarizeAdvisor(r: AdvisorResult): string {
 
   return [
     `--- ${d.asesor} | ${nivelLabel(d.nivel).toUpperCase()} | ${d.avg_score}/100 | ${d.call_count} llamadas${deltaNote} ---`,
+    `Descartes por no calificar: ${d.cierres.descartado_no_califica ?? 0} (${d.pct_descarte_justificado}% con criterio) | Sin avanzar con lead calificado: ${d.cierres.sin_siguiente_paso}`,
     `Resumen: ${d.resumen}`,
     `Criterios:\n${criterios}`,
     `Debilidades principales:\n${debilidades}`,

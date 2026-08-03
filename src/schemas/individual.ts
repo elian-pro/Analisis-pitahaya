@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const NivelEnum     = z.enum(['excelente', 'bueno', 'aceptable', 'necesita_mejora', 'critico']);
+export const NivelEnum     = z.enum(['elite', 'alto_desempeno', 'consistente', 'en_progreso', 'punto_de_partida']);
 export const PrioridadEnum = z.enum(['alta', 'media', 'baja']);
 export const ImpactoEnum   = z.enum(['alta', 'media', 'baja']);
 
@@ -13,11 +13,26 @@ export type Nivel = z.infer<typeof NivelEnum>;
  * Umbrales iguales para todos los clientes.
  */
 export function nivelFromScore(avgScore: number): Nivel {
-  if (avgScore >= 90) return 'excelente';
-  if (avgScore >= 75) return 'bueno';
-  if (avgScore >= 60) return 'aceptable';
-  if (avgScore >= 50) return 'necesita_mejora';
-  return 'critico';
+  if (avgScore >= 85) return 'elite';
+  if (avgScore >= 70) return 'alto_desempeno';
+  if (avgScore >= 55) return 'consistente';
+  if (avgScore >= 40) return 'en_progreso';
+  return 'punto_de_partida';
+}
+
+// Cómo se escribe el nivel en el PDF. El valor del enum es un slug (va en
+// clases CSS); el texto visible se toma de aquí y nunca de un replace sobre el
+// slug, que con dos guiones bajos dejaba a medias "punto de_partida".
+const NIVEL_LABEL: Record<Nivel, string> = {
+  elite:            'Élite',
+  alto_desempeno:   'Alto desempeño',
+  consistente:      'Consistente',
+  en_progreso:      'En progreso',
+  punto_de_partida: 'Punto de partida',
+};
+
+export function nivelLabel(nivel: Nivel): string {
+  return NIVEL_LABEL[nivel] ?? nivel;
 }
 
 // ── What Claude must return for one advisor ───────────────────────────────────

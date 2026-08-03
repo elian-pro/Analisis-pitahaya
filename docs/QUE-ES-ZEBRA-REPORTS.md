@@ -135,7 +135,7 @@ El documento final tiene **dos tipos de reporte**.
 Incluye, en lenguaje claro:
 
 - **Encabezado:** nombre del asesor, periodo analizado y fecha de generación.
-- **Tipo de asesor y nivel general:** por ejemplo "cerrador" con nivel *excelente, bueno, aceptable, necesita mejora* o *crítico*.
+- **Tipo de asesor y nivel general:** por ejemplo "cerrador" con nivel *Élite* (85+), *Alto desempeño* (70–84), *Consistente* (55–69), *En progreso* (40–54) o *Punto de partida* (menos de 40). El nivel lo calcula el sistema a partir del score promedio, no lo elige la IA.
 - **Calificación del periodo:** promedio, rango (mínimo a máximo), qué tan consistente fue y número de llamadas.
 - **Comparativo con el periodo anterior:** cuánto subió o bajó en calificación, en logro del siguiente paso y en equilibrio de la conversación (o "primer periodo" si no aplica).
 - **Resumen ejecutivo** del desempeño del asesor.

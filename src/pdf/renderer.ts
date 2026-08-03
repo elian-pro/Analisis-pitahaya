@@ -2,6 +2,7 @@ import { chromium, Browser } from 'playwright';
 import { Eta } from 'eta';
 import path from 'path';
 import fs from 'fs';
+import { nivelLabel } from '../schemas/individual';
 
 const eta = new Eta({
   views: path.join(__dirname, 'templates'),
@@ -111,6 +112,7 @@ export async function renderPdf(template: string, data: Record<string, unknown>)
     _logoB64:  getLogoB64(),
     _fontsCss: getFontsCss(),
     _motifB64: getMotifB64(),
+    _nivelLabel: nivelLabel,
   };
   const html = eta.render(template, enriched);
   if (!html) throw new Error(`Template '${template}' rendered empty`);

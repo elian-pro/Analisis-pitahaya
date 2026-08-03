@@ -5,6 +5,7 @@ import {
   type ClaudeGeneralOutput,
   type GeneralReportData,
 } from '../schemas/general';
+import { nivelLabel } from '../schemas/individual';
 import type { AdvisorResult } from './individual';
 import { renderPdf } from '../pdf/renderer';
 import { monthLabel } from '../google/drive';
@@ -65,7 +66,7 @@ function summarizeAdvisor(r: AdvisorResult): string {
     : ' | Primer periodo de evaluacion';
 
   return [
-    `--- ${d.asesor} | ${d.nivel.toUpperCase()} | ${d.avg_score}/100 | ${d.call_count} llamadas${deltaNote} ---`,
+    `--- ${d.asesor} | ${nivelLabel(d.nivel).toUpperCase()} | ${d.avg_score}/100 | ${d.call_count} llamadas${deltaNote} ---`,
     `Resumen: ${d.resumen}`,
     `Criterios:\n${criterios}`,
     `Debilidades principales:\n${debilidades}`,

@@ -136,11 +136,13 @@
     text-transform: uppercase; letter-spacing: .06em; padding: 2pt 7pt;
     border-radius: var(--r-chip); border: 1px solid var(--border-strong); color: var(--text); white-space: nowrap;
   }
-  .chip.nivel-excelente,
-  .chip.nivel-bueno           { background: var(--pos-bg);    color: var(--pos);    border-color: var(--pos-bd); }
-  .chip.nivel-aceptable       { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn-bd); }
-  .chip.nivel-necesita_mejora { background: var(--orange-bg); color: var(--orange); border-color: var(--orange-bd); }
-  .chip.nivel-critico         { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
+  /* Sin rojo a proposito: el nivel mas bajo describe una etapa, no una alarma.
+     El penultimo va neutro para que el salto al ambar no se lea como castigo. */
+  .chip.nivel-elite,
+  .chip.nivel-alto_desempeno   { background: var(--pos-bg);    color: var(--pos);    border-color: var(--pos-bd); }
+  .chip.nivel-consistente      { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn-bd); }
+  .chip.nivel-en_progreso      { background: var(--surface-2); color: var(--text-muted); border-color: var(--border-strong); }
+  .chip.nivel-punto_de_partida { background: var(--orange-bg); color: var(--orange); border-color: var(--orange-bd); }
 
   .pill {
     display: inline-block; font-family: var(--mono); font-size: 6.5pt; font-weight: 600;
@@ -275,7 +277,7 @@ const fmtDelta   = function(n){ return (n >= 0 ? '+' : '') + n; };
               <% } %>
             </td>
             <td class="num" style="text-align:center;"><%= r.call_count %></td>
-            <td><span class="chip nivel-<%= r.nivel %>"><%= r.nivel.replace('_', ' ') %></span></td>
+            <td><span class="chip nivel-<%= r.nivel %>"><%= it._nivelLabel(r.nivel) %></span></td>
           </tr>
         <% } %>
         </tbody>

@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import {
   ClaudeIndividualOutputSchema,
   nivelFromScore,
+  nivelLabel,
   type ClaudeIndividualOutput,
   type IndividualReportData,
 } from '../schemas/individual';
@@ -303,7 +304,7 @@ export function buildSidecar(d: IndividualReportData, periodKey: string): string
 
   return [
     `REPORTE INDIVIDUAL: ${d.asesor}: ${d.mes_label}${d.period_label ? ` (${d.period_label})` : ''}`,
-    `Nivel: ${d.nivel} | Score: ${d.avg_score}/100 (${d.score_min} a ${d.score_max}, sigma=${d.score_sigma})`,
+    `Nivel: ${nivelLabel(d.nivel)} | Score: ${d.avg_score}/100 (${d.score_min} a ${d.score_max}, sigma=${d.score_sigma})`,
     `Llamadas: ${d.call_count} | Talk ratio: ${d.talk_ratio}% | Sig. paso: ${d.pct_logra_siguiente_paso}%`,
     `Periodo clave: ${periodKey}`,
     ``,

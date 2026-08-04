@@ -3161,13 +3161,6 @@
     if (tab === 'radar')      populateRadarSelectors();
   }
 
-  // Deep link: abrir directo una pestaña con #automation, #dashboard, etc. Lo usa
-  // el link "Ver detalles" de los avisos de error en Google Chat.
-  (function openTabFromHash(){
-    const t = (location.hash || '').slice(1);
-    if (_APP_TABS.includes(t)) setTab(t);
-  })();
-
   // ── File picker ad-hoc (botón + nombre de archivo) ─────────────────────────
   function _fpOpen(id){ document.getElementById(id).click(); }
   function _fpUpdate(input){
@@ -5305,6 +5298,18 @@
     _schedSig = sig;
     renderScheduleList();
   }
+
+  // Deep link: abrir directo una pestaña con #automation, #dashboard, etc. Lo usa
+  // el link "Ver detalles" de los avisos de error en Google Chat.
+  //
+  // Va al FINAL del script a propósito: setTab() dispara el render de la pestaña,
+  // y ese render usa constantes (SCHEDULES_API, CLIENTS_API) declaradas más abajo
+  // con `const`. Corriendo antes, entrar por #automation moría con "Cannot access
+  // 'SCHEDULES_API' before initialization" y la pestaña quedaba en rojo.
+  (function openTabFromHash(){
+    const t = (location.hash || '').slice(1);
+    if (_APP_TABS.includes(t)) setTab(t);
+  })();
 </script>
 
 <!-- ── Combobox Zebra (reemplaza los <select> nativos) ────────────────────────

@@ -2,6 +2,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { JOBS_FILE } from '../config/paths';
 import { dbEnabled, JOBS_TABLE, dbLoadAll, dbUpsert } from '../config/db';
+import { humanizeError } from '../humanizeError';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 
@@ -137,6 +138,9 @@ export function getJob(id: string): Job | undefined {
 export function updateJob(id: string, patch: Partial<Omit<Job, 'id' | 'created_at'>>): Job {
   const job = store.get(id);
   if (!job) throw new Error(`Job ${id} not found`);
+  // El `error` del job lo lee la UI y lo reenvía el scheduler a Chat: se guarda
+  // ya traducido. El crudo queda en los logs del runner, que es donde se depura.
+  if (patch.error) patch = { ...patch, error: humanizeError(patch.error) };
   Object.assign(job, patch, { updated_at: new Date().toISOString() });
   persist(job);
   return job;

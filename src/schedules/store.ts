@@ -1,6 +1,7 @@
 import fs from 'fs';
 import crypto from 'crypto';
 import { SCHEDULES_FILE } from '../config/paths';
+import { humanizeError } from '../humanizeError';
 import {
   dbEnabled,
   SCHEDULES_TABLE,
@@ -142,11 +143,11 @@ export async function markFailed(id: string, error: string): Promise<void> {
   });
 }
 
-// Cómo se guarda un error: recortado, con texto por defecto si viene vacío.
-// Comparar contra `last_error` exige pasar por aquí, o un error de 501 caracteres
-// nunca se reconocería como repetido.
+// Cómo se guarda un error: traducido a lenguaje humano, recortado, con texto por
+// defecto si viene vacío. Comparar contra `last_error` exige pasar por aquí, o un
+// error de 501 caracteres nunca se reconocería como repetido.
 export function errorDetail(error: string): string {
-  return (error || 'Error desconocido').slice(0, 500);
+  return humanizeError(error).slice(0, 500);
 }
 
 // ¿Este fallo es el mismo que el anterior? Lo usa el aviso de Chat para mandar

@@ -1,4 +1,4 @@
-import { listSchedules, getSchedule, markAttempt, markRan, markFailed, isRepeatError, advisorMode, updateSchedule, type Schedule } from './store';
+import { listSchedules, getSchedule, markAttempt, markRan, markFailed, isRepeatError, errorDetail, advisorMode, updateSchedule, type Schedule } from './store';
 
 // Result of a single fire attempt's SYNCHRONOUS phase (advisor read + job
 // enqueue). The report job itself runs asynchronously afterwards; its outcome
@@ -145,9 +145,13 @@ async function notifyError(
   schedule: Schedule,
   clientName: string,
   periodo: string,
-  detail: string,
+  raw: string,
 ): Promise<void> {
   if (!schedule.error_notify_enabled || !schedule.error_chat_space_id) return;
+
+  // Mismo texto que guarda markFailed (traducido y recortado): así el aviso y la
+  // tarjeta dicen lo mismo, y la comparación de "error repetido" cuadra.
+  const detail = errorDetail(raw);
 
   // ¿Es el MISMO error que la vez pasada? `schedule` es el objeto cargado al
   // inicio del disparo y markFailed() no lo muta, así que `last_error` todavía

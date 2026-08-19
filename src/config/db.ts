@@ -50,10 +50,14 @@ export const JOBS_TABLE = 'jobs';
 export const TOKEN_LOG_TABLE = 'token_log';
 export const REPORT_METRICS_TABLE = 'report_metrics';
 export const ADVISORS_TABLE = 'advisors';
+export const CALLS_TABLE = 'calls';
 
 /**
  * Creates the tables if they don't exist. Safe to run on every boot.
  */
+// ponytail: CREATE TABLE IF NOT EXISTS no altera tablas ya creadas. Si cambian
+// los pesos de calif_global (10/25/30/35), hay que hacer el ALTER a mano; pasar
+// a migraciones versionadas solo cuando eso ocurra más de una vez.
 export async function ensureSchema(): Promise<void> {
   if (!pool) return;
   // Config + job tables: full object stored per row in a jsonb column.
@@ -110,7 +114,75 @@ export async function ensureSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS report_metrics_client_period_idx
        ON ${REPORT_METRICS_TABLE} (client_id, period_start)`,
   );
-  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors)');
+  // Llamadas: reemplaza la hoja "Analisis" de Google Sheets como fuente de
+  // verdad. La fila cruda del webhook de Callpicker se inserta primero y se
+  // completa después con transcripción y análisis, de modo que una llamada
+  // sobrevive aunque Gemini o el modelo fallen (en Sheets se perdía: no se
+  // escribía nada hasta terminar todo el pipeline).
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS ${CALLS_TABLE} (
+       call_id       TEXT        PRIMARY KEY,
+       -- Nullable a propósito: dos clientes pueden compartir la misma fuente de
+       -- llamadas y solo el roster de asesores los separa (ver advisors/match.ts),
+       -- así que a veces no se puede decidir de quién es una llamada al recibirla.
+       -- Se guarda igual, con estado 'sin_asignar', en vez de rechazarla.
+       client_id     TEXT,
+       fecha         TIMESTAMPTZ NOT NULL,
+       asesor        TEXT        NOT NULL,
+       callee_number TEXT,
+       callee_city   TEXT,
+       callee_state  TEXT,
+       call_status   TEXT,
+       wait_time     INTEGER,
+       duracion_segundos INTEGER NOT NULL DEFAULT 0,
+       record        TEXT,
+       raw           JSONB,
+       procesado_at  TIMESTAMPTZ,
+       lead_id       TEXT,
+       tipo_contacto TEXT,
+       presentacion  TEXT,
+       precalif      TEXT,
+       exploracion   TEXT,
+       agenda        TEXT,
+       analisis      TEXT,
+       transcripcion TEXT,
+       -- Estado del pipeline. 'descartada' (corta o sin grabación) NO es un fallo
+       -- y se distingue de 'fallida' para que el monitoreo no las mezcle; sin esta
+       -- columna, "pendiente" y "rota" eran indistinguibles.
+       estado        TEXT        NOT NULL DEFAULT 'recibida'
+                     CHECK (estado IN ('recibida','descartada','transcrita',
+                                       'analizada','fallida','sin_asignar')),
+       error         TEXT,
+       -- Frena el reintento eterno de un fallo permanente (audio borrado, cuota).
+       intentos      INTEGER     NOT NULL DEFAULT 0,
+       -- Reemplaza la fórmula ArrayFormula de la columna "Calif global".
+       -- La original usaba HALLAR("S", ...), que busca la letra suelta sin
+       -- distinguir mayúsculas: "Whatsapp" contenía una "s" y cobraba los 35
+       -- puntos de agendamiento pese a significar que el asesor NUNCA intentó
+       -- agendar. El patrón ^s[ií] exige que el valor empiece por "si",
+       -- tolerando Si/Sí/SI del modelo sin volver a premiar "Whatsapp".
+       calif_global  INTEGER GENERATED ALWAYS AS (
+         CASE WHEN analisis LIKE '%Buzón de voz%' THEN NULL
+         ELSE (CASE WHEN presentacion ~* '^s[ií]' THEN 10 ELSE 0 END)
+            + (CASE WHEN precalif     ~* '^s[ií]' THEN 25 ELSE 0 END)
+            + (CASE WHEN exploracion  ~* '^s[ií]' THEN 30 ELSE 0 END)
+            + (CASE WHEN agenda       ~* '^s[ií]' THEN 35 ELSE 0 END)
+         END
+       ) STORED
+     )`,
+  );
+  // Todas las lecturas del reporte son por cliente y rango de fechas.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS calls_lookup_idx ON ${CALLS_TABLE} (client_id, fecha)`,
+  );
+  // El barrido busca lo que quedó a medias; parcial para no indexar los estados
+  // terminales ('analizada', 'descartada'), que con el tiempo son la mayoría.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS calls_pendientes_idx
+       ON ${CALLS_TABLE} (estado, intentos)
+       WHERE estado IN ('recibida','transcrita','fallida')`,
+  );
+  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors, calls)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

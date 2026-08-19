@@ -21,6 +21,15 @@ const envSchema = z.object({
   // construir el redirect_uri del flujo de setup OAuth in-app. Si se deja vacía
   // se deriva de las cabeceras del proxy (X-Forwarded-Proto + Host).
   APP_BASE_URL: z.string().optional(),
+
+  // ── Pipeline de llamadas (webhook → transcripción → análisis → Postgres) ────
+  // Todas opcionales a propósito: el pipeline nace apagado y la app tiene que
+  // poder arrancar sin ninguna de ellas. Se validan en tiempo de uso con los
+  // getters de más abajo, igual que las de OAuth.
+  CALLS_PIPELINE:      z.enum(['on', 'off']).default('off'),
+  CALLS_WEBHOOK_TOKEN: z.string().optional(),
+  GEMINI_API_KEY:      z.string().optional(),
+  OPENAI_API_KEY:      z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -75,6 +84,33 @@ export function getGoogleOAuthAppCreds(): { clientId: string; clientSecret: stri
  * Valida en tiempo de uso (no al arrancar) para que el setup pueda correr con
  * solo CLIENT_ID/SECRET y generar el refresh token que falta.
  */
+// ── Pipeline de llamadas ─────────────────────────────────────────────────────
+
+/**
+ * Con el pipeline apagado el webhook responde 503 y el barrido no arranca, pero
+ * la lectura y el procesamiento manual de una llamada siguen funcionando: así se
+ * puede recorrer el pipeline entero antes de exponerlo a tráfico real.
+ */
+export const callsPipelineEnabled = (): boolean => env.CALLS_PIPELINE === 'on';
+
+export function getGeminiKey(): string {
+  if (!env.GEMINI_API_KEY) {
+    throw new Error(
+      'Falta GEMINI_API_KEY para transcribir el audio. Consíguela en https://aistudio.google.com/apikey',
+    );
+  }
+  return env.GEMINI_API_KEY;
+}
+
+export function getOpenAIKey(): string {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error(
+      'Falta OPENAI_API_KEY para analizar la transcripción. Consíguela en https://platform.openai.com/api-keys',
+    );
+  }
+  return env.OPENAI_API_KEY;
+}
+
 export function getGoogleOAuth(): GoogleOAuthCredentials {
   const { clientId, clientSecret } = getGoogleOAuthAppCreds();
   const refreshToken = env.GOOGLE_OAUTH_REFRESH_TOKEN;

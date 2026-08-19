@@ -35,6 +35,12 @@ const ClientBodySchema = z.object({
   radar_sidecar_folder_id:       z.string().optional(),
   radar_min_duration_seconds:    z.number().int().min(0).max(3600).optional(),
   radar_transcripcion_max_chars: z.number().int().min(100).max(50000).optional(),
+  // ── Pipeline de llamadas (opcionales; ver ClientConfig) ──────────────────────
+  callpicker_tag:                z.string().optional(),
+  contexto_negocio:              z.string().optional(),
+  prompt_transcripcion:          z.string().optional(),
+  prompt_analisis:               z.string().optional(),
+  call_min_duration_seconds:     z.number().int().min(0).max(3600).optional(),
 });
 
 router.get('/', async (_req: Request, res: Response): Promise<void> => {

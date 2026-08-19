@@ -45,6 +45,23 @@ export interface ClientConfig {
   radar_sidecar_folder_id?:      string;   // carpeta del sidecar radar-YYYY-MM.json (opcional)
   radar_min_duration_seconds?:   number;   // filtro de duración del Radar (default 200)
   radar_transcripcion_max_chars?: number;  // recorte de transcripción del Radar (default 8000)
+  // ── Pipeline de llamadas (webhook → transcripción → análisis) ───────────────
+  // Todos opcionales: el pipeline nace apagado y los clientes existentes siguen
+  // funcionando sin tocarlos.
+  //
+  // `callpicker_description` esperado ("ZD - Midstorage"). Solo hace falta cuando
+  // dos clientes comparten asesores y hay que desempatar (ver calls/resolveClient).
+  callpicker_tag?:         string;
+  // Descripción del negocio que se inyecta en el {contexto} de los prompts por
+  // defecto. Es lo único que normalmente hay que rellenar por cliente.
+  contexto_negocio?:       string;
+  // Sustituyen el prompt entero. Vacío => se usa el default con {contexto}.
+  prompt_transcripcion?:   string;
+  prompt_analisis?:        string;
+  // Duración mínima para transcribir. Hoy en n8n es 90 s en Midstorage, 100 s en
+  // Gira y ninguna en Sofía. Vacío => MIN_CALL_DURATION_SECONDS.
+  call_min_duration_seconds?: number;
+
   // Internal bookkeeping (not part of the public CRUD form, set by
   // advisors/store.ts): true once this client's advisor roster has been
   // imported from Sheets into the `advisors` table, so the one-time import

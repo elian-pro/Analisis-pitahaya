@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { env } from './config/env';
+import { env, callsPipelineEnabled } from './config/env';
 import { dbEnabled, ensureSchema } from './config/db';
 import { seedClientsFromFileIfEmpty } from './clients/manager';
 import { seedSchedulesFromFileIfEmpty } from './schedules/store';
@@ -18,9 +18,11 @@ import chatRouter from './routes/chat';
 import sheetsRouter from './routes/sheets';
 import driveRouter from './routes/drive';
 import oauthSetupRouter from './routes/oauthSetup';
+import { webhookRouter, callsRouter } from './routes/calls';
 import authRouter from './auth/router';
 import { requireApiAuth, requirePage } from './auth/middleware';
 import { startScheduler } from './schedules/runner';
+import { startCallsSweeper } from './calls/sweeper';
 
 const app = express();
 
@@ -36,6 +38,10 @@ const staticDir = path.join(__dirname, '..');
 app.use('/api/health', healthRouter);          // Docker healthcheck
 app.use('/auth', authRouter);                  // login / logout / config / me
 app.get('/login', (_req, res) => res.sendFile(path.join(staticDir, 'login.html')));
+// Webhook de Callpicker: es máquina-a-máquina, así que no puede pasar por la
+// cookie de sesión. Va aquí ARRIBA a propósito — montarlo debajo de la línea de
+// requireApiAuth lo dejaría inalcanzable. Trae su propio token (calls/webhookAuth).
+app.use('/api/calls/webhook', webhookRouter);
 
 // ── Protected API (401 JSON when unauthenticated; no-op when auth disabled) ────
 app.use('/api', requireApiAuth);
@@ -49,6 +55,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/sheets', sheetsRouter);
 app.use('/api/drive', driveRouter);            // selector de carpetas de Drive
 app.use('/api/oauth', oauthSetupRouter);       // setup OAuth cuenta central (Sheets/Drive)
+app.use('/api/calls', callsRouter);            // monitoreo del pipeline de llamadas
 
 // ── Protected frontend (redirect to /login when unauthenticated) ──────────────
 app.use(requirePage);
@@ -77,6 +84,8 @@ async function bootstrap(): Promise<void> {
   app.listen(env.PORT, () => {
     console.log(`✅ Zebra Reports listening on port ${env.PORT}`);
     startScheduler();
+    // Solo con el pipeline encendido: apagado no debe haber ni un tick de fondo.
+    if (callsPipelineEnabled() && dbEnabled) startCallsSweeper();
   });
 }
 

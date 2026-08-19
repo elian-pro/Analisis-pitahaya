@@ -459,6 +459,34 @@
     .cal-day-cell:not(.disabled):hover{background:var(--surface);}
     .cal-day-cell.cal-day-sel{background:var(--accent);color:var(--on-accent) !important;font-weight:600;}
     .cal-day-cell.disabled{opacity:0.22;cursor:default;pointer-events:none;}
+/* ── Pestaña Llamadas ─────────────────────────────────────────────────────── */
+.calls-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.calls-chip{font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;
+  border-radius:999px;border:1px solid var(--line,#2a2a2a);background:rgba(255,255,255,.03)}
+.calls-row{display:grid;grid-template-columns:150px 1fr 70px 120px 60px 90px;gap:12px;
+  align-items:center;padding:11px 8px;border-bottom:1px solid var(--line,#2a2a2a);font-size:13px}
+.calls-row.head{font-size:11px;letter-spacing:.05em;text-transform:uppercase;opacity:.6;font-weight:600}
+.calls-row.item{cursor:pointer}
+.calls-row.item:hover{background:rgba(255,255,255,.03)}
+.calls-est{font-size:11px;padding:3px 9px;border-radius:999px;white-space:nowrap;justify-self:start}
+.est-analizada{background:rgba(34,197,94,.15);color:#4ade80}
+.est-fallida{background:rgba(239,68,68,.15);color:#f87171}
+.est-descartada{background:rgba(148,163,184,.15);color:#94a3b8}
+.est-recibida,.est-transcrita{background:rgba(234,179,8,.15);color:#facc15}
+.est-sin_asignar{background:rgba(59,130,246,.15);color:#60a5fa}
+.calls-detail{padding:4px 8px 18px;border-bottom:1px solid var(--line,#2a2a2a);
+  font-size:12.5px;line-height:1.7}
+/* …solo el valor lo preserva. En el contenedor, los saltos y la indentación del
+   template literal se renderizaban como un hueco enorme sobre el primer campo. */
+.calls-val{white-space:pre-wrap;word-break:break-word}
+.calls-detail a{color:var(--accent,#4ade80);text-decoration:none;border-bottom:1px solid currentColor}
+.calls-detail a:hover{opacity:.75}
+.calls-detail .lbl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;opacity:.55;
+  display:block;margin:12px 0 4px}
+.calls-empty{padding:28px 8px;text-align:center;opacity:.55;font-size:13px}
+.calls-err{color:#f87171;font-size:12px;padding:6px 8px}
+@media(max-width:900px){.calls-row{grid-template-columns:110px 1fr 90px;font-size:12px}
+  .calls-row>:nth-child(n+4){display:none}}
   </style>
 </head>
 <body data-theme="dark">
@@ -482,6 +510,7 @@
     <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')"><i class="ti ti-radar"></i>RADAR</button>
     <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
     <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
+    <button class="app-tab" id="tab-btn-calls" onclick="setTab('calls')"><i class="ti ti-phone"></i>LLAMADAS</button>
     <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
   </nav>
   <div id="tab-reports" class="tab-panel active">
@@ -854,6 +883,87 @@
         <button class="btn-primary" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:18px;"><i class="ti ti-file-analytics"></i> Generar desde archivo</button>
         <div id="radar-upload-status" class="radar-status">Sube un archivo markdown para comenzar el análisis.</div>
       </div>
+    </div>
+  </div>
+  <div id="tab-calls" class="tab-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Llamadas</div>
+        <div class="panel-sub">Pipeline propio: webhook → transcripción → análisis · sustituye a los flujos de n8n</div>
+      </div>
+      <button class="btn-sm" onclick="reprocessCalls()"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="field" style="min-width:170px;margin:0;">
+          <label class="field-label">Cliente</label>
+          <select id="calls-client" onchange="renderCalls()"><option value="">Todos</option></select>
+        </div>
+        <div class="field" style="min-width:150px;margin:0;">
+          <label class="field-label">Estado</label>
+          <select id="calls-estado" onchange="renderCalls()">
+            <option value="">Todos</option>
+            <option value="analizada">Analizada</option>
+            <option value="fallida">Fallida</option>
+            <option value="recibida">Pendiente</option>
+            <option value="transcrita">Transcrita</option>
+            <option value="descartada">Descartada</option>
+            <option value="sin_asignar">Sin asignar</option>
+          </select>
+        </div>
+        <div class="field" style="min-width:190px;margin:0;">
+          <label class="field-label">Periodo</label>
+          <select id="calls-periodo" onchange="onCallsPeriodo()">
+            <option value="30d">Últimos 30 días</option>
+            <option value="hoy">Hoy</option>
+            <option value="semana">Semana actual</option>
+            <option value="mes">Mes actual</option>
+            <option value="mes_ant">Mes anterior</option>
+            <option value="todo">Todo</option>
+            <option value="custom">Personalizado…</option>
+          </select>
+        </div>
+        <!-- Desde y Hasta van juntos en un solo ítem flex: si el ancho no da,
+             envuelven los dos a la vez en vez de quedar uno en cada fila. -->
+        <div id="calls-fechas" style="display:none;gap:14px;align-items:flex-end;">
+        <div class="field" id="calls-from-field" style="position:relative;margin:0;">
+          <div class="field-label">Desde</div>
+          <input type="hidden" id="calls-from">
+          <div id="calls-from-display" onclick="toggleDateCal('calls','from',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:138px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+            <span id="calls-from-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+          </div>
+          <div id="calls-from-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+            <div class="inline-cal-head">
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('calls','from',-1,event)">‹</button>
+              <div class="mini-cal-title" id="calls-from-cal-title" style="margin-bottom:0;"></div>
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('calls','from',1,event)">›</button>
+            </div>
+            <div class="cal-rows" id="calls-from-cal-rows"></div>
+          </div>
+        </div>
+        <div class="field" id="calls-to-field" style="position:relative;margin:0;">
+          <div class="field-label">Hasta</div>
+          <input type="hidden" id="calls-to">
+          <div id="calls-to-display" onclick="toggleDateCal('calls','to',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--muted);min-width:138px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">
+            <span id="calls-to-display-text">Selecciona fecha</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>
+          </div>
+          <div id="calls-to-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">
+            <div class="inline-cal-head">
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('calls','to',-1,event)">‹</button>
+              <div class="mini-cal-title" id="calls-to-cal-title" style="margin-bottom:0;"></div>
+              <button type="button" class="cal-nav-btn" onclick="dateCalNav('calls','to',1,event)">›</button>
+            </div>
+            <div class="cal-rows" id="calls-to-cal-rows"></div>
+          </div>
+        </div>
+        </div>
+      </div>
+      <div id="calls-counts" class="calls-counts"></div>
+    </div>
+
+    <div class="card">
+      <div id="calls-list"><div class="calls-empty">Cargando…</div></div>
     </div>
   </div>
 </main>
@@ -2489,7 +2599,8 @@
   const _DATE_MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   let _dateCalState = {};
   // Qué hacer justo después de que el usuario elige un día, por prefijo.
-  const _DATE_PICKER_ON_PICK = { dash: () => loadDashboard(), tok: () => loadTokenStats() };
+  const _DATE_PICKER_ON_PICK = { dash: () => loadDashboard(), tok: () => loadTokenStats(),
+                               calls: () => renderCalls() };
 
   function _dateISO(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -3144,7 +3255,7 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','radar','dashboard','automation','settings'];
+  const _APP_TABS = ['reports','radar','dashboard','automation','calls','settings'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -3159,6 +3270,7 @@
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
+    if (tab === 'calls')      renderCalls();
   }
 
   // ── File picker ad-hoc (botón + nombre de archivo) ─────────────────────────
@@ -5297,6 +5409,198 @@
     if (sig === _schedSig) return;   // nothing changed → keep DOM (animation stays smooth)
     _schedSig = sig;
     renderScheduleList();
+  }
+
+
+
+  // Rangos de los presets de periodo. `hoy` entra por parámetro para poder
+  // verificarlo con fechas fijas (fin de mes, domingo, año bisiesto) en vez de
+  // depender del día en que se ejecute.
+  //
+  // La semana va de LUNES a DOMINGO, igual que el calendario del dashboard
+  // (renderDateCal arranca las filas en lunes). getDay() da 0 para domingo, de
+  // ahí el ajuste: un domingo pertenece a la semana que empezó 6 días antes, no
+  // a la que empieza al día siguiente.
+  function _periodoRango(preset, hoy = new Date()) {
+    const d = (y, m, dd) => _dateISO(new Date(y, m, dd));
+    const Y = hoy.getFullYear(), M = hoy.getMonth(), D = hoy.getDate();
+
+    switch (preset) {
+      case 'hoy':
+        return { from: d(Y, M, D), to: d(Y, M, D) };
+      case 'semana': {
+        const dow = hoy.getDay();
+        const lunes = D - (dow === 0 ? 6 : dow - 1);
+        return { from: d(Y, M, lunes), to: d(Y, M, lunes + 6) };
+      }
+      case 'mes':
+        return { from: d(Y, M, 1), to: d(Y, M + 1, 0) };   // día 0 = último del mes previo
+      case 'mes_ant':
+        return { from: d(Y, M - 1, 1), to: d(Y, M, 0) };
+      case '30d':
+        return { from: d(Y, M, D - 29), to: d(Y, M, D) };  // hoy incluido
+      default:
+        return { from: '', to: '' };                        // 'todo' y 'custom'
+    }
+  }
+
+  function onCallsPeriodo() {
+    const preset = document.getElementById('calls-periodo').value;
+    const custom = preset === 'custom';
+
+    // En modo Personalizado se descubren los dos date pickers; en cualquier otro
+    // se ocultan y el rango lo fija el preset.
+    document.getElementById('calls-fechas').style.display = custom ? 'flex' : 'none';
+    for (const w of ['from', 'to']) document.getElementById(`calls-${w}-cal`).style.display = 'none';
+
+    if (!custom) {
+      const { from, to } = _periodoRango(preset);
+      _setPickerDate('calls', 'from', from);
+      _setPickerDate('calls', 'to', to);
+    }
+    renderCalls();
+  }
+
+  // ── Pestaña Llamadas ───────────────────────────────────────────────────────
+  const CALLS_API = '/api/calls';
+  let _callsAbiertaId = null;
+
+  const _CALL_EST_LABEL = {
+    analizada:'Analizada', fallida:'Fallida', descartada:'Descartada',
+    recibida:'Pendiente', transcrita:'Transcrita', sin_asignar:'Sin asignar',
+  };
+
+  function _dur(s) {
+    if (!s) return '—';
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  function _fechaHora(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '—';
+    return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short' })
+         + ' ' + d.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  async function _fillCallsClients() {
+    const sel = document.getElementById('calls-client');
+    if (!sel || sel.dataset.filled) return;
+    try {
+      const r = await fetch(CLIENTS_API);
+      if (!r.ok) return;
+      for (const c of await r.json()) {
+        sel.insertAdjacentHTML('beforeend', `<option value="${_esc(c.id)}">${_esc(c.name)}</option>`);
+      }
+      sel.dataset.filled = '1';
+    } catch (_) { /* el filtro se queda en "Todos" */ }
+  }
+
+  async function renderCalls() {
+    const box = document.getElementById('calls-list');
+    if (!box) return;
+    await _fillCallsClients();
+
+    // Primera entrada: aplica el preset por defecto para no consultar sin rango.
+    // onCallsPeriodo() vuelve a llamar aquí, ya con las fechas puestas.
+    if (!box.dataset.periodoAplicado) {
+      box.dataset.periodoAplicado = '1';
+      onCallsPeriodo();
+      return;
+    }
+
+    const q = new URLSearchParams();
+    // 'calls-from' y 'calls-to' son inputs hidden que rellena el date picker
+    // del repo (toggleDateCal/_setPickerDate), no <input type="date"> nativos.
+    for (const [k, id] of [['client_id','calls-client'],['estado','calls-estado'],
+                           ['from','calls-from'],['to','calls-to']]) {
+      const v = document.getElementById(id)?.value;
+      if (v) q.set(k, v);
+    }
+
+    try {
+      const r = await fetch(`${CALLS_API}?${q}`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      const { calls, counts } = await r.json();
+
+      document.getElementById('calls-counts').innerHTML = Object.entries(counts || {})
+        .map(([e, n]) => `<span class="calls-chip">${_esc(_CALL_EST_LABEL[e] || e)} ${n}</span>`)
+        .join('') || '<span class="calls-chip">Sin llamadas todavía</span>';
+
+      if (!calls.length) {
+        box.innerHTML = '<div class="calls-empty">No hay llamadas con esos filtros.</div>';
+        return;
+      }
+
+      box.innerHTML =
+        `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div>Duración</div>
+         <div>Estado</div><div>Calif.</div><div></div></div>` +
+        calls.map(c => `
+          <div class="calls-row item" onclick="toggleCallDetail('${_esc(c.call_id)}')">
+            <div>${_esc(_fechaHora(c.fecha))}</div>
+            <div>${_esc(c.asesor || '—')}</div>
+            <div>${_dur(c.duracion_segundos)}</div>
+            <div><span class="calls-est est-${_esc(c.estado)}">${_esc(_CALL_EST_LABEL[c.estado] || c.estado)}</span></div>
+            <div>${c.calif_global ?? '—'}</div>
+            <div>${c.estado === 'fallida'
+              ? `<button class="btn-sm" onclick="event.stopPropagation();reprocessOne('${_esc(c.call_id)}')">Reintentar</button>`
+              : ''}</div>
+          </div>
+          <div id="cd-${_esc(c.call_id)}"></div>`).join('');
+
+      if (_callsAbiertaId) { const id = _callsAbiertaId; _callsAbiertaId = null; toggleCallDetail(id); }
+    } catch (e) {
+      box.innerHTML = `<div class="calls-err">No se pudieron cargar las llamadas: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  async function toggleCallDetail(callId) {
+    const slot = document.getElementById('cd-' + callId);
+    if (!slot) return;
+    if (slot.innerHTML) { slot.innerHTML = ''; _callsAbiertaId = null; return; }
+
+    _callsAbiertaId = callId;
+    slot.innerHTML = '<div class="calls-detail">Cargando…</div>';
+    try {
+      const r = await fetch(`${CALLS_API}/${encodeURIComponent(callId)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const c = await r.json();
+      const campo = (l, v) => v ? `<span class="lbl">${l}</span><div class="calls-val">${_esc(String(v))}</div>` : '';
+      slot.innerHTML = `<div class="calls-detail">
+        ${c.error ? `<div class="calls-err">${_esc(c.error)}${c.intentos ? ` · ${c.intentos} intento(s)` : ''}</div>` : ''}
+        ${campo('Teléfono del prospecto', [c.callee_number, c.callee_city].filter(Boolean).join(' · '))}
+        ${campo('Tipo de contacto', c.tipo_contacto)}
+        ${campo('Presentación / Precalif. / Exploración / Agenda',
+                [c.presentacion, c.precalif, c.exploracion, c.agenda].some(Boolean)
+                  ? `${c.presentacion || '—'} · ${c.precalif || '—'} · ${c.exploracion || '—'} · ${c.agenda || '—'}` : '')}
+        ${campo('Análisis', c.analisis)}
+        ${campo('Transcripción', c.transcripcion)}
+        ${c.record ? `<span class="lbl">Grabación</span><a href="${_esc(c.record)}" target="_blank" rel="noopener">Escuchar audio</a>` : ''}
+      </div>`;
+    } catch (e) {
+      slot.innerHTML = `<div class="calls-err">No se pudo cargar el detalle: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  async function reprocessOne(callId) {
+    try {
+      const r = await fetch(`${CALLS_API}/${encodeURIComponent(callId)}/process`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) alert('No se pudo reprocesar: ' + (d.error || `HTTP ${r.status}`));
+    } catch (e) { alert('No se pudo reprocesar: ' + e.message); }
+    renderCalls();
+  }
+
+  async function reprocessCalls() {
+    if (!await _ask('Reprocesar pendientes',
+                    'Se reintentarán las llamadas pendientes y fallidas. Consume transcripción y análisis.',
+                    { okLabel: 'Reprocesar' })) return;
+    try {
+      const r = await fetch(`${CALLS_API}/reprocess`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      alert(`${d.procesadas ?? 0} procesada(s), ${d.fallidas ?? 0} con error.`);
+    } catch (e) { alert('No se pudo reprocesar: ' + e.message); }
+    renderCalls();
   }
 
   // Deep link: abrir directo una pestaña con #automation, #dashboard, etc. Lo usa

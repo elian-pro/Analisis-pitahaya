@@ -67,6 +67,11 @@ export interface ClientConfig {
   // Descripción del negocio que se inyecta en el {contexto} de los prompts por
   // defecto. Es lo único que normalmente hay que rellenar por cliente.
   contexto_negocio?:       string;
+  // De dónde salió ese contexto, cuando salió de ZCIS: su id allí y la fecha de
+  // la oferta que se copió. La copia es deliberada —el texto queda editable— y
+  // guardar la fecha es lo que permite avisar de que la oferta cambió después.
+  zcis_id?:                string;
+  zcis_actualizado_en?:    string;
   // Sustituyen el prompt entero. Vacío => se usa el default con {contexto}.
   prompt_transcripcion?:   string;
   prompt_analisis?:        string;

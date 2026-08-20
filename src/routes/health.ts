@@ -24,7 +24,7 @@ router.get('/', (_req, res) => {
     // `features` es lo que distingue una versión de otra sin necesidad de un
     // número de build: si esta clave no viene en la respuesta, lo desplegado es
     // anterior al pipeline de llamadas.
-    features: ['calls-pipeline', 'calls-diagnostico'],
+    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta'],
     proceso: {
       arrancadoEn: calls.arrancadoEn,
       uptimeMin:   calls.uptimeMin,
@@ -35,6 +35,9 @@ router.get('/', (_req, res) => {
       geminiKey:  Boolean(process.env.GEMINI_API_KEY),
       openaiKey:  Boolean(process.env.OPENAI_API_KEY),
     },
+    // Si la fila de "Traer oferta" no aparece, esto responde por qué sin
+    // necesidad de entrar con sesión. Booleano: la llave nunca sale de aquí.
+    zcis: { configurado: Boolean(process.env.ZCIS_API_KEY) },
   });
 });
 

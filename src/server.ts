@@ -20,6 +20,7 @@ import sheetsRouter from './routes/sheets';
 import driveRouter from './routes/drive';
 import oauthSetupRouter from './routes/oauthSetup';
 import callsRouter from './routes/calls';
+import zcisRouter from './routes/zcis';
 import authRouter from './auth/router';
 import { requireApiAuth, requirePage } from './auth/middleware';
 import { startScheduler } from './schedules/runner';
@@ -53,6 +54,7 @@ app.use('/api/sheets', sheetsRouter);
 app.use('/api/drive', driveRouter);            // selector de carpetas de Drive
 app.use('/api/oauth', oauthSetupRouter);       // setup OAuth cuenta central (Sheets/Drive)
 app.use('/api/calls', callsRouter);            // monitoreo del pipeline de llamadas
+app.use('/api/zcis', zcisRouter);              // oferta del cliente desde el panel ZCIS
 
 // ── Protected frontend (redirect to /login when unauthenticated) ──────────────
 app.use(requirePage);

@@ -39,6 +39,8 @@ const ClientBodySchema = z.object({
   calls_source:                  z.enum(['sheets','postgres']).optional(),
   calls_schema:                  z.string().optional(),
   contexto_negocio:              z.string().optional(),
+  zcis_id:                       z.string().optional(),
+  zcis_actualizado_en:           z.string().optional(),
   prompt_transcripcion:          z.string().optional(),
   prompt_analisis:               z.string().optional(),
   call_min_duration_seconds:     z.number().int().min(0).max(3600).optional(),

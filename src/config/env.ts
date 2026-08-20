@@ -31,6 +31,13 @@ const envSchema = z.object({
   CALLS_PIPELINE:      z.enum(['on', 'off']).default('off'),
   GEMINI_API_KEY:      z.string().optional(),
   OPENAI_API_KEY:      z.string().optional(),
+
+  // ── ZCIS: el panel donde vive la oferta de cada cliente ─────────────────────
+  // Opcionales: sin la llave la app arranca igual y el botón de importar no
+  // aparece; el contexto de negocio se escribe a mano, que es como funciona hoy
+  // para cuatro de los cinco clientes.
+  ZCIS_BASE_URL:       z.string().optional(),
+  ZCIS_API_KEY:        z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -110,6 +117,21 @@ export function getOpenAIKey(): string {
     );
   }
   return env.OPENAI_API_KEY;
+}
+
+// ── ZCIS ─────────────────────────────────────────────────────────────────────
+
+/** Sin llave no hay integración: la fila de importar ni siquiera se muestra. */
+export const zcisEnabled = (): boolean => Boolean(env.ZCIS_API_KEY);
+
+export function getZcis(): { base: string; key: string } {
+  if (!env.ZCIS_API_KEY) {
+    throw new Error('Falta ZCIS_API_KEY para leer la oferta del cliente desde ZCIS.');
+  }
+  return {
+    base: env.ZCIS_BASE_URL || 'https://panel.zebra-ecosystem.cloud',
+    key:  env.ZCIS_API_KEY,
+  };
 }
 
 export function getGoogleOAuth(): GoogleOAuthCredentials {

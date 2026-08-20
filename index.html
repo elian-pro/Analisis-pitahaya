@@ -467,6 +467,9 @@
 /* Ningún .form-hint usaba negrita hasta ahora (el contador del contexto es el
    primero), así que esto no cambia ninguno de los 26 existentes. */
 .form-hint b{color:var(--muted);font-weight:500}
+/* Traer la oferta de ZCIS: selector + botón, encima del textarea del contexto.
+   Oculta entera si el servidor no tiene ZCIS_API_KEY. */
+.zcis-row{display:flex;gap:8px;align-items:center;margin-bottom:2px}
 .chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
 .chip-row span{font-size:10px;letter-spacing:.02em;padding:3px 8px;border-radius:999px;
   border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap}
@@ -1016,8 +1019,15 @@
         </div>
         <div class="form-group">
           <label class="form-label">Contexto del negocio *</label>
+          <div class="zcis-row" id="cf-zcis-row" style="display:none;">
+            <select class="form-control-sm" id="cf-zcis-sel" style="flex:1 1 auto;" data-placeholder="— Traer de ZCIS —"></select>
+            <button type="button" class="btn-sm btn-sm-cancel" id="cf-zcis-btn" onclick="traerOfertaZcis()" style="white-space:nowrap;">Traer oferta</button>
+          </div>
+          <input type="hidden" id="cf-zcis-id">
+          <input type="hidden" id="cf-zcis-actualizado">
           <textarea class="form-textarea" id="cf-contexto-negocio" rows="6" oninput="_wizContextoHint()"
             placeholder="Qué vende, dónde y a quién, y qué lo diferencia de su competencia. Nombra los productos y los argumentos que un asesor debería usar."></textarea>
+          <div class="form-note" id="cf-zcis-aviso" style="display:none;"></div>
           <div class="form-hint" id="cf-contexto-hint"></div>
         </div>
         <div class="form-group">
@@ -3633,7 +3643,8 @@
     const fields = ['cf-id','cf-name','cf-short-name','cf-folder-id','cf-parent-folder-id','cf-sidecar-folder-id','cf-spreadsheet-id',
       'cf-sheet-name','cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis',
       'cf-col-transcripcion','cf-col-duracion','cf-col-record','cf-excluded-phrases','cf-max-chars',
-      'cf-contexto-negocio','cf-prompt-individual','cf-prompt-general',
+      'cf-contexto-negocio','cf-zcis-id','cf-zcis-actualizado',
+      'cf-prompt-individual','cf-prompt-general',
       'cf-prompt-radar','cf-radar-folder-id','cf-radar-min-dur','cf-radar-max-chars'];
     fields.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
     document.getElementById('cf-max-chars').value = '3000';
@@ -3655,6 +3666,8 @@
     _wizRadarToggle();
     _wizContextoHint();
     _wizPromptsSummary();
+    document.getElementById('cf-zcis-aviso').style.display = 'none';
+    void _cargarZcis(null);
     _dpApplyLocation('', '');
     _wizOnNameInput();
     populateColumnOptions([]);
@@ -3703,9 +3716,14 @@
         document.getElementById('cf-excluded-phrases').value = (c.excluded_phrases || []).join(', ');
         document.getElementById('cf-max-chars').value        = c.transcripcion_max_chars || 3000;
         document.getElementById('cf-contexto-negocio').value  = c.contexto_negocio || '';
+        document.getElementById('cf-zcis-id').value           = c.zcis_id || '';
+        document.getElementById('cf-zcis-actualizado').value  = c.zcis_actualizado_en || '';
+        void _cargarZcis(c.zcis_id || null);
+        void _zcisAvisoCambio(c.zcis_id || '', c.zcis_actualizado_en || '');
         document.getElementById('cf-prompt-individual').value= c.prompt_individual || '';
         document.getElementById('cf-prompt-general').value   = c.prompt_general || '';
         _wizContextoHint();
+        _crecerContexto();
         _wizPromptsSummary();
         document.getElementById('cf-prompt-radar').value             = c.prompt_radar || '';
         document.getElementById('cf-radar-folder-id').value          = c.radar_folder_id || '';
@@ -4187,6 +4205,102 @@
       : 'No se creará ninguna carpeta: se usarán las que ya existen.';
   }
 
+  // ── Traer el contexto desde ZCIS ───────────────────────────────────────────
+  // El navegador nunca ve la llave de ZCIS: pide a nuestro backend, que es quien
+  // habla con el panel. La oferta es material confidencial de cada cliente y esa
+  // llave abre la de todos, asi que el proxy no es burocracia.
+  //
+  // La lista se pide una vez por sesion: cambia poco y la fila tiene que
+  // aparecer sin que se note al abrir el formulario.
+  let _zcisClientes = null;
+
+  async function _cargarZcis(zcisIdGuardado) {
+    const row = document.getElementById('cf-zcis-row');
+    row.style.display = 'none';
+    try {
+      if (!_zcisClientes) {
+        const r = await fetch('/api/zcis/clientes');
+        const d = await r.json();
+        // Sin llave configurada el campo funciona como un textarea normal: es el
+        // caso de los cuatro clientes cuyo contexto se escribe a mano.
+        if (!r.ok || !d.configurado) return;
+        _zcisClientes = d.clientes || [];
+      }
+      if (!_zcisClientes.length) return;
+      const sel = document.getElementById('cf-zcis-sel');
+      sel.innerHTML = '<option value="">— Elige el cliente en ZCIS —</option>' +
+        _zcisClientes.map(c =>
+          `<option value="${_esc(c.id)}">${_esc(c.nombre)}${c.vertical ? ' · ' + _esc(c.vertical) : ''}</option>`
+        ).join('');
+      if (zcisIdGuardado) sel.value = zcisIdGuardado;
+      row.style.display = 'flex';
+    } catch { /* ZCIS caido no puede impedir dar de alta un cliente */ }
+  }
+
+  async function traerOfertaZcis() {
+    const id = document.getElementById('cf-zcis-sel').value;
+    if (!id) { _showToast('Elige primero el cliente en ZCIS'); return; }
+    const ta = document.getElementById('cf-contexto-negocio');
+    if (ta.value.trim() && !await _ask('Reemplazar el contexto',
+      'La oferta de ZCIS sustituirá lo que hay escrito ahora en el contexto del negocio.',
+      { okLabel: 'Reemplazar' })) return;
+
+    const btn = document.getElementById('cf-zcis-btn');
+    const txt = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Trayendo…';
+    try {
+      const r = await fetch(`/api/zcis/clientes/${encodeURIComponent(id)}/oferta`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      // Se copia, no se sincroniza: el texto queda editable y lo que se guarda
+      // es esta copia. Por eso se anota de que fecha era.
+      ta.value = d.contexto;
+      // La oferta trae 40 lineas y la caja enseña 4: sin esto, "revisa lo que
+      // importaste" seria pedirle a alguien que audite un documento por una
+      // rendija. Y revisarlo es el plan, porque la limpieza solo quita lo que
+      // va marcado.
+      _crecerContexto();
+      document.getElementById('cf-zcis-id').value          = d.id;
+      document.getElementById('cf-zcis-actualizado').value = d.actualizado_en || '';
+      document.getElementById('cf-zcis-aviso').style.display = 'none';
+      _wizContextoHint();
+      _showToast(`✓ Oferta de ${d.nombre} importada`);
+    } catch (e) {
+      alert('No se pudo traer la oferta: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = txt;
+    }
+  }
+
+  // Al abrir un cliente que ya importo su oferta: si en ZCIS cambio despues, se
+  // avisa con la fecha. No se re-importa solo — el texto pudo editarse a mano y
+  // pisarlo sin permiso seria peor que quedarse desactualizado.
+  async function _zcisAvisoCambio(zcisId, fechaGuardada) {
+    if (!zcisId) return;
+    try {
+      const r = await fetch(`/api/zcis/clientes/${encodeURIComponent(zcisId)}/oferta`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d.actualizado_en || d.actualizado_en === fechaGuardada) return;
+      // Solo la fecha: la hora a la que alguien tocó la ficha no ayuda a decidir,
+      // y _fechaHora acaba en "a. m.", que junto al punto de la frase se lee mal.
+      const dia = iso => new Date(iso).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' });
+      const el = document.getElementById('cf-zcis-aviso');
+      el.innerHTML = `La oferta en ZCIS cambió el <b>${dia(d.actualizado_en)}</b>`
+        + (fechaGuardada ? ` y esta copia es del ${dia(fechaGuardada)}` : '')
+        + `. Pulsa “Traer oferta” para actualizarla.`;
+      el.style.display = '';
+    } catch { /* si ZCIS no responde, no hay aviso que dar */ }
+  }
+
+  // Solo en acciones puntuales (importar, o abrir un cliente que ya tiene un
+  // contexto largo), nunca al teclear: crecer en cada pulsacion le quitaria al
+  // usuario el control del tamaño que el mismo eligio con la esquina.
+  function _crecerContexto() {
+    const ta = document.getElementById('cf-contexto-negocio');
+    if (ta.value.length > 400 && ta.clientHeight < 320) ta.style.height = '320px';
+  }
+
   // El contexto alimenta los cinco prompts a la vez, asi que uno pobre no se
   // nota en un sitio sino en todos. El contador no bloquea nada: solo hace
   // visible que "Empresa: Sofia Fractional Residences." no describe un producto.
@@ -4542,6 +4656,11 @@
       // guardado, así que omitirlos dejaría un prompt viejo pegado al cliente
       // para siempre, y vaciarlo es justo lo que hace que se use el estándar.
       contexto_negocio:        document.getElementById('cf-contexto-negocio').value.trim(),
+      // El vinculo con ZCIS lo crea IMPORTAR, no elegir en el selector: si se
+      // guardara al elegir, el aviso de "la oferta cambio" compararia contra una
+      // fecha que nunca existio y saltaria siempre.
+      zcis_id:                 document.getElementById('cf-zcis-id').value,
+      zcis_actualizado_en:     document.getElementById('cf-zcis-actualizado').value,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
       calls_source:            fuenteActual(),

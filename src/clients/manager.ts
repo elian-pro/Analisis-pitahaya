@@ -45,13 +45,23 @@ export interface ClientConfig {
   radar_sidecar_folder_id?:      string;   // carpeta del sidecar radar-YYYY-MM.json (opcional)
   radar_min_duration_seconds?:   number;   // filtro de duración del Radar (default 200)
   radar_transcripcion_max_chars?: number;  // recorte de transcripción del Radar (default 8000)
-  // ── Pipeline de llamadas (webhook → transcripción → análisis) ───────────────
+  // ── Fuente de las llamadas ───────────────────────────────────────────────────
+  // 'sheets' (por defecto) mantiene el comportamiento de siempre: los reportes
+  // leen la hoja `Analisis`. 'postgres' hace que TODO —PDFs, Radar y Dashboard—
+  // lea de <calls_schema>.analisis, que llena el pipeline propio.
+  //
+  // Vacío = 'sheets', para que los clientes existentes no cambien de conducta
+  // por el mero hecho de desplegar esto.
+  calls_source?:           'sheets' | 'postgres';
+  // Schema de la base de Callpicker (p. ej. 'Midstorage_callpicker'). VARIOS
+  // clientes pueden apuntar al mismo: Midstorage y Grupo Tactical comparten
+  // cuenta y lo que los separa es su roster de asesores.
+  calls_schema?:           string;
+
+  // ── Pipeline de llamadas (lee la base de Callpicker → transcribe → analiza) ─
   // Todos opcionales: el pipeline nace apagado y los clientes existentes siguen
   // funcionando sin tocarlos.
   //
-  // `callpicker_description` esperado ("ZD - Midstorage"). Solo hace falta cuando
-  // dos clientes comparten asesores y hay que desempatar (ver calls/resolveClient).
-  callpicker_tag?:         string;
   // Descripción del negocio que se inyecta en el {contexto} de los prompts por
   // defecto. Es lo único que normalmente hay que rellenar por cliente.
   contexto_negocio?:       string;

@@ -1,7 +1,7 @@
 import { clientFileLabel, type ClientConfig } from '../clients/manager';
 import { listAdvisors } from '../advisors/store';
 import { rosterMatcher } from '../advisors/match';
-import { getCallData, type SheetColumns } from '../google/sheets';
+import { readCalls } from '../calls/read';
 import { monthLabel, previousMonth, uploadPdfNamed, radarFilename, findRadarSidecar, uploadRadarSidecar } from '../google/drive';
 import { resolveRadarPrompt, type RadarCall, type RadarPeriodMeta } from '../claude/radar';
 import { parseRadarSidecar } from './sidecar';
@@ -70,12 +70,6 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
   const minDur   = client.radar_min_duration_seconds    ?? RADAR_MIN_DURATION_DEFAULT;
   const maxChars = client.radar_transcripcion_max_chars ?? RADAR_MAX_CHARS_DEFAULT;
 
-  const cols: SheetColumns = {
-    fecha: client.col_fecha, asesor: client.col_asesor, calif: client.col_calif,
-    analisis: client.col_analisis, transcripcion: client.col_transcripcion,
-    duracion: client.col_duracion, record: client.col_record,
-  };
-
   // Roster del cliente: define que llamadas de la hoja le pertenecen. Se incluyen
   // los inactivos porque un asesor dado de baja hoy pudo tener llamadas en el
   // periodo analizado, y esas llamadas siguen siendo de este equipo.
@@ -83,20 +77,21 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
   if (roster.length === 0) {
     throw new Error(
       `El cliente '${client.name}' no tiene asesores registrados, y el Radar los necesita para saber ` +
-      `que llamadas de la hoja le pertenecen. Da de alta su equipo en Ajustes y vuelve a intentarlo.`,
+      `que llamadas le pertenecen. Da de alta su equipo en Ajustes y vuelve a intentarlo.`,
     );
   }
   const isMine = rosterMatcher(roster.map(a => a.name));
 
   // Lee TODAS las llamadas del período (umbral 0) para conocer el total; luego
   // filtra a >= minDur en memoria. Una llamada sin duración legible (0) se incluye.
-  const allPeriodCalls = await getCallData(
-    client.spreadsheet_id, client.data_sheet_name, cols, period.month,
-    client.excluded_phrases, maxChars,
-    period.useRange ? period.dateFrom : undefined,
-    period.useRange ? period.dateTo   : undefined,
-    0,
-  );
+  // La fuente (hoja o Postgres) la resuelve readCalls segun el cliente.
+  const allPeriodCalls = await readCalls(client, {
+    month:       period.month,
+    dateFrom:    period.useRange ? period.dateFrom : undefined,
+    dateTo:      period.useRange ? period.dateTo   : undefined,
+    minDuracion: 0,
+    maxChars,
+  });
   // El total que se reporta es el del equipo de ESTE cliente, no el de la hoja.
   const periodCalls = allPeriodCalls.filter(c => isMine(c.asesor));
   const foreign     = allPeriodCalls.length - periodCalls.length;
@@ -109,7 +104,7 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
   if (periodCalls.length === 0) {
     throw new Error(
       `Ninguna llamada de ${period.periodLabel} pertenece a los asesores registrados de '${client.name}'. ` +
-      `Revisa que los nombres del roster coincidan con la columna "${client.col_asesor}" de la hoja.`,
+      `Revisa que los nombres del roster coincidan con los de las llamadas.`,
     );
   }
 

@@ -16,13 +16,13 @@ const ClientBodySchema = z.object({
   create_reports_folder:   z.boolean().default(true),
   create_radar_folder:     z.boolean().default(true),
   sidecar_folder_id:       z.string().optional(),
-  spreadsheet_id:          z.string().min(1),
-  data_sheet_name:         z.string().min(1),
-  col_fecha:               z.string().min(1),
-  col_asesor:              z.string().min(1),
-  col_calif:               z.string().min(1),
-  col_analisis:            z.string().min(1),
-  col_transcripcion:       z.string().min(1),
+  spreadsheet_id:          z.string().default(''),
+  data_sheet_name:         z.string().default(''),
+  col_fecha:               z.string().default(''),
+  col_asesor:              z.string().default(''),
+  col_calif:               z.string().default(''),
+  col_analisis:            z.string().default(''),
+  col_transcripcion:       z.string().default(''),
   col_duracion:            z.string().optional(),
   col_record:              z.string().optional(),
   excluded_phrases:        z.array(z.string()).default([]),
@@ -35,12 +35,37 @@ const ClientBodySchema = z.object({
   radar_sidecar_folder_id:       z.string().optional(),
   radar_min_duration_seconds:    z.number().int().min(0).max(3600).optional(),
   radar_transcripcion_max_chars: z.number().int().min(100).max(50000).optional(),
-  // ── Pipeline de llamadas (opcionales; ver ClientConfig) ──────────────────────
-  callpicker_tag:                z.string().optional(),
+  // ── Fuente de las llamadas y pipeline (opcionales; ver ClientConfig) ─────────
+  calls_source:                  z.enum(['sheets','postgres']).optional(),
+  calls_schema:                  z.string().optional(),
   contexto_negocio:              z.string().optional(),
   prompt_transcripcion:          z.string().optional(),
   prompt_analisis:               z.string().optional(),
   call_min_duration_seconds:     z.number().int().min(0).max(3600).optional(),
+})
+// Los campos de Sheets dejaron de ser obligatorios para que un cliente de
+// Postgres pueda existir sin hoja. Eso abre la puerta a guardar uno sin ninguna
+// fuente, asi que la exigencia pasa a depender de cual se eligio.
+.superRefine((d, ctx) => {
+  const fuente = d.calls_source ?? 'sheets';
+  if (fuente === 'postgres') {
+    if (!d.calls_schema) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['calls_schema'],
+        message: 'Con fuente Postgres hay que elegir el schema de llamadas.' });
+    }
+    return;
+  }
+  for (const [campo, etiqueta] of [
+    ['spreadsheet_id','la hoja de calculo'], ['data_sheet_name','la pestaña de datos'],
+    ['col_fecha','la columna de fecha'],     ['col_asesor','la columna de asesor'],
+    ['col_calif','la columna de calificacion'], ['col_analisis','la columna de analisis'],
+    ['col_transcripcion','la columna de transcripcion'],
+  ] as const) {
+    if (!d[campo]) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [campo],
+        message: `Con fuente Google Sheets hace falta ${etiqueta}.` });
+    }
+  }
 });
 
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
@@ -86,7 +111,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 router.put('/:id', async (req: Request, res: Response): Promise<void> => {
-  const parsed = ClientBodySchema.partial().safeParse(req.body);
+  // .partial() no esta en un schema con superRefine: se usa el objeto de dentro,
+  // que ademas es lo correcto para un PATCH (validar solo lo que llega).
+  const parsed = ClientBodySchema.innerType().partial().safeParse(req.body);
   if (!parsed.success) {
     const msg = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
     res.status(400).json({ error: msg });

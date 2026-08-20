@@ -4,7 +4,9 @@ import { getClient, clientFileLabel } from '../clients/manager';
 class CancelledError extends Error {
   constructor() { super('cancelled'); this.name = 'CancelledError'; }
 }
-import { getCallData, type SheetColumns } from '../google/sheets';
+import { readCalls, fuenteDe } from '../calls/read';
+import { MIN_DURACION_SEG } from '../calls/pipeline';
+import { listAdvisors } from '../advisors/store';
 import {
   findPreviousReport,
   uploadPdf,
@@ -69,35 +71,36 @@ export async function runJob(job: Job): Promise<void> {
       : job.month;
 
     // ── 1. Fetch all call data for the period ────────────────────────────────
-    const cols: SheetColumns = {
-      fecha:         client.col_fecha,
-      asesor:        client.col_asesor,
-      calif:         client.col_calif,
-      analisis:      client.col_analisis,
-      transcripcion: client.col_transcripcion,
-      duracion:      client.col_duracion,
-      record:        client.col_record,
-    };
+    // De donde salen las llamadas lo decide readCalls segun la fuente del
+    // cliente: la hoja de siempre, o la tabla `analisis` que llena el pipeline.
+    const fuente = fuenteDe(client);
+    const origen = fuente === 'postgres' ? `Postgres (${client.calls_schema})` : `hoja "${client.data_sheet_name}"`;
+    console.log(`[runner] Step 1: fetching call data from ${origen}...`);
 
-    console.log(`[runner] Step 1: fetching call data from sheet "${client.data_sheet_name}"...`);
-    const allCalls = await getCallData(
-      client.spreadsheet_id,
-      client.data_sheet_name,
-      cols,
-      job.month,
-      client.excluded_phrases,
-      client.transcripcion_max_chars,
-      job.date_from,
-      job.date_to,
-    );
+    // En Postgres el roster filtra en SQL: dos clientes pueden compartir cuenta
+    // y traer las llamadas del otro equipo para descartarlas seria mover datos
+    // para nada. En Sheets no aplica (el filtrado es por job.advisors mas abajo).
+    const roster = fuente === 'postgres'
+      ? (await listAdvisors(client.id, { includeInactive: true })).map(a => a.name)
+      : undefined;
+
+    const allCalls = await readCalls(client, {
+      month:    job.month,
+      dateFrom: job.date_from,
+      dateTo:   job.date_to,
+      roster,
+    });
 
     console.log(`[runner] Step 1 done: ${allCalls.length} llamadas encontradas para el periodo`);
     if (isCancelled()) throw new CancelledError();
 
     if (allCalls.length === 0) {
-      throw new Error(
-        `No se encontraron llamadas en la hoja "${client.data_sheet_name}" para el periodo indicado. ` +
-        `Verifica que la columna "${client.col_fecha}" tenga fechas legibles y que haya registros para ese periodo.`,
+      throw new Error(fuente === 'postgres'
+        ? `No hay llamadas analizadas en ${client.calls_schema} para el periodo indicado. `
+          + `Revisa en la pestaña Llamadas si quedaron pendientes o si el equipo no tuvo llamadas de mas de `
+          + `${MIN_DURACION_SEG} s.`
+        : `No se encontraron llamadas en la hoja "${client.data_sheet_name}" para el periodo indicado. `
+          + `Verifica que la columna "${client.col_fecha}" tenga fechas legibles y que haya registros para ese periodo.`,
       );
     }
 

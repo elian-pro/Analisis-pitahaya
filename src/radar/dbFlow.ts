@@ -10,7 +10,7 @@ import type { RadarReportData } from '../schemas/radar';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flujo del Radar desde la base de datos: un cliente + un período. Lee la hoja
-// con el cap y umbral propios del Radar (default 8000 chars / 200 s), busca el
+// con el cap y umbral propios del Radar (default 8000 chars / 150 s), busca el
 // sidecar del período anterior para el comparativo, genera el reporte, sube el
 // PDF a la carpeta de Radar y persiste el sidecar. Lo usan el runner (scheduler)
 // y el endpoint manual.
@@ -21,7 +21,11 @@ import type { RadarReportData } from '../schemas/radar';
 // El comparativo compara contra el período inmediatamente anterior del mismo tipo.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const RADAR_MIN_DURATION_DEFAULT = 200;
+// 150 s y no 200: con 200, en el primer mes real de Midstorage entraban 26 de
+// 44 llamadas y se quedaban fuera tres de 150-199 s que si tienen conversacion.
+// Sigue siendo mas alto que el umbral del pipeline (100 s) a proposito: para
+// leer objeciones hace falta dialogo, no un "no me interesa" de dos minutos.
+export const RADAR_MIN_DURATION_DEFAULT = 150;
 export const RADAR_MAX_CHARS_DEFAULT     = 8000;
 
 // El Radar solo analiza las llamadas de los asesores dados de alta en el cliente:

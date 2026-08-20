@@ -11,11 +11,10 @@ import { parseRadarMarkdown } from '../ingest/radarMarkdown';
 import { parseRadarSidecar } from '../radar/sidecar';
 import { processRadarReport } from '../radar/process';
 import { resolveRadarPrompt, type RadarPeriodMeta } from '../claude/radar';
-import { runRadarForClient, runRadarForClientFortnight, fortnightFor } from '../radar/dbFlow';
+import { runRadarForClient, runRadarForClientFortnight, fortnightFor, RADAR_MIN_DURATION_DEFAULT } from '../radar/dbFlow';
 
 const router = Router();
 
-const RADAR_MIN_DURATION_DEFAULT = 200;
 const RADAR_MAX_CHARS_DEFAULT     = 8000;
 
 // Human-friendly label for a sidecar period key: 'YYYY-MM' → "Junio 2026",

@@ -1233,7 +1233,7 @@
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Duración mínima (segundos)</label>
-            <input class="form-control" id="cf-radar-min-dur" type="number" min="0" max="3600" placeholder="200">
+            <input class="form-control" id="cf-radar-min-dur" type="number" min="0" max="3600" placeholder="150">
           </div>
           <div class="form-group">
             <label class="form-label">Máx. caracteres (Radar)</label>
@@ -4416,7 +4416,7 @@
                         ? `${g('cf-contexto-negocio').length} caracteres`
                         : miss('Sin contexto del negocio')],
       ['Prompts',     document.getElementById('cf-prompts-summary').textContent],
-      ['Radar',       radarOn ? `Activo · mínimo ${g('cf-radar-min-dur') || 200}s` : 'Desactivado'],
+      ['Radar',       radarOn ? `Activo · mínimo ${g('cf-radar-min-dur') || 150}s` : 'Desactivado'],
       ['Filtros',     document.getElementById('cf-filters-summary').textContent],
     ];
     document.getElementById('wiz-summary').innerHTML = rows.map(([k, v]) =>

@@ -140,7 +140,10 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
     source:         'database',
   };
 
-  const systemPrompt = resolveRadarPrompt(client.prompt_radar ?? null);
+  // El segundo argumento es obligatorio en la practica: sin el, el default
+  // rellena su {contexto} con "No se proporciono contexto" y TODOS los Radar
+  // del dashboard salian sin contexto de negocio, incluso con el configurado.
+  const systemPrompt = resolveRadarPrompt(client.prompt_radar ?? null, client.contexto_negocio);
   const result = await processRadarReport(systemPrompt, meta, calls, prevSidecar);
 
   // La etiqueta del periodo distingue los dos cortes de un mismo mes, así que

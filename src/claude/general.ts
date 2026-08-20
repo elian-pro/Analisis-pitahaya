@@ -8,21 +8,18 @@ import {
 import { nivelLabel } from '../schemas/individual';
 import type { AdvisorResult } from './individual';
 import { renderPdf } from '../pdf/renderer';
+import { NO_DASH_INSTRUCTION, resolveGeneralPrompt } from './prompts';
 import { monthLabel } from '../google/drive';
 
 interface ClientForGeneral {
-  name:          string;
-  prompt_general: string;
+  name:            string;
+  // Vacio => DEFAULT_GENERAL_PROMPT con el contexto.
+  prompt_general?:   string;
+  contexto_negocio?: string;
 }
 
 const MAX_RETRIES = 3;
 const MODEL       = 'claude-sonnet-4-6';
-
-const NO_DASH_INSTRUCTION =
-  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningún texto generado. ' +
-  'Usa dos puntos, comas, paréntesis o punto según corresponda gramaticalmente. ' +
-  'Escribe siempre en español correcto: incluye todas las tildes (á, é, í, ó, ú, ü), la ñ y demás signos diacríticos. ' +
-  'Nunca omitas acentos ni la ñ.';
 
 let _claude: Anthropic | null = null;
 function getClaude(): Anthropic {
@@ -241,7 +238,10 @@ export async function processGeneralReport(
   const userMessage = buildUserMessage(
     individualReports, client.name, month, avgScoreEquipo, totalLlamadas, periodLabel,
   );
-  const { data: claudeOut, input_tokens, output_tokens } = await callClaudeWithRetry(client.prompt_general, userMessage);
+  const { data: claudeOut, input_tokens, output_tokens } = await callClaudeWithRetry(
+    resolveGeneralPrompt(client.prompt_general, client.contexto_negocio),
+    userMessage,
+  );
 
   const now = new Date();
   const generated_date = [

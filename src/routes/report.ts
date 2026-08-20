@@ -203,7 +203,7 @@ router.post('/radar-upload', (req: Request, res: Response): void => {
         source:         'markdown_upload',
       };
 
-      const systemPrompt = resolveRadarPrompt(client?.prompt_radar ?? null, parsed.meta.contexto);
+      const systemPrompt = resolveRadarPrompt(client?.prompt_radar ?? null, parsed.meta.contexto || client?.contexto_negocio);
       const result = await processRadarReport(systemPrompt, meta, parsed.calls, prevSidecar);
 
       // Entrega

@@ -11,39 +11,19 @@ import { SIDECAR_METRICS_VERSION, type PreviousMetrics } from '../schemas/indivi
 export { parseSidecarMetrics, SIDECAR_METRICS_VERSION, type PreviousMetrics } from '../schemas/individual';
 import type { CallRow } from '../google/sheets';
 import { renderPdf } from '../pdf/renderer';
+import { CALIFICACION_INSTRUCTION, NO_DASH_INSTRUCTION, resolveIndividualPrompt } from './prompts';
 import { monthLabel } from '../google/drive';
 
 interface ClientForAnalysis {
-  prompt_individual: string;
+  // Vacio => se usa DEFAULT_INDIVIDUAL_PROMPT con el contexto de abajo, igual
+  // que ya hacia prompt_radar.
+  prompt_individual?: string;
+  contexto_negocio?:  string;
 }
 
 const MAX_RETRIES = 3;
 const MODEL       = 'claude-sonnet-4-6';
 
-// Va en el system de TODOS los clientes, no en el prompt de cada uno: es una
-// regla de como se mide a un asesor, no una preferencia de un cliente. Sin
-// esto, descartar bien un lead se contaba como cierre fallido y castigaba
-// justo la habilidad que se quiere premiar.
-const CALIFICACION_INSTRUCTION =
-  '\n\nCALIFICACION DEL LEAD. Descartar un lead que no califica es un resultado CORRECTO, ' +
-  'no un fracaso de cierre: un asesor tambien se mide por detectar rapido a quien no va a comprar ' +
-  'y liberar su tiempo. Aplica esto al analizar:\n' +
-  '- Una llamada cerrada porque el lead no calificaba va en cierres.descartado_no_califica, NUNCA en ' +
-  'cierres.sin_siguiente_paso (que es para leads que SI calificaban y aun asi no avanzaron).\n' +
-  '- pct_logra_siguiente_paso se calcula solo sobre las llamadas con lead calificado: excluye del ' +
-  'denominador las descartadas. Si todas las llamadas fueron descartes, devuelve 0.\n' +
-  '- pct_descarte_justificado mide, de esas descartadas, en cuantas el asesor pregunto por criterios ' +
-  'reales (presupuesto, tiempo, capacidad de decision, encaje del producto) ANTES de cerrar. ' +
-  'Descartar sin indagar no es criterio, es quitarse la llamada de encima: eso NO cuenta como ' +
-  'justificado. Si no hubo descartes, devuelve 0.\n' +
-  '- Un descarte rapido y bien fundamentado es una FORTALEZA. Un descarte sin indagar, o seguir ' +
-  'invirtiendo tiempo en un lead claramente no calificado, es una DEBILIDAD.';
-
-const NO_DASH_INSTRUCTION =
-  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningún texto generado. ' +
-  'Usa dos puntos, comas, paréntesis o punto según corresponda gramaticalmente. ' +
-  'Escribe siempre en español correcto: incluye todas las tildes (á, é, í, ó, ú, ü), la ñ y demás signos diacríticos. ' +
-  'Nunca omitas acentos ni la ñ.';
 
 let _claude: Anthropic | null = null;
 function getClaude(): Anthropic {
@@ -354,7 +334,10 @@ export async function processAdvisor(
 
   const metrics     = computeMetrics(calls);
   const userMessage = buildUserMessage(advisorName, calls, month, previousReport, prevMetrics);
-  const { data: claudeOut, input_tokens, output_tokens } = await callClaudeWithRetry(client.prompt_individual, userMessage);
+  const { data: claudeOut, input_tokens, output_tokens } = await callClaudeWithRetry(
+    resolveIndividualPrompt(client.prompt_individual, client.contexto_negocio),
+    userMessage,
+  );
 
   const now = new Date();
   const generated_date = [

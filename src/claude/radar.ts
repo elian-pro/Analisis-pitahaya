@@ -6,6 +6,8 @@ import {
   type RadarReportData,
 } from '../schemas/radar';
 import type { RadarSidecar } from '../radar/sidecar';
+import { NO_DASH_INSTRUCTION, DEFAULT_RADAR_PROMPT, resolveRadarPrompt } from './prompts';
+export { DEFAULT_RADAR_PROMPT, resolveRadarPrompt };
 import { reconcileTaxonomy, computeComparativo, type Remap } from '../radar/compare';
 
 const MAX_RETRIES = 3;
@@ -14,54 +16,11 @@ const MODEL       = 'claude-sonnet-4-6';
 // comparativo), por eso un tope más alto que los demás reportes.
 const MAX_TOKENS  = 16384;
 
-const NO_DASH_INSTRUCTION =
-  '\n\nIMPORTANTE: No uses em dashes (—), en dashes (–) ni guiones largos en ningún texto generado. ' +
-  'Usa dos puntos, comas, paréntesis o punto según corresponda gramaticalmente. ' +
-  'Escribe siempre en español correcto: incluye todas las tildes (á, é, í, ó, ú, ü), la ñ y demás signos diacríticos. ' +
-  'Nunca omitas acentos ni la ñ.';
 
 let _claude: Anthropic | null = null;
 function getClaude(): Anthropic {
   if (!_claude) _claude = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   return _claude;
-}
-
-// ── Prompt por defecto (valor de `prompt_radar` cuando el cliente no lo define) ─
-// Pensado para un reporte que se COMPARTE con el cliente final: evaluación a
-// nivel de equipo (agregada, sin nombrar asesores), tono profesional y directo.
-export const DEFAULT_RADAR_PROMPT = `Eres un analista senior de ventas. Analizas transcripciones de llamadas de prospeccion de un periodo y produces el reporte "Radar de Objeciones": que preguntan los prospectos, como responde el equipo comercial y que patrones hay detras.
-
-CONTEXTO DEL NEGOCIO
-{contexto}
-
-REGLAS DE EXTRACCION DE PREGUNTAS
-1. Una "pregunta frecuente" es una duda o solicitud del PROSPECTO (nunca del asesor), agrupada por intencion semantica aunque el fraseo varie.
-2. Incluye toda pregunta que aparezca en 2 o mas llamadas distintas, hasta un maximo de 18. Si menos de 8 superan el umbral, completa con las de una sola aparicion marcandolas con frecuencia 1.
-3. Cada pregunta lleva un categoria_id en slug (minusculas, sin acentos, guiones). Si recibes la taxonomia del periodo anterior, REUTILIZA el slug existente cuando la intencion sea la misma; crea slugs nuevos solo para preguntas realmente nuevas. Nunca renombres un slug existente.
-4. Registra los indices de las llamadas donde aparece cada pregunta. La frecuencia debe coincidir con la cantidad de indices. No inventes: si no esta en las transcripciones, no existe.
-
-REGLAS DE EVALUACION DE RESPUESTAS
-5. Para cada pregunta describe la respuesta tipica del equipo (patron real observado, no el ideal) y evaluala: bien | mejorable | critico.
-   - bien: respuesta consistente que avanza hacia el objetivo de la llamada.
-   - mejorable: funciona pero pierde oportunidades o es inconsistente.
-   - critico: la respuesta rompe conversaciones o pierde leads con intencion.
-6. Acompana cada evaluacion con una observacion accionable de 1 a 3 frases y, cuando exista, una cita textual corta (maximo 15 palabras) con el indice de la llamada de donde salio.
-
-PATRONES Y RECOMENDACIONES
-7. Identifica patrones de los prospectos (perfil, objeciones dominantes, comportamientos repetidos) y del equipo (fortalezas y areas de mejora), cada uno con evidencia (indices de llamadas). Habla del equipo de forma agregada; no menciones a asesores por su nombre.
-8. Si recibes el resumen del periodo anterior, dedica el analisis comparativo a explicar POR QUE cambiaron las frecuencias y evaluaciones, y si las recomendaciones anteriores se implementaron. No recalcules los deltas: se te entregan calculados.
-9. Cierra con maximo 6 recomendaciones priorizadas (alta | media | baja), concretas y ejecutables por el equipo comercial.
-
-ESTILO
-Espanol correcto con tildes y enes. Tono directo y profesional, sin adornos. Es un reporte que se comparte con el dueno del negocio: cada hallazgo debe responder "y esto que hago con ello". No expongas nombres de asesores individuales.`;
-
-// Inserta el contexto de negocio en el prompt (default o el del cliente si trae
-// el placeholder {contexto}). Si el prompt del cliente no tiene placeholder, se
-// respeta tal cual (el contexto ya vive dentro de su prompt).
-export function resolveRadarPrompt(clientPrompt: string | null | undefined, contexto?: string): string {
-  const base = (clientPrompt && clientPrompt.trim()) ? clientPrompt : DEFAULT_RADAR_PROMPT;
-  const ctx  = (contexto && contexto.trim()) ? contexto.trim() : 'No se proporciono contexto adicional del negocio.';
-  return base.includes('{contexto}') ? base.replace('{contexto}', ctx) : base;
 }
 
 // ── Entradas del análisis ─────────────────────────────────────────────────────

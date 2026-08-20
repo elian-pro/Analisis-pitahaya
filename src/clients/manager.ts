@@ -37,8 +37,10 @@ export interface ClientConfig {
   col_record?:             string;
   excluded_phrases:        string[];
   transcripcion_max_chars: number;
-  prompt_individual:       string;
-  prompt_general:          string;
+  // Vacios => se usan los esqueletos de claude/prompts.ts con contexto_negocio.
+  // Solo se rellenan para sustituir la plantilla entera, como prompt_radar.
+  prompt_individual?:      string;
+  prompt_general?:         string;
   // ── Radar de Objeciones (opcionales; el reporte usa defaults si faltan) ──────
   prompt_radar?:                 string;   // vacío => se usa el prompt default
   radar_folder_id?:              string;   // carpeta Drive del PDF de Radar

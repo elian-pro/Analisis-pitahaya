@@ -27,8 +27,8 @@ const ClientBodySchema = z.object({
   col_record:              z.string().optional(),
   excluded_phrases:        z.array(z.string()).default([]),
   transcripcion_max_chars: z.number().int().min(100).default(3000),
-  prompt_individual:       z.string().min(1),
-  prompt_general:          z.string().min(1),
+  prompt_individual:       z.string().optional(),
+  prompt_general:          z.string().optional(),
   // ── Radar de Objeciones (opcionales) ─────────────────────────────────────────
   prompt_radar:                  z.string().optional(),
   radar_folder_id:               z.string().optional(),

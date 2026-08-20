@@ -1,87 +1,67 @@
 /**
- * Dry-run CLI — reads Google Sheets data, prints stats, optionally runs Claude
- * and saves output to ./fixtures/ without uploading anything to Drive.
+ * Dry-run CLI — genera el reporte de un asesor SIN subir nada a Drive ni tocar
+ * la base: recorre exactamente el camino de produccion (readCalls decide hoja o
+ * Postgres, processAdvisor arma el prompt, llama a Claude con REPORT_TOOL y
+ * renderiza el PDF) y vuelca el resultado en ./fixtures.
+ *
+ * Existe para comparar un reporte antes y despues de tocar un prompt: se corre
+ * con el prompt actual (baseline), se cambia el prompt, se vuelve a correr y se
+ * diffean los dos JSON. `avg_score` no debe moverse: lo calcula computeMetrics
+ * promediando las calificaciones, no lo escribe Claude.
  *
  * Usage:
- *   tsx src/cli/dry-run.ts <client_id> <month>
- *   tsx src/cli/dry-run.ts <client_id> <month> <advisor_name>
+ *   tsx src/cli/dry-run.ts <client_id> <month> [advisor_name]
  *
  * Examples:
- *   tsx src/cli/dry-run.ts pitahaya-investments 2026-05
- *   tsx src/cli/dry-run.ts pitahaya-investments 2026-05 Felipe
+ *   tsx src/cli/dry-run.ts midstorage 2026-08
+ *   tsx src/cli/dry-run.ts midstorage 2026-08 "Ana Perez"
  */
 
 import path from 'path';
 import fs from 'fs';
-import Anthropic from '@anthropic-ai/sdk';
-import { getCallData, getAdvisors } from '../google/sheets';
+import { getClient } from '../clients/manager';
+import { listAdvisors } from '../advisors/store';
+import { readCalls, fuenteDe } from '../calls/read';
+import { processAdvisor } from '../claude/individual';
+import { parseSidecarMetrics } from '../schemas/individual';
+import { previousReportTextFromDb } from '../metrics/store';
 import { findPreviousReport, monthLabel } from '../google/drive';
-import {
-  ClaudeIndividualOutputSchema,
-} from '../schemas/individual';
-import { env } from '../config/env';
 
 const [,, clientId, month, advisorArg] = process.argv;
 
 if (!clientId || !month || !/^\d{4}-\d{2}$/.test(month)) {
   console.error('Usage: tsx src/cli/dry-run.ts <client_id> <month> [advisor_name]');
-  console.error('       month must be YYYY-MM, e.g. 2026-05');
+  console.error('       month must be YYYY-MM, e.g. 2026-08');
   process.exit(1);
 }
 
-interface ClientConfig {
-  id: string; name: string; folder_id: string; spreadsheet_id: string;
-  data_sheet_name: string; advisors_sheet_name: string;
-  col_fecha: string; col_asesor: string; col_calif: string;
-  col_analisis: string; col_transcripcion: string;
-  col_duracion?: string; col_record?: string;
-  excluded_phrases: string[]; transcripcion_max_chars: number;
-  prompt_individual: string; prompt_general: string;
-}
-
-function loadClient(id: string): ClientConfig {
-  const p = path.join(__dirname, '..', '..', 'clients.json');
-  const all: ClientConfig[] = JSON.parse(fs.readFileSync(p, 'utf-8'));
-  const c = all.find(x => x.id === id);
-  if (!c) {
-    console.error(`Client '${id}' not found. Available: ${all.map(x => x.id).join(', ')}`);
-    process.exit(1);
-  }
-  return c;
-}
+/** Nombres con espacios y tildes en un fichero: se quedan legibles, sin sorpresas. */
+const slug = (s: string): string =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 async function main() {
-  const client = loadClient(clientId);
+  const client = await getClient(clientId);
+  if (!client) {
+    console.error(`Cliente '${clientId}' no encontrado.`);
+    process.exit(1);
+  }
 
+  const fuente = fuenteDe(client);
   console.log(`\n🦓 Zebra Reports — Dry Run`);
-  console.log(`   Client : ${client.name}`);
-  console.log(`   Month  : ${monthLabel(month)} (${month})\n`);
+  console.log(`   Cliente : ${client.name}`);
+  console.log(`   Periodo : ${monthLabel(month)} (${month})`);
+  console.log(`   Fuente  : ${fuente === 'postgres' ? `Postgres (${client.calls_schema})` : `hoja "${client.data_sheet_name}"`}`);
+  console.log(`   Prompt  : ${client.prompt_individual?.trim() ? 'propio del cliente' : 'esqueleto estandar'}`);
+  console.log(`   Contexto: ${client.contexto_negocio?.trim() ? `${client.contexto_negocio.trim().length} chars` : 'SIN CONTEXTO'}\n`);
 
-  // ── 1. Advisor list ───────────────────────────────────────────────────────
-  console.log('📋 Loading advisor list...');
-  const advisors = await getAdvisors(
-    client.spreadsheet_id,
-    client.advisors_sheet_name,
-    client.col_asesor,
-  );
-  console.log(`   Found ${advisors.length} advisor(s): ${advisors.map(a => a.asesor).join(', ')}\n`);
+  // Mismo filtrado por roster que el runner: en Postgres dos clientes pueden
+  // compartir cuenta y lo que los distingue son los asesores.
+  const roster = fuente === 'postgres'
+    ? (await listAdvisors(client.id, { includeInactive: true })).map(a => a.name)
+    : undefined;
 
-  // ── 2. Call data ─────────────────────────────────────────────────────────
-  console.log('📊 Loading call data from sheet...');
-  const calls = await getCallData(
-    client.spreadsheet_id,
-    client.data_sheet_name,
-    {
-      fecha: client.col_fecha, asesor: client.col_asesor,
-      calif: client.col_calif, analisis: client.col_analisis,
-      transcripcion: client.col_transcripcion,
-      duracion: client.col_duracion, record: client.col_record,
-    },
-    month,
-    client.excluded_phrases,
-    client.transcripcion_max_chars,
-  );
-  console.log(`   ${calls.length} call(s) found in ${monthLabel(month)}`);
+  const calls = await readCalls(client, { month, roster });
+  console.log(`📊 ${calls.length} llamada(s) en el periodo\n`);
 
   const byAdvisor = new Map<string, typeof calls>();
   for (const c of calls) {
@@ -89,104 +69,65 @@ async function main() {
     byAdvisor.get(c.asesor)!.push(c);
   }
 
-  console.log('\n   Breakdown by advisor:');
   for (const [name, rows] of byAdvisor) {
     const scores = rows.map(r => parseFloat(r.calif)).filter(s => !isNaN(s));
-    const avg = scores.length
-      ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
-      : 'N/A';
-    console.log(`     ${name.padEnd(22)} ${rows.length} call(s)   avg score: ${avg}`);
+    const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+    console.log(`   ${name.padEnd(22)} ${String(rows.length).padStart(3)} llamada(s)   promedio: ${avg}`);
   }
 
   if (!advisorArg) {
-    console.log('\n💡 Pass an advisor name as 3rd argument to run a Claude dry-run for that advisor.');
-    console.log('   Example: tsx src/cli/dry-run.ts ' + clientId + ' ' + month + ' "' + (advisors[0]?.asesor ?? 'Asesor') + '"');
+    const primero = [...byAdvisor.keys()][0] ?? 'Asesor';
+    console.log(`\n💡 Pasa un asesor como tercer argumento para generar su reporte completo.`);
+    console.log(`   tsx src/cli/dry-run.ts ${clientId} ${month} "${primero}"`);
     return;
   }
 
-  // ── 3. Claude dry-run for one advisor ─────────────────────────────────────
   const advisorCalls = byAdvisor.get(advisorArg);
   if (!advisorCalls?.length) {
-    console.error(`\n❌ No calls found for '${advisorArg}' in ${month}`);
+    console.error(`\n❌ '${advisorArg}' no tiene llamadas en ${month}.`);
     process.exit(1);
   }
 
-  console.log(`\n🤖 Running Claude analysis for "${advisorArg}" (${advisorCalls.length} call(s))...`);
-  console.log('   (No PDF rendered, no Drive upload)');
+  // El reporte anterior entra en el prompt, asi que el dry-run tiene que
+  // buscarlo igual que el runner o el baseline no seria comparable. Diferencia
+  // deliberada: no se crea la carpeta de sidecars si no existe (seria un efecto
+  // en Drive, justo lo que un dry-run promete no hacer).
+  const prevText =
+    (await previousReportTextFromDb(client.id, advisorArg, month, 'monthly'))
+    ?? (client.sidecar_folder_id
+      ? await findPreviousReport(client.sidecar_folder_id, advisorArg, month)
+      : null);
+  console.log(prevText
+    ? `\n📎 Reporte anterior encontrado — entra en el prompt`
+    : `\n📎 Sin reporte anterior — primer periodo`);
 
-  const prevReport = await findPreviousReport(client.folder_id, advisorArg, month);
-  console.log(prevReport
-    ? '   📎 Previous report found — included in prompt'
-    : '   📎 No previous report — first month');
+  console.log(`🤖 Generando reporte de "${advisorArg}" (${advisorCalls.length} llamada(s))...`);
 
-  // Build prompt (same as production path)
-  const callsText = advisorCalls.map((c, i) => {
-    const parts = [`--- Call ${i + 1} | ${c.fecha} | Score: ${c.calif} ---`];
-    if (c.analisis) parts.push(`ANÁLISIS PREVIO:\n${c.analisis}`);
-    parts.push(`TRANSCRIPCIÓN:\n${c.transcripcion}`);
-    return parts.join('\n');
-  }).join('\n\n');
+  const result = await processAdvisor(
+    advisorArg, advisorCalls, client, month, prevText, prevText ? parseSidecarMetrics(prevText) : null,
+  );
+  const d = result.reportData;
 
-  const userMessage = [
-    `=== DATOS DEL MES ===`,
-    `Asesor: ${advisorArg}`,
-    `Mes: ${monthLabel(month)}`,
-    `Llamadas: ${advisorCalls.length}`,
-    ``,
-    `=== LLAMADAS ===`,
-    callsText,
-    ``,
-    `=== REPORTE MES ANTERIOR ===`,
-    prevReport ?? 'Sin reporte previo — primer mes de evaluación.',
-    ``,
-    `Analiza el desempeño del asesor usando la herramienta.`,
-  ].join('\n');
-
-  const TOOL_NAME = 'enviar_reporte_individual';
-  const claude = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-  const res = await claude.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
-    system: client.prompt_individual,
-    messages: [{ role: 'user', content: userMessage }],
-    tools: [{
-      name: TOOL_NAME,
-      description: 'Envía el reporte estructurado del asesor.',
-      input_schema: { type: 'object' as const, properties: {}, required: [] },
-    }],
-    tool_choice: { type: 'tool', name: TOOL_NAME },
-  });
-
-  const toolBlock = res.content.find(b => b.type === 'tool_use');
-  if (!toolBlock || toolBlock.type !== 'tool_use') {
-    throw new Error('No tool_use block in Claude response');
-  }
-
-  const parsed = ClaudeIndividualOutputSchema.safeParse(toolBlock.input);
-  if (!parsed.success) {
-    console.error('\n❌ Schema validation failed:');
-    console.error(parsed.error.message);
-    const outBad = path.join('fixtures', `dry-run-${advisorArg}-${month}-INVALID.json`);
-    fs.mkdirSync('fixtures', { recursive: true });
-    fs.writeFileSync(outBad, JSON.stringify(toolBlock.input, null, 2));
-    console.error(`   Raw output saved to ${outBad}`);
-    process.exit(1);
-  }
-
-  const outFile = path.join('fixtures', `dry-run-${advisorArg}-${month}.json`);
   fs.mkdirSync('fixtures', { recursive: true });
-  fs.writeFileSync(outFile, JSON.stringify(parsed.data, null, 2));
+  const base    = path.join('fixtures', `dry-run-${slug(client.id)}-${slug(advisorArg)}-${month}`);
+  const jsonOut = `${base}.json`;
+  const pdfOut  = `${base}.pdf`;
+  fs.writeFileSync(jsonOut, JSON.stringify(d, null, 2));
+  fs.writeFileSync(pdfOut, result.pdfBuffer);
 
-  console.log(`\n✅ Claude output validated successfully`);
-  console.log(`   tipo      : ${parsed.data.tipo_asesor}`);
-  console.log(`   criterios : ${parsed.data.criterios.length}`);
-  console.log(`   objeciones: ${parsed.data.objeciones.length}`);
-  console.log(`   recs      : ${parsed.data.recomendaciones.length}`);
-  console.log(`\n   Output saved to: ${outFile}`);
+  console.log(`\n✅ Reporte valido (los 22 campos del schema)`);
+  console.log(`   avg_score   : ${d.avg_score}   ← determinista, NO debe moverse al cambiar el prompt`);
+  console.log(`   tipo_asesor : ${d.tipo_asesor}`);
+  console.log(`   criterios   : ${d.criterios.length}`);
+  console.log(`   objeciones  : ${d.objeciones.length}`);
+  console.log(`   recs        : ${d.recomendaciones.length}`);
+  console.log(`   tokens      : ${result.input_tokens} in / ${result.output_tokens} out`);
+  console.log(`\n   ${jsonOut}`);
+  console.log(`   ${pdfOut}  (${Math.round(result.pdfBuffer.length / 1024)} KB)`);
+  console.log(`\n   Comparar contra otro run:  diff <(jq -S . A.json) <(jq -S . B.json)`);
 }
 
-main().catch(err => {
-  console.error('\n❌ Fatal error:', (err as Error).message);
+main().then(() => process.exit(0)).catch(err => {
+  console.error('\n❌ Error:', (err as Error).message);
   process.exit(1);
 });

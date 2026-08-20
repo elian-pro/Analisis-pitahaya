@@ -49,6 +49,37 @@ export function callsDb(): Pool {
 }
 
 /**
+ * Traduce los fallos de conexion a algo accionable. `ENOTFOUND <host>` es el mas
+ * frecuente al desplegar: en EasyPanel la red privada es POR PROYECTO, asi que
+ * el host interno `<proyecto>_<servicio>` solo resuelve entre servicios del
+ * mismo proyecto. Si la base vive en otro, hay que usar su conexion externa.
+ */
+export function explainConnError(e: unknown): string {
+  const err = e as { code?: string; message?: string; hostname?: string };
+  const msg = err?.message ?? String(e);
+  switch (err?.code) {
+    case 'ENOTFOUND':
+      return `No se encuentra el host "${err.hostname ?? '?'}" de CALLS_DATABASE_URL. `
+           + `En EasyPanel el host interno solo resuelve entre servicios del MISMO proyecto: `
+           + `si la base está en otro, usa su conexión externa (host público y puerto).`;
+    case 'ECONNREFUSED':
+      return `El host de CALLS_DATABASE_URL responde pero rechaza el puerto. `
+           + `Revisa el puerto y que el servicio acepte conexiones externas.`;
+    case 'ETIMEDOUT':
+      return `Tiempo agotado al conectar con la base de llamadas. `
+           + `Suele ser un puerto cerrado por firewall.`;
+    case '28P01':
+      return 'Usuario o contraseña incorrectos en CALLS_DATABASE_URL. '
+           + 'Si la contraseña lleva "@", codifícalo como %40.';
+    case '3D000':
+      return 'La base indicada en CALLS_DATABASE_URL no existe. '
+           + 'Ojo: los schemas de Callpicker están en la base "postgres".';
+    default:
+      return msg;
+  }
+}
+
+/**
  * Los identificadores de schema vienen de `callpicker_registro.cuentas`, que es
  * una tabla que administramos nosotros, pero se citan igual antes de
  * interpolarlos: son nombres con mayúsculas y espacios ("Grupo Gira"), así que

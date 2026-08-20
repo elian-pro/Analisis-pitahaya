@@ -5,7 +5,7 @@ import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registr
 import { listCalls, getCall, countByEstado, type CallEstadoUI } from '../calls/store';
 import { processCall, matchClient, minDuracion } from '../calls/pipeline';
 import { sweepOnce, DESDE } from '../calls/sweeper';
-import { callsDbEnabled } from '../calls/db';
+import { callsDbEnabled, explainConnError } from '../calls/db';
 import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from '../calls/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ router.get('/esquemas', async (_req: Request, res: Response): Promise<void> => {
   try {
     res.json({ esquemas: await listEsquemas() });
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 
@@ -84,7 +84,7 @@ router.post('/activar', async (req: Request, res: Response): Promise<void> => {
       : 0;
     res.json({ ok: true, creada, esquema, desde: desde ?? null, pendientes });
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 
@@ -102,7 +102,7 @@ router.get('/cuentas', async (_req: Request, res: Response): Promise<void> => {
       })),
     });
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 
@@ -144,7 +144,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
                                tiene_transcripcion: Boolean(c.transcripcion) })),
     });
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 
@@ -154,7 +154,7 @@ router.post('/reprocess', async (req: Request, res: Response): Promise<void> => 
   try {
     res.json(await sweepOnce(Number(req.query.lote) || undefined));
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 
@@ -166,7 +166,7 @@ router.get('/:slug/:call_id', async (req: Request, res: Response): Promise<void>
     if (!call) { res.status(404).json({ error: 'Llamada no encontrada' }); return; }
     res.json(call);
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 
@@ -175,7 +175,7 @@ router.post('/:slug/:call_id/process', async (req: Request, res: Response): Prom
     const r = await processCall(req.params.slug, req.params.call_id, req.query.force === 'true');
     res.status(r.ok ? 200 : 422).json(r);
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(500).json({ error: explainConnError(e) });
   }
 });
 

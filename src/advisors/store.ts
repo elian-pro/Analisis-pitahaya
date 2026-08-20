@@ -10,7 +10,7 @@ import {
   dbDelete,
 } from '../config/db';
 import { ClientConfig, updateClient } from '../clients/manager';
-import { getAdvisors, getAdvisorsForMonth } from '../google/sheets';
+import { readRosterNames } from '../calls/read';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Advisor roster per client, in Postgres (or JSON file fallback, same dual
@@ -154,24 +154,17 @@ export async function deleteAdvisor(id: string): Promise<void> {
 export async function seedAdvisorsFromSheetIfNeeded(client: ClientConfig): Promise<void> {
   if (client.advisors_seeded) return;
   try {
-    let names: string[] = [];
-    if (client.advisors_sheet_name) {
-      const rows = await getAdvisors(client.spreadsheet_id, client.advisors_sheet_name, client.col_asesor);
-      names = rows.map(r => r.asesor);
-    } else {
-      const month = new Date().toISOString().slice(0, 7);
-      const rows = await getAdvisorsForMonth(
-        client.spreadsheet_id, client.data_sheet_name, client.col_fecha, client.col_asesor, month,
-      );
-      names = rows.map(r => r.asesor);
-    }
+    // De donde salen los nombres lo decide calls/read segun la fuente del
+    // cliente: la hoja de asesores, la de datos del mes, o las llamadas ya
+    // analizadas en Postgres (donde no hay hoja ninguna).
+    const names = await readRosterNames(client, new Date().toISOString().slice(0, 7));
     const uniqueNames = [...new Set(names.map(n => n.trim()).filter(Boolean))];
     for (const name of uniqueNames) {
       await createAdvisor(client.id, { name });
     }
-    console.log(`[advisors] Seeded ${uniqueNames.length} advisor(s) for client '${client.id}' from Sheets`);
+    console.log(`[advisors] Seeded ${uniqueNames.length} advisor(s) for client '${client.id}'`);
   } catch (e) {
-    console.warn(`[advisors] Sheet import failed for client '${client.id}', starting with an empty roster:`, (e as Error).message);
+    console.warn(`[advisors] Roster import failed for client '${client.id}', starting empty:`, (e as Error).message);
   } finally {
     // Mark as seeded even on failure/empty result: this is a one-shot import,
     // not a sync — retrying it on every request would defeat moving off Sheets.

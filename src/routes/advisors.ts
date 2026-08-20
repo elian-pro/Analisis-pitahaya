@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getClient } from '../clients/manager';
-import { getAdvisorCallCounts } from '../google/sheets';
+import { readAdvisorCallCounts } from '../calls/read';
+import { normalizeAdvisorName } from '../advisors/match';
 import {
   listAdvisors,
   createAdvisor,
@@ -26,10 +27,12 @@ const QuerySchema = z.object({
 // Roster comes from the DB (advisors table), never from Sheets directly — the
 // first request for a client with no rows yet triggers a one-time import from
 // Sheets (seedAdvisorsFromSheetIfNeeded). When `month` (or a weekly range) is
-// given, each advisor also gets `has_calls`: whether Sheets shows at least one
-// call for them in that period, so the UI can warn about advisors with none.
-// That check is best-effort: if Sheets is unreachable, the roster still comes
-// back (has_calls omitted) — a Sheets outage must never hide the DB roster.
+// given, each advisor also gets `has_calls`: whether the client's SOURCE (the
+// sheet, or the analysis table in Postgres — lo decide calls/read) shows at
+// least one call for them in that period, so the UI can warn about advisors
+// with none. That check is best-effort: if the source is unreachable, the
+// roster still comes back (has_calls omitted) — a source outage must never
+// hide the DB roster.
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   const parsed = QuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -60,10 +63,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       try {
         const dateFrom = period_type === 'weekly' ? date_from : undefined;
         const dateTo   = period_type === 'weekly' ? date_to   : undefined;
-        callCounts = await getAdvisorCallCounts(
-          client.spreadsheet_id, client.data_sheet_name, client.col_fecha, client.col_asesor,
-          month, dateFrom, dateTo,
-        );
+        callCounts = await readAdvisorCallCounts(client, { month, dateFrom, dateTo });
       } catch (e) {
         console.warn(`[advisors] Could not check call counts for '${client_id}':`, (e as Error).message);
       }
@@ -72,8 +72,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     res.json(advisors.map(a => ({
       ...a,
       // null = no se pudo consultar el Sheet, distinto de 0 = sin llamadas.
-      call_count: callCounts ? (callCounts.get(a.name) ?? 0) : null,
-      has_calls:  callCounts ? callCounts.has(a.name) : null,
+      call_count: callCounts ? (callCounts.get(normalizeAdvisorName(a.name)) ?? 0) : null,
+      has_calls:  callCounts ? callCounts.has(normalizeAdvisorName(a.name)) : null,
     })));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });

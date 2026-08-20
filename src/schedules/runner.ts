@@ -6,7 +6,8 @@ import { listSchedules, getSchedule, markAttempt, markRan, markFailed, isRepeatE
 export interface FireResult { ok: boolean; job_id?: string; error?: string }
 import { loadClients } from '../clients/manager';
 import { listAdvisors, seedAdvisorsFromSheetIfNeeded } from '../advisors/store';
-import { getAdvisorNamesWithCalls } from '../google/sheets';
+import { readAdvisorNamesWithCalls } from '../calls/read';
+import { normalizeAdvisorName } from '../advisors/match';
 import { createJob, getJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { sendChatMessage } from '../google/chat';
@@ -373,11 +374,11 @@ async function fireScheduleInner(schedule: Schedule): Promise<FireResult> {
       rosterSize = roster.length;
 
       if (wantsActiveOnly) {
-        const withCalls = await getAdvisorNamesWithCalls(
-          client.spreadsheet_id, client.data_sheet_name, client.col_fecha, client.col_asesor,
-          month, dateFrom, dateTo,
-        );
-        advisors = roster.filter(name => withCalls.has(name));
+        // La fuente la decide readAdvisorNamesWithCalls segun el cliente: con
+        // Postgres, preguntar a la hoja devolvia cero y la automatizacion se
+        // saltaba a todo el equipo sin fallar, que es la peor forma de fallar.
+        const withCalls = await readAdvisorNamesWithCalls(client, { month, dateFrom, dateTo });
+        advisors = roster.filter(name => withCalls.has(normalizeAdvisorName(name)));
       } else {
         advisors = roster;
       }

@@ -3966,7 +3966,7 @@
     info.textContent = 'Buscando orígenes disponibles…';
     try {
       const r = await fetch(`${CALLS_API}/esquemas`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
       _esquemas = (await r.json()).esquemas || [];
       if (!_esquemas.length) {
         info.textContent = 'No hay ningún origen con llamadas de Callpicker en la base.';
@@ -5692,7 +5692,7 @@
     if (!sel || sel.dataset.filled) return;
     try {
       const r = await fetch(`${CALLS_API}/cuentas`);
-      if (!r.ok) return;
+      if (!r.ok) return;   // renderCalls muestra el motivo con el mensaje del servidor
       const { cuentas } = await r.json();
       // Las habilitadas primero, y una de ellas seleccionada: arrancar en una
       // cuenta sin activar mostraba un error nada mas abrir la pestaña.
@@ -5779,7 +5779,7 @@
     slot.innerHTML = '<div class="calls-detail">Cargando…</div>';
     try {
       const r = await fetch(`${CALLS_API}/${encodeURIComponent(slug)}/${encodeURIComponent(callId)}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
       const c = await r.json();
       const campo = (l, v) => v ? `<span class="lbl">${l}</span><div class="calls-val">${_esc(String(v))}</div>` : '';
       const califs = [c.presentacion, c.precalif, c.exploracion, c.agenda].some(Boolean)

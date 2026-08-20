@@ -1,10 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { loadClients } from '../clients/manager';
 import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registry';
 import { listCalls, getCall, countByEstado, type CallEstadoUI } from '../calls/store';
 import { processCall, matchClient, minDuracion } from '../calls/pipeline';
 import { sweepOnce, DESDE } from '../calls/sweeper';
+import { callsDbEnabled } from '../calls/db';
 import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from '../calls/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,6 +15,18 @@ import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const router = Router();
+
+// Sin la base de llamadas configurada, cualquier ruta de aqui fallaria con un
+// error de conexion crudo. Un 503 con el nombre de la variable que falta dice
+// que hacer; un 500 solo dice que algo se rompio. Cubre todas las rutas de una,
+// en vez de repetir la comprobacion en cada una.
+router.use((_req: Request, res: Response, next: NextFunction): void => {
+  if (callsDbEnabled()) { next(); return; }
+  res.status(503).json({
+    error: 'El pipeline de llamadas no está configurado: falta la variable '
+         + 'CALLS_DATABASE_URL (la base donde Callpicker escribe las llamadas).',
+  });
+});
 
 const ESTADOS = ['pendiente','descartada','transcrita','analizada','fallida','sin_procesar','corta'] as const;
 

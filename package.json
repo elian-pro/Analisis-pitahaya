@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dry-run": "tsx src/cli/dry-run.ts",
+    "dry-run:diff": "tsx src/cli/dry-run-diff.ts",
     "oauth:setup": "tsx src/cli/oauth-setup.ts",
     "migrate:db": "tsx src/cli/migrate-to-db.ts",
     "backfill:metrics": "tsx src/cli/backfill-metrics.ts",

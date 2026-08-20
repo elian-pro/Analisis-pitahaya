@@ -10,11 +10,15 @@
  * promediando las calificaciones, no lo escribe Claude.
  *
  * Usage:
- *   tsx src/cli/dry-run.ts <client_id> <month> [advisor_name]
+ *   tsx src/cli/dry-run.ts <client_id> <month> [advisor_name] [etiqueta]
  *
  * Examples:
  *   tsx src/cli/dry-run.ts midstorage 2026-08
  *   tsx src/cli/dry-run.ts midstorage 2026-08 "Ana Perez"
+ *   tsx src/cli/dry-run.ts midstorage 2026-08 "Ana Perez" antes
+ *
+ * La etiqueta va al nombre del fichero. Sin ella, la segunda corrida del mismo
+ * asesor pisa la primera, que es justo la que hacía de baseline.
  */
 
 import path from 'path';
@@ -27,10 +31,10 @@ import { parseSidecarMetrics } from '../schemas/individual';
 import { previousReportTextFromDb } from '../metrics/store';
 import { findPreviousReport, monthLabel } from '../google/drive';
 
-const [,, clientId, month, advisorArg] = process.argv;
+const [,, clientId, month, advisorArg, etiqueta] = process.argv;
 
 if (!clientId || !month || !/^\d{4}-\d{2}$/.test(month)) {
-  console.error('Usage: tsx src/cli/dry-run.ts <client_id> <month> [advisor_name]');
+  console.error('Usage: tsx src/cli/dry-run.ts <client_id> <month> [advisor_name] [etiqueta]');
   console.error('       month must be YYYY-MM, e.g. 2026-08');
   process.exit(1);
 }
@@ -78,7 +82,7 @@ async function main() {
   if (!advisorArg) {
     const primero = [...byAdvisor.keys()][0] ?? 'Asesor';
     console.log(`\n💡 Pasa un asesor como tercer argumento para generar su reporte completo.`);
-    console.log(`   tsx src/cli/dry-run.ts ${clientId} ${month} "${primero}"`);
+    console.log(`   tsx src/cli/dry-run.ts ${clientId} ${month} "${primero}" antes`);
     return;
   }
 
@@ -109,7 +113,8 @@ async function main() {
   const d = result.reportData;
 
   fs.mkdirSync('fixtures', { recursive: true });
-  const base    = path.join('fixtures', `dry-run-${slug(client.id)}-${slug(advisorArg)}-${month}`);
+  const base    = path.join('fixtures',
+    `dry-run-${slug(client.id)}-${slug(advisorArg)}-${month}${etiqueta ? '-' + slug(etiqueta) : ''}`);
   const jsonOut = `${base}.json`;
   const pdfOut  = `${base}.pdf`;
   fs.writeFileSync(jsonOut, JSON.stringify(d, null, 2));
@@ -124,7 +129,7 @@ async function main() {
   console.log(`   tokens      : ${result.input_tokens} in / ${result.output_tokens} out`);
   console.log(`\n   ${jsonOut}`);
   console.log(`   ${pdfOut}  (${Math.round(result.pdfBuffer.length / 1024)} KB)`);
-  console.log(`\n   Comparar contra otro run:  diff <(jq -S . A.json) <(jq -S . B.json)`);
+  console.log(`\n   Comparar con otra corrida:  npm run dry-run:diff -- <antes.json> ${jsonOut}`);
 }
 
 main().then(() => process.exit(0)).catch(err => {

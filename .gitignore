@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .env
+# Cualquier variante (.env.local, .env.tmp de un script a medias): esas copias
+# llevan las mismas credenciales y no tienen por que llegar a git.
+.env.*
+!.env.example
 *.env.local
 # Runtime data — persist these via a mounted volume in production (set DATA_DIR env var)
 data/*.json

@@ -1,145 +1,157 @@
-import { dbEnabled, pool, CALLS_TABLE } from '../config/db';
+import { callsDb } from './db';
 import { humanizeError } from '../humanizeError';
-import type { NormalizedCall } from './normalize';
+import { esquemaDe, type Cuenta } from './registry';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Acceso a la tabla `calls`.
+// Acceso a `<schema>.llamadas` (la escribe Callpicker, aquí solo se lee) y a
+// `<schema>.analisis` (la escribimos nosotros).
 //
-// La tabla ES la cola: el estado del pipeline vive en columnas, no en memoria.
-// Por eso un reinicio no pierde trabajo, a diferencia de jobs/store.ts, que
-// marca como error todo lo que estuviera en vuelo (ver initJobs()).
+// `analisis` NO duplica fecha, asesor ni teléfono: viven en `llamadas` y ambas
+// tablas están en la misma base, así que se unen al leer. La hoja de Sheets sí
+// los repetía porque allí no había joins.
 //
-// A diferencia del resto de stores del repo, aquí NO hay respaldo en JSON: el
-// pipeline de llamadas nace para Postgres y un fallback a fichero solo serviría
-// para perder datos en silencio.
+// La clave es compuesta (cuenta, call_id) igual que en `llamadas`: call_id no
+// es único por sí solo, va namespaced por cuenta.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type CallEstado =
-  | 'recibida' | 'descartada' | 'transcrita' | 'analizada' | 'fallida' | 'sin_asignar';
+export type CallEstado = 'pendiente' | 'descartada' | 'transcrita' | 'analizada' | 'fallida';
 
-/** Estados desde los que aún queda trabajo por hacer. Coincide con el índice parcial. */
-export const ESTADOS_PENDIENTES: CallEstado[] = ['recibida', 'transcrita', 'fallida'];
+/**
+ * Lo que ve la pestaña. Además de los estados reales de `analisis` hay dos que
+ * se derivan de la propia llamada:
+ *   • 'sin_procesar' — supera el umbral y todavía no tiene fila de análisis.
+ *   • 'corta'        — no llega al umbral, así que el pipeline no la mirará.
+ * Sin esa distinción las 1.200 llamadas de menos de 100 s aparecían como
+ * pendientes y el monitoreo no servía para nada.
+ */
+export type CallEstadoUI = CallEstado | 'sin_procesar' | 'corta';
 
+export const ESTADOS_PENDIENTES: CallEstado[] = ['pendiente', 'transcrita', 'fallida'];
+
+/** Una llamada con su análisis, tal como la ve la pestaña. */
 export interface CallRow {
-  call_id:           string;
-  client_id:         string | null;
-  fecha:             Date;
-  asesor:            string;
-  callee_number:     string | null;
-  callee_city:       string | null;
-  callee_state:      string | null;
-  call_status:       string | null;
-  wait_time:         number | null;
-  duracion_segundos: number;
-  record:            string | null;
-  raw:               unknown;
-  procesado_at:      Date | null;
-  lead_id:           string | null;
-  tipo_contacto:     string | null;
-  presentacion:      string | null;
-  precalif:          string | null;
-  exploracion:       string | null;
-  agenda:            string | null;
-  analisis:          string | null;
-  transcripcion:     string | null;
-  estado:            CallEstado;
-  error:             string | null;
-  intentos:          number;
-  calif_global:      number | null;
+  cuenta:        string;
+  call_id:       string;
+  fecha:         Date;
+  asesor:        string | null;
+  contraparte_numero: string | null;
+  ciudad:        string | null;
+  duracion_seg:  number | null;
+  estatus:       string | null;
+  record:        string | null;
+  estado:        CallEstadoUI;
+  transcripcion: string | null;
+  tipo_contacto: string | null;
+  presentacion:  string | null;
+  precalif:      string | null;
+  exploracion:   string | null;
+  agenda:        string | null;
+  analisis:      string | null;
+  calif_global:  number | null;
+  error:         string | null;
+  intentos:      number | null;
+  procesado_at:  Date | null;
 }
 
-function db() {
-  if (!dbEnabled || !pool) {
-    throw new Error(
-      'El pipeline de llamadas necesita PostgreSQL. Configura DATABASE_URL para usarlo.',
-    );
-  }
-  return pool;
+// Columnas de la llamada + las del análisis. `grabaciones[1]` es la URL del
+// audio: la columna es un ARRAY de Postgres, no el string JSON que llegaba en
+// Sheets, así que no hay nada que parsear.
+const SELECT_BASE = (esq: string, umbralParam: string) => `
+  SELECT l.cuenta, l.call_id, l.fecha, l.asesor, l.contraparte_numero, l.ciudad,
+         l.duracion_seg, l.estatus, l.grabaciones[1] AS record,
+         COALESCE(a.estado,
+                  CASE WHEN l.duracion_seg >= ${umbralParam} THEN 'sin_procesar' ELSE 'corta' END
+         ) AS estado,
+         a.transcripcion, a.tipo_contacto, a.presentacion, a.precalif,
+         a.exploracion, a.agenda, a.analisis, a.calif_global, a.error,
+         a.intentos, a.procesado_at
+    FROM ${esq}.llamadas l
+    LEFT JOIN ${esq}.analisis a
+           ON a.cuenta = l.cuenta AND a.call_id = l.call_id`;
+
+export interface PendientesOpts {
+  minDuracion?:  number;
+  desde?:        string;   // YYYY-MM-DD, en hora de México
+  maxIntentos?:  number;
+  limit?:        number;
 }
 
 /**
- * Guarda el evento recién recibido. Idempotente por `call_id`: reenviar el mismo
- * webhook no duplica la fila ni vuelve a pagar la transcripción — exactamente lo
- * que hoy no puede garantizar n8n, que hace `append` sin clave.
+ * Lo que falta por procesar: llamadas con audio, suficientemente largas, que o
+ * no tienen fila en `analisis` o la tienen a medias.
  *
- * Devuelve true si insertó, false si ya existía.
+ * El corte por fecha se hace en hora de México y no en UTC: `fecha` es
+ * timestamptz, y con UTC las llamadas del 31 por la tarde caerían en el mes
+ * siguiente.
  */
-export async function insertCall(
-  call:     NormalizedCall,
-  clientId: string | null,
-  estado:   CallEstado,
-  error:    string | null = null,
-): Promise<boolean> {
-  const { rowCount } = await db().query(
-    `INSERT INTO ${CALLS_TABLE} (
-       call_id, client_id, fecha, asesor, callee_number, callee_city, callee_state,
-       call_status, wait_time, duracion_segundos, record, raw, estado, error
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-     ON CONFLICT (call_id) DO NOTHING`,
-    [
-      call.call_id, clientId, call.fecha, call.asesor, call.callee_number,
-      call.callee_city, call.callee_state, call.call_status, call.wait_time,
-      call.duracion_segundos, call.record, JSON.stringify(call.raw), estado, error,
-    ],
+export async function listPendientes(c: Cuenta, o: PendientesOpts = {}): Promise<CallRow[]> {
+  const esq = esquemaDe(c);
+  const { rows } = await callsDb().query(
+    `${SELECT_BASE(esq, '$1')}
+      WHERE l.n_grabaciones > 0
+        AND l.duracion_seg >= $1
+        AND (a.estado IS NULL OR (a.estado = ANY($2) AND a.intentos < $3))
+        AND ($4::date IS NULL OR (l.fecha AT TIME ZONE 'America/Mexico_City') >= $4::date)
+      ORDER BY l.fecha ASC
+      LIMIT $5`,
+    [o.minDuracion ?? 100, ESTADOS_PENDIENTES, o.maxIntentos ?? 3, o.desde ?? null, o.limit ?? 20],
   );
-  return rowCount === 1;
-}
-
-export async function getCall(callId: string): Promise<CallRow | undefined> {
-  const { rows } = await db().query(`SELECT * FROM ${CALLS_TABLE} WHERE call_id = $1`, [callId]);
-  return rows[0] as CallRow | undefined;
+  return rows as CallRow[];
 }
 
 export interface ListFilters {
-  client_id?: string;
-  estado?:    CallEstado;
-  from?:      string;   // YYYY-MM-DD
-  to?:        string;   // YYYY-MM-DD
-  limit?:     number;
+  estado?:      CallEstadoUI;
+  desde?:       string;
+  hasta?:       string;
+  limit?:       number;
+  minDuracion?: number;
 }
 
-export async function listCalls(f: ListFilters = {}): Promise<CallRow[]> {
-  const where: string[] = [];
-  const args: unknown[] = [];
+/** Para la pestaña: todas las llamadas con audio del periodo, procesadas o no. */
+export async function listCalls(c: Cuenta, f: ListFilters = {}): Promise<CallRow[]> {
+  const esq = esquemaDe(c);
+  const args: unknown[] = [f.minDuracion ?? 100];      // $1 = umbral
+  const where = ['l.n_grabaciones > 0'];
   const add = (sql: string, v: unknown) => { args.push(v); where.push(sql.replace('?', `$${args.length}`)); };
 
-  if (f.client_id) add('client_id = ?', f.client_id);
-  if (f.estado)    add('estado = ?', f.estado);
-  if (f.from)      add('fecha >= ?', `${f.from}T00:00:00`);
-  if (f.to)        add('fecha <= ?', `${f.to}T23:59:59`);
+  if (f.desde) add(`(l.fecha AT TIME ZONE 'America/Mexico_City') >= ?::date`, f.desde);
+  if (f.hasta) add(`(l.fecha AT TIME ZONE 'America/Mexico_City') <  (?::date + 1)`, f.hasta);
+
+  if (f.estado === 'corta')             where.push('a.estado IS NULL AND l.duracion_seg < $1');
+  else if (f.estado === 'sin_procesar') where.push('a.estado IS NULL AND l.duracion_seg >= $1');
+  else if (f.estado)                    add('a.estado = ?', f.estado);
+  // Por defecto se ocultan las cortas: son el 95 % de las filas y el pipeline no
+  // las va a tocar nunca. Se ven pidiendo el estado 'corta' explícitamente.
+  else where.push('(a.estado IS NOT NULL OR l.duracion_seg >= $1)');
 
   args.push(Math.min(f.limit ?? 200, 1000));
-  const { rows } = await db().query(
-    `SELECT * FROM ${CALLS_TABLE}
-     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY fecha DESC LIMIT $${args.length}`,
+  const { rows } = await callsDb().query(
+    `${SELECT_BASE(esq, '$1')} WHERE ${where.join(' AND ')} ORDER BY l.fecha DESC LIMIT $${args.length}`,
     args,
   );
   return rows as CallRow[];
 }
 
-/**
- * Lo que al barrido le queda por hacer. El tope de `intentos` es lo que impide
- * que un fallo permanente (audio borrado, cuota agotada) se reintente para
- * siempre pagando una transcripción en cada vuelta.
- */
-export async function listPendientes(maxIntentos = 3, limit = 20): Promise<CallRow[]> {
-  const { rows } = await db().query(
-    `SELECT * FROM ${CALLS_TABLE}
-      WHERE estado = ANY($1) AND intentos < $2
-      ORDER BY fecha ASC LIMIT $3`,
-    [ESTADOS_PENDIENTES, maxIntentos, limit],
-  );
-  return rows as CallRow[];
+export async function getCall(c: Cuenta, callId: string): Promise<CallRow | undefined> {
+  const { rows } = await callsDb().query(
+    `${SELECT_BASE(esquemaDe(c), '0')} WHERE l.call_id = $1 LIMIT 1`, [callId]);
+  return rows[0] as CallRow | undefined;
 }
 
-export async function markTranscrita(callId: string, transcripcion: string): Promise<void> {
-  await db().query(
-    `UPDATE ${CALLS_TABLE}
-        SET transcripcion = $2, estado = 'transcrita', error = NULL
-      WHERE call_id = $1`,
-    [callId, transcripcion],
-  );
+// ── Escrituras ───────────────────────────────────────────────────────────────
+// Todas hacen upsert: la fila de `analisis` puede no existir todavía (la llamada
+// la creó Callpicker, no nosotros), así que no se puede asumir un UPDATE.
+
+const upsert = (esq: string, cols: string, sets: string) => `
+  INSERT INTO ${esq}.analisis (cuenta, call_id, ${cols})
+  VALUES ($1, $2, ${cols.split(',').map((_, i) => `$${i + 3}`).join(', ')})
+  ON CONFLICT (cuenta, call_id) DO UPDATE SET ${sets}`;
+
+export async function markTranscrita(c: Cuenta, callId: string, texto: string): Promise<void> {
+  await callsDb().query(
+    upsert(esquemaDe(c), 'estado, transcripcion',
+           `estado = 'transcrita', transcripcion = EXCLUDED.transcripcion, error = NULL`),
+    [c.slug, callId, 'transcrita', texto]);
 }
 
 export interface AnalysisFields {
@@ -152,69 +164,54 @@ export interface AnalysisFields {
 }
 
 /**
- * Cierra la llamada. No escribe `calif_global`: esa columna es GENERATED y la
- * calcula Postgres a partir de los cuatro campos de aquí — el mismo cálculo que
- * hacía la ArrayFormula del Sheet, sin el bug que premiaba "Whatsapp".
+ * Cierra la llamada. No escribe `calif_global`: es una columna GENERATED que
+ * calcula Postgres desde los cuatro campos de arriba, con la fórmula del Sheet
+ * ya corregida (verificada contra el motor: "Whatsapp" da 0, no 35).
  */
-export async function markAnalizada(callId: string, a: AnalysisFields): Promise<void> {
-  await db().query(
-    `UPDATE ${CALLS_TABLE}
-        SET tipo_contacto = $2, presentacion = $3, precalif = $4, exploracion = $5,
-            agenda = $6, analisis = $7,
-            estado = 'analizada', error = NULL, procesado_at = now()
-      WHERE call_id = $1`,
-    [callId, a.tipo_contacto, a.presentacion, a.precalif, a.exploracion, a.agenda, a.analisis],
-  );
+export async function markAnalizada(c: Cuenta, callId: string, a: AnalysisFields): Promise<void> {
+  await callsDb().query(
+    upsert(esquemaDe(c),
+      'estado, tipo_contacto, presentacion, precalif, exploracion, agenda, analisis',
+      `estado = 'analizada', tipo_contacto = EXCLUDED.tipo_contacto,
+       presentacion = EXCLUDED.presentacion, precalif = EXCLUDED.precalif,
+       exploracion = EXCLUDED.exploracion, agenda = EXCLUDED.agenda,
+       analisis = EXCLUDED.analisis, error = NULL, procesado_at = now()`),
+    [c.slug, callId, 'analizada', a.tipo_contacto, a.presentacion, a.precalif,
+     a.exploracion, a.agenda, a.analisis]);
 }
 
-/** Buzón de voz: termina el recorrido sin pasar por el análisis. */
-export async function markBuzon(callId: string, transcripcion: string): Promise<void> {
-  await db().query(
-    `UPDATE ${CALLS_TABLE}
-        SET transcripcion = $2, analisis = 'Buzón de voz', estado = 'analizada',
-            error = NULL, procesado_at = now()
-      WHERE call_id = $1`,
-    [callId, transcripcion],
-  );
+/** Buzón de voz: termina sin pasar por el análisis, que no tendría nada que leer. */
+export async function markBuzon(c: Cuenta, callId: string, texto: string): Promise<void> {
+  await callsDb().query(
+    upsert(esquemaDe(c), 'estado, transcripcion, analisis',
+      `estado = 'analizada', transcripcion = EXCLUDED.transcripcion,
+       analisis = 'Buzón de voz', error = NULL, procesado_at = now()`),
+    [c.slug, callId, 'analizada', texto, 'Buzón de voz']);
 }
 
-export async function markDescartada(callId: string, motivo: string): Promise<void> {
-  await db().query(
-    `UPDATE ${CALLS_TABLE}
-        SET estado = 'descartada', error = $2, procesado_at = now()
-      WHERE call_id = $1`,
-    [callId, motivo],
-  );
-}
-
-/** El mensaje se guarda ya traducido, igual que hace jobs/store.ts en updateJob. */
-export async function markFallida(callId: string, err: unknown): Promise<void> {
+export async function markFallida(c: Cuenta, callId: string, err: unknown): Promise<void> {
   const msg = humanizeError(err instanceof Error ? err.message : String(err));
-  await db().query(
-    `UPDATE ${CALLS_TABLE}
-        SET estado = 'fallida', error = $2, intentos = intentos + 1
-      WHERE call_id = $1`,
-    [callId, msg],
-  );
+  await callsDb().query(
+    upsert(esquemaDe(c), 'estado, error, intentos',
+      `estado = 'fallida', error = EXCLUDED.error,
+       intentos = ${esquemaDe(c)}.analisis.intentos + 1`),
+    [c.slug, callId, 'fallida', msg, 1]);
 }
 
-/** Asigna el cliente de una llamada que llegó sin poder resolverse. */
-export async function assignClient(callId: string, clientId: string): Promise<void> {
-  await db().query(
-    `UPDATE ${CALLS_TABLE}
-        SET client_id = $2, estado = CASE WHEN estado = 'sin_asignar' THEN 'recibida' ELSE estado END
-      WHERE call_id = $1`,
-    [callId, clientId],
-  );
-}
-
-/** Conteo por estado para la cabecera del monitoreo. */
-export async function countByEstado(clientId?: string): Promise<Record<string, number>> {
-  const { rows } = await db().query(
-    `SELECT estado, COUNT(*)::int AS n FROM ${CALLS_TABLE}
-     ${clientId ? 'WHERE client_id = $1' : ''}
-     GROUP BY estado`,
-    clientId ? [clientId] : [],
-  );
+/** Resumen por estado para la cabecera de la pestaña. */
+export async function countByEstado(
+  c: Cuenta, desde?: string, minDuracion = 100,
+): Promise<Record<string, number>> {
+  const esq = esquemaDe(c);
+  const { rows } = await callsDb().query(
+    `SELECT COALESCE(a.estado,
+              CASE WHEN l.duracion_seg >= $2 THEN 'sin_procesar' ELSE 'corta' END) AS estado,
+            count(*)::int AS n
+       FROM ${esq}.llamadas l
+       LEFT JOIN ${esq}.analisis a ON a.cuenta = l.cuenta AND a.call_id = l.call_id
+      WHERE l.n_grabaciones > 0
+        AND ($1::date IS NULL OR (l.fecha AT TIME ZONE 'America/Mexico_City') >= $1::date)
+      GROUP BY 1`,
+    [desde ?? null, minDuracion]);
   return Object.fromEntries(rows.map(r => [r.estado, r.n]));
 }

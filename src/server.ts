@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { env, callsPipelineEnabled } from './config/env';
 import { dbEnabled, ensureSchema } from './config/db';
+import { callsDbEnabled } from './calls/db';
 import { seedClientsFromFileIfEmpty } from './clients/manager';
 import { seedSchedulesFromFileIfEmpty } from './schedules/store';
 import { seedTokenLogFromFileIfEmpty } from './tokens/store';
@@ -18,7 +19,7 @@ import chatRouter from './routes/chat';
 import sheetsRouter from './routes/sheets';
 import driveRouter from './routes/drive';
 import oauthSetupRouter from './routes/oauthSetup';
-import { webhookRouter, callsRouter } from './routes/calls';
+import callsRouter from './routes/calls';
 import authRouter from './auth/router';
 import { requireApiAuth, requirePage } from './auth/middleware';
 import { startScheduler } from './schedules/runner';
@@ -38,10 +39,6 @@ const staticDir = path.join(__dirname, '..');
 app.use('/api/health', healthRouter);          // Docker healthcheck
 app.use('/auth', authRouter);                  // login / logout / config / me
 app.get('/login', (_req, res) => res.sendFile(path.join(staticDir, 'login.html')));
-// Webhook de Callpicker: es máquina-a-máquina, así que no puede pasar por la
-// cookie de sesión. Va aquí ARRIBA a propósito — montarlo debajo de la línea de
-// requireApiAuth lo dejaría inalcanzable. Trae su propio token (calls/webhookAuth).
-app.use('/api/calls/webhook', webhookRouter);
 
 // ── Protected API (401 JSON when unauthenticated; no-op when auth disabled) ────
 app.use('/api', requireApiAuth);
@@ -85,7 +82,7 @@ async function bootstrap(): Promise<void> {
     console.log(`✅ Zebra Reports listening on port ${env.PORT}`);
     startScheduler();
     // Solo con el pipeline encendido: apagado no debe haber ni un tick de fondo.
-    if (callsPipelineEnabled() && dbEnabled) startCallsSweeper();
+    if (callsPipelineEnabled() && callsDbEnabled()) startCallsSweeper();
   });
 }
 

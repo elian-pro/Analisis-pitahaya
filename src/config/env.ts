@@ -22,12 +22,13 @@ const envSchema = z.object({
   // se deriva de las cabeceras del proxy (X-Forwarded-Proto + Host).
   APP_BASE_URL: z.string().optional(),
 
-  // ── Pipeline de llamadas (webhook → transcripción → análisis → Postgres) ────
+  // ── Pipeline de llamadas (lee de la base de Callpicker, transcribe, analiza) ─
+  // CALLS_DATABASE_URL no se valida aquí: se lee con process.env en calls/db.ts,
+  // igual que DATABASE_URL en config/db.ts.
   // Todas opcionales a propósito: el pipeline nace apagado y la app tiene que
   // poder arrancar sin ninguna de ellas. Se validan en tiempo de uso con los
   // getters de más abajo, igual que las de OAuth.
   CALLS_PIPELINE:      z.enum(['on', 'off']).default('off'),
-  CALLS_WEBHOOK_TOKEN: z.string().optional(),
   GEMINI_API_KEY:      z.string().optional(),
   OPENAI_API_KEY:      z.string().optional(),
 });
@@ -87,9 +88,9 @@ export function getGoogleOAuthAppCreds(): { clientId: string; clientSecret: stri
 // ── Pipeline de llamadas ─────────────────────────────────────────────────────
 
 /**
- * Con el pipeline apagado el webhook responde 503 y el barrido no arranca, pero
- * la lectura y el procesamiento manual de una llamada siguen funcionando: así se
- * puede recorrer el pipeline entero antes de exponerlo a tráfico real.
+ * Apagado, el barrido automático no arranca. La lectura y el procesamiento
+ * manual de una llamada sí funcionan: así se puede recorrer el pipeline entero,
+ * llamada a llamada, antes de dejar que corra solo.
  */
 export const callsPipelineEnabled = (): boolean => env.CALLS_PIPELINE === 'on';
 

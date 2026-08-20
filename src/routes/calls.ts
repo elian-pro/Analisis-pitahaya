@@ -1,97 +1,133 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { env, callsPipelineEnabled } from '../config/env';
-import { checkWebhookToken, extractToken } from '../calls/webhookAuth';
-import { ingestCall, processCall } from '../calls/pipeline';
-import { listCalls, getCall, countByEstado, assignClient, type CallEstado } from '../calls/store';
-import { sweepOnce } from '../calls/sweeper';
+import { loadClients } from '../clients/manager';
+import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registry';
+import { listCalls, getCall, countByEstado, type CallEstadoUI } from '../calls/store';
+import { processCall, matchClient, minDuracion } from '../calls/pipeline';
+import { sweepOnce, DESDE } from '../calls/sweeper';
+import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from '../calls/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dos routers, porque tienen autenticación distinta:
-//
-//   webhookRouter → PÚBLICO respecto a la sesión, con su propio token. Se monta
-//                   ANTES de app.use('/api', requireApiAuth) en server.ts, que
-//                   es el único mecanismo de exención que existe en este repo.
-//   callsRouter   → detrás de la sesión, como el resto de /api.
+// API de la pestaña de llamadas. Toda detrás de la sesión, como el resto de
+// /api: ya no hay webhook público, porque Callpicker escribe directo en su base
+// y el pipeline lee de ahí.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const webhookRouter = Router();
+const router = Router();
 
-webhookRouter.post('/', async (req: Request, res: Response): Promise<void> => {
-  const auth = checkWebhookToken(
-    extractToken(req.headers as Record<string, unknown>, req.query as Record<string, unknown>),
-    env.CALLS_WEBHOOK_TOKEN,
-  );
-  if (!auth.ok) {
-    res.status(auth.status).json({ error: auth.error });
-    return;
-  }
-
-  if (!callsPipelineEnabled()) {
-    res.status(503).json({ error: 'El pipeline de llamadas está apagado (CALLS_PIPELINE=off).' });
-    return;
-  }
-
-  // Un payload sin `call_id` es culpa del emisor: 400 para que NO lo reintente,
-  // porque reenviarlo daría exactamente el mismo resultado.
-  const payload = req.body ?? {};
-  if (!payload.call_id) {
-    res.status(400).json({ error: 'El evento no trae `call_id`.' });
-    return;
-  }
-
-  try {
-    const result = await ingestCall(payload);
-
-    // Se responde antes de transcribir: el proveedor no debe esperar a Gemini, y
-    // un timeout suyo provocaría reenvíos. Mismo patrón que routes/report.ts:59.
-    res.status(202).json(result);
-
-    if (result.nueva && result.estado === 'recibida') {
-      processCall(result.call_id).catch(err =>
-        console.error(`[calls] proceso de ${result.call_id} falló:`, err),
-      );
-    }
-  } catch (e) {
-    // Aquí solo quedan fallos NUESTROS (base caída, config incompleta). Tiene que
-    // ser 5xx: con un 400 el proveedor daría la llamada por entregada y se
-    // perdería para siempre, que es justo lo que este pipeline viene a evitar.
-    const msg = (e as Error).message;
-    console.error(`[calls] ingest de ${payload.call_id} falló:`, msg);
-    res.status(500).json({ error: msg });
-  }
-});
-
-// ── API del dashboard ────────────────────────────────────────────────────────
-
-export const callsRouter = Router();
-
-const ESTADOS = ['recibida', 'descartada', 'transcrita', 'analizada', 'fallida', 'sin_asignar'] as const;
+const ESTADOS = ['pendiente','descartada','transcrita','analizada','fallida','sin_procesar','corta'] as const;
 
 const ListQuerySchema = z.object({
-  client_id: z.string().optional(),
-  estado:    z.enum(ESTADOS).optional(),
-  from:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  to:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  limit:     z.coerce.number().int().min(1).max(1000).optional(),
+  cuenta: z.string().optional(),
+  estado: z.enum(ESTADOS).optional(),
+  desde:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  hasta:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  limit:  z.coerce.number().int().min(1).max(1000).optional(),
 });
 
-callsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+/**
+ * Los schemas que pueden servir de fuente, con lo necesario para decidir desde
+ * que fecha analizar: cuantas llamadas hay por mes que superen el umbral.
+ */
+router.get('/esquemas', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    res.json({ esquemas: await listEsquemas() });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+const ActivarSchema = z.object({
+  esquema:          z.string().min(1),
+  // null = no analizar el historico. Se guarda la fecha de HOY en vez de un null
+  // especial: "de aqui en adelante" es una fecha como cualquier otra y evita un
+  // caso aparte en el barrido.
+  desde:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  contexto_negocio: z.string().optional(),
+});
+
+/**
+ * Activa una cuenta: crea su tabla `analisis` y guarda desde cuando analizar.
+ * Con la tabla creada el barrido la recoge solo en el siguiente tick, asi que
+ * no hay nada mas que disparar.
+ */
+router.post('/activar', async (req: Request, res: Response): Promise<void> => {
+  const parsed = ActivarSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
+    return;
+  }
+  const { esquema, desde, contexto_negocio } = parsed.data;
+  try {
+    await ensureConfigTable();
+    const creada = await ensureAnalisisTable(esquema);
+    const hoy = new Date().toISOString().slice(0, 10);
+    await setConfig(esquema, desde ?? hoy, contexto_negocio ?? null);
+
+    // Cuantas quedan por procesar con esa fecha, para poder avisar del volumen.
+    const info = (await listEsquemas()).find(e => e.esquema === esquema);
+    const pendientes = desde
+      ? (info?.por_mes ?? []).filter(m => m.mes >= desde.slice(0, 7)).reduce((a, m) => a + m.n, 0)
+      : 0;
+    res.json({ ok: true, creada, esquema, desde: desde ?? null, pendientes });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+/** Cuentas disponibles, para el selector de la pestaña. */
+router.get('/cuentas', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const [cuentas, clients] = await Promise.all([listCuentas(), loadClients()]);
+    res.json({
+      desde: DESDE,
+      cuentas: cuentas.map(c => ({
+        ...c,
+        // Si no empareja con ningún cliente de Zebra Reports, se usan los
+        // prompts por defecto: conviene que se vea en la UI.
+        tiene_cliente: clients.some(x => x.id === c.slug || x.name === c.cliente),
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   const parsed = ListQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
     return;
   }
+  const { cuenta: slug, estado, desde, hasta, limit } = parsed.data;
   try {
+    // Sin cuenta explícita se usa la primera habilitada; hoy solo hay una.
+    const cuenta = slug ? await getCuenta(slug) : (await listCuentasHabilitadas())[0];
+    if (!cuenta) { res.json({ cuenta: null, counts: {}, calls: [] }); return; }
+    // Una cuenta sin tabla `analisis` no se puede consultar: el LEFT JOIN falla
+    // con un error de Postgres que al usuario no le dice nada.
+    if (!cuenta.habilitada) {
+      res.json({
+        cuenta: { slug: cuenta.slug, cliente: cuenta.cliente, habilitada: false },
+        counts: {}, calls: [],
+        aviso: `${cuenta.cliente} todavia no esta activado: falta crear la tabla `
+             + `analisis en el schema ${cuenta.esquema}.`,
+      });
+      return;
+    }
+
+    // El umbral del cliente decide qué cuenta como pendiente y qué como corta.
+    const umbral = minDuracion(matchClient(cuenta, await loadClients()));
     const [calls, counts] = await Promise.all([
-      listCalls({ ...parsed.data, estado: parsed.data.estado as CallEstado | undefined }),
-      countByEstado(parsed.data.client_id),
+      listCalls(cuenta, { estado: estado as CallEstadoUI | undefined,
+                          desde: desde ?? DESDE, hasta, limit, minDuracion: umbral }),
+      countByEstado(cuenta, desde ?? DESDE, umbral),
     ]);
-    // La transcripción puede pesar decenas de KB y la lista no la muestra: se
-    // recorta aquí para no mandar megas al navegador en cada refresco.
+    // La transcripción pesa decenas de KB por fila y la lista no la muestra.
     res.json({
+      cuenta: { slug: cuenta.slug, cliente: cuenta.cliente, habilitada: cuenta.habilitada },
       counts,
-      calls: calls.map(c => ({ ...c, transcripcion: undefined, raw: undefined,
+      calls: calls.map(c => ({ ...c, transcripcion: undefined,
                                tiene_transcripcion: Boolean(c.transcripcion) })),
     });
   } catch (e) {
@@ -99,20 +135,21 @@ callsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Las rutas literales van ANTES de las que llevan parámetro, para que Express
+// Las rutas literales van antes que las que llevan parámetro, para que Express
 // no interprete 'reprocess' como un call_id. Misma nota que en report.ts:259.
-callsRouter.post('/reprocess', async (req: Request, res: Response): Promise<void> => {
-  const lote = Number(req.query.lote) || undefined;
+router.post('/reprocess', async (req: Request, res: Response): Promise<void> => {
   try {
-    res.json(await sweepOnce(lote));
+    res.json(await sweepOnce(Number(req.query.lote) || undefined));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-callsRouter.get('/:call_id', async (req: Request, res: Response): Promise<void> => {
+router.get('/:slug/:call_id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const call = await getCall(req.params.call_id);
+    const cuenta = await getCuenta(req.params.slug);
+    if (!cuenta) { res.status(404).json({ error: 'Cuenta no encontrada' }); return; }
+    const call = await getCall(cuenta, req.params.call_id);
     if (!call) { res.status(404).json({ error: 'Llamada no encontrada' }); return; }
     res.json(call);
   } catch (e) {
@@ -120,26 +157,13 @@ callsRouter.get('/:call_id', async (req: Request, res: Response): Promise<void> 
   }
 });
 
-callsRouter.post('/:call_id/process', async (req: Request, res: Response): Promise<void> => {
+router.post('/:slug/:call_id/process', async (req: Request, res: Response): Promise<void> => {
   try {
-    const result = await processCall(req.params.call_id, req.query.force === 'true');
-    res.status(result.ok ? 200 : 422).json(result);
+    const r = await processCall(req.params.slug, req.params.call_id, req.query.force === 'true');
+    res.status(r.ok ? 200 : 422).json(r);
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-const AssignSchema = z.object({ client_id: z.string().min(1) });
-
-callsRouter.post('/:call_id/assign', async (req: Request, res: Response): Promise<void> => {
-  const parsed = AssignSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: 'Falta client_id' }); return; }
-  try {
-    await assignClient(req.params.call_id, parsed.data.client_id);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
-
-export default callsRouter;
+export default router;

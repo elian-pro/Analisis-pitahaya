@@ -3599,6 +3599,40 @@
   // ── Clients CRUD ───────────────────────────────────────────────────────────
   const CLIENTS_API = '/api/clients';
 
+  // La fila enseña de donde lee ESTE cliente, no la hoja que le quedo
+  // configurada. Un cliente migrado a Postgres conserva su spreadsheet_id —no se
+  // borra, por si hay que volver— y enlazarlo mandaba a mirar una hoja que ya no
+  // alimenta ningun reporte.
+  //
+  // Postgres no tiene una URL que abrir, asi que el enlace equivalente es el
+  // nuestro: la pestaña Llamadas con esa cuenta puesta. Por eso la flecha es "→"
+  // y no "↗": no se sale de la app.
+  function _fuenteDelCliente(c) {
+    if (c.calls_source === 'postgres') {
+      return c.calls_schema
+        ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();verLlamadasDe('${_esc(c.calls_schema)}')" style="color:inherit;" title="Ver sus llamadas en la pestaña Llamadas">Postgres · ${_esc(c.calls_schema)} →</a>`
+        : `<span style="color:var(--danger);">Postgres sin origen elegido</span>`;
+    }
+    return c.spreadsheet_id
+      ? `<a href="https://docs.google.com/spreadsheets/d/${_esc(c.spreadsheet_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Hoja de cálculo ↗</a>`
+      : `<span>Sin hoja</span>`;
+  }
+
+  // Salta a Llamadas con la cuenta de ese schema ya elegida. El selector va por
+  // slug y el cliente guarda el schema, asi que hay que traducir: son dos
+  // catalogos distintos (el registro de Callpicker y los clientes de aqui).
+  async function verLlamadasDe(esquema) {
+    const sel = document.getElementById('calls-cuenta');
+    await _fillCuentas();
+    try {
+      const { cuentas } = await fetch(`${CALLS_API}/cuentas`).then(r => r.json());
+      const cuenta = (cuentas || []).find(x => x.esquema === esquema);
+      if (cuenta && sel) sel.value = cuenta.slug;
+      else _showToast('Ese origen ya no aparece en el registro de Callpicker');
+    } catch { /* si falla, la pestaña abre en su cuenta por defecto */ }
+    setTab('calls');
+  }
+
   async function renderClientList() {
     const el = document.getElementById('client-list');
     el.innerHTML = '<div class="token-empty" style="padding:16px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>';
@@ -3616,9 +3650,7 @@
           `<div style="flex:1;min-width:0;">` +
             `<div class="client-row-name">${_esc(c.name)}</div>` +
             `<div class="client-row-meta">` +
-              (c.spreadsheet_id
-                ? `<a href="https://docs.google.com/spreadsheets/d/${_esc(c.spreadsheet_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Hoja de cálculo ↗</a>`
-                : `<span>Sin hoja</span>`) +
+              _fuenteDelCliente(c) +
               ((c.parent_folder_id || c.folder_id) ? `<span>·</span><a href="https://drive.google.com/drive/folders/${_esc(c.parent_folder_id || c.folder_id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:inherit;">Carpeta en Drive ↗</a>` : '') +
             `</div>` +
           `</div>` +

@@ -460,6 +460,13 @@
     .cal-day-cell.cal-day-sel{background:var(--accent);color:var(--on-accent) !important;font-weight:600;}
     .cal-day-cell.disabled{opacity:0.22;cursor:default;pointer-events:none;}
 /* ── Pestaña Llamadas ─────────────────────────────────────────────────────── */
+/* .form-note ya existe en el sistema (la usan las notas de frecuencia en
+   Automatización): se reutiliza tal cual y NO se redefine. Solo se añade el
+   énfasis del dato, que no existía. */
+.form-note b{color:var(--fg);font-weight:500}
+.chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
+.chip-row span{font-size:10px;letter-spacing:.02em;padding:3px 8px;border-radius:999px;
+  border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap}
 .calls-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .calls-chip{font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;
   border-radius:999px;border:1px solid var(--line,#2a2a2a);background:rgba(255,255,255,.03)}
@@ -472,8 +479,9 @@
 .est-analizada{background:rgba(34,197,94,.15);color:#4ade80}
 .est-fallida{background:rgba(239,68,68,.15);color:#f87171}
 .est-descartada{background:rgba(148,163,184,.15);color:#94a3b8}
-.est-recibida,.est-transcrita{background:rgba(234,179,8,.15);color:#facc15}
-.est-sin_asignar{background:rgba(59,130,246,.15);color:#60a5fa}
+.est-pendiente,.est-transcrita{background:rgba(234,179,8,.15);color:#facc15}
+.est-sin_procesar{background:rgba(234,179,8,.15);color:#facc15}
+.est-corta{background:rgba(148,163,184,.10);color:#94a3b8}
 .calls-detail{padding:4px 8px 18px;border-bottom:1px solid var(--line,#2a2a2a);
   font-size:12.5px;line-height:1.7}
 /* …solo el valor lo preserva. En el contenedor, los saltos y la indentación del
@@ -889,7 +897,7 @@
     <div class="panel-header">
       <div>
         <div class="panel-title">Llamadas</div>
-        <div class="panel-sub">Pipeline propio: webhook → transcripción → análisis · sustituye a los flujos de n8n</div>
+        <div class="panel-sub">Pipeline propio: Callpicker → transcripción → análisis · sustituye a los flujos de n8n</div>
       </div>
       <button class="btn-sm" onclick="reprocessCalls()"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
     </div>
@@ -897,8 +905,8 @@
     <div class="card" style="margin-bottom:14px;">
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
         <div class="field" style="min-width:170px;margin:0;">
-          <label class="field-label">Cliente</label>
-          <select id="calls-client" onchange="renderCalls()"><option value="">Todos</option></select>
+          <label class="field-label">Cuenta</label>
+          <select id="calls-cuenta" onchange="renderCalls()"></select>
         </div>
         <div class="field" style="min-width:150px;margin:0;">
           <label class="field-label">Estado</label>
@@ -906,10 +914,10 @@
             <option value="">Todos</option>
             <option value="analizada">Analizada</option>
             <option value="fallida">Fallida</option>
-            <option value="recibida">Pendiente</option>
+            <option value="sin_procesar">Sin procesar</option>
             <option value="transcrita">Transcrita</option>
             <option value="descartada">Descartada</option>
-            <option value="sin_asignar">Sin asignar</option>
+            <option value="corta">Corta (bajo el umbral)</option>
           </select>
         </div>
         <div class="field" style="min-width:190px;margin:0;">
@@ -1054,6 +1062,39 @@
       </div>
       <div class="wiz-pane" data-step="2">
       <div class="form-section">
+        <div class="form-section-title">Fuente de las llamadas</div>
+        <div class="form-group">
+          <select class="form-control" id="cf-calls-source" onchange="onFuenteChange()">
+            <option value="sheets">Google Sheets</option>
+            <option value="postgres">Postgres · Callpicker</option>
+          </select>
+          <div class="form-hint">
+            Con Postgres, los reportes y el Radar dejan de leer la hoja y usan las
+            transcripciones que genera el pipeline propio.
+          </div>
+        </div>
+
+        <div id="cf-pg-wrap" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Origen *</label>
+            <select class="form-control" id="cf-calls-schema" onchange="onEsquemaChange()"
+                    data-placeholder="— Elige el origen —"></select>
+            <div class="form-note" id="cf-pg-info">La tabla de análisis se crea sola al guardar.</div>
+          </div>
+          <div class="form-group" id="cf-pg-backfill-wrap" style="display:none;">
+            <label class="form-label">Llamadas existentes</label>
+            <select class="form-control" id="cf-pg-desde" onchange="onDesdeChange()"></select>
+            <div class="form-note" id="cf-pg-costo"></div>
+          </div>
+          <div class="form-group" id="cf-pg-asesores-wrap" style="display:none;">
+            <label class="form-label">Asesores en estas llamadas</label>
+            <div class="chip-row" id="cf-pg-asesores"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="cf-sheets-wrap">
+      <div class="form-section">
         <div class="form-section-title">Google Sheets</div>
         <div class="form-group">
           <label class="form-label">Hoja de Google (pega el link) *</label>
@@ -1130,6 +1171,7 @@
             <input class="form-control" id="cf-max-chars" type="number" placeholder="3000" min="1000" max="200000">
           </div>
         </details>
+      </div>
       </div>
       </div>
       <div class="wiz-pane" data-step="3">
@@ -3584,6 +3626,9 @@
     document.getElementById('cf-radar-name-text').textContent  = '';
     document.getElementById('cf-sheet-chip').classList.remove('show');
     document.getElementById('cf-spreadsheet-row').style.display = '';
+    // Cliente nuevo: fuente Sheets, que es como se han dado de alta siempre.
+    const _fSel = document.getElementById('cf-calls-source');
+    if (_fSel) { _fSel.value = 'sheets'; void onFuenteChange(); }
     document.getElementById('cf-sheet-hint').style.display = '';
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
@@ -3620,6 +3665,7 @@
         document.getElementById('cf-folder-id').value        = c.folder_id || '';
         document.getElementById('cf-parent-folder-id').value = c.parent_folder_id || '';
         document.getElementById('cf-sidecar-folder-id').value= c.sidecar_folder_id || '';
+        document.getElementById('cf-calls-source').value     = c.calls_source || 'sheets';
         document.getElementById('cf-spreadsheet-id').value   = c.spreadsheet_id || '';
         document.getElementById('cf-sheet-name').value       = c.data_sheet_name || '';
         if (c.data_sheet_name) setTabMode('text');   // al editar, muestra el nombre guardado
@@ -3657,6 +3703,16 @@
         // En segundo plano: no bloquean abrir el modal
         _fillFolderNames(c);
         _fillSheetName(c.spreadsheet_id);
+        // Refleja la fuente guardada: con Postgres oculta lo de la hoja y
+        // preselecciona su origen.
+        void (async () => {
+          await onFuenteChange();
+          if (c.calls_schema) {
+            const sel = document.getElementById('cf-calls-schema');
+            sel.value = c.calls_schema;
+            onEsquemaChange();
+          }
+        })();
       } catch(e) {
         alert('Error cargando datos del cliente: ' + e.message);
         return;
@@ -3885,15 +3941,132 @@
     wizGo(_wizStep + 1);
   }
 
+  // ── Fuente de las llamadas ─────────────────────────────────────────────────
+  // Un cliente lee de la hoja de siempre o de Postgres. Al elegir Postgres se
+  // oculta todo lo de Sheets (que deja de aplicar) y se pide el origen.
+  let _esquemas = [];
+
+  function fuenteActual() {
+    return document.getElementById('cf-calls-source')?.value || 'sheets';
+  }
+
+  async function onFuenteChange() {
+    const pg = fuenteActual() === 'postgres';
+    document.getElementById('cf-sheets-wrap').style.display = pg ? 'none' : '';
+    document.getElementById('cf-pg-wrap').style.display     = pg ? '' : 'none';
+    if (pg) await _fillEsquemas();
+  }
+
+  const _num = n => Number(n).toLocaleString('es-MX');
+
+  async function _fillEsquemas() {
+    const sel  = document.getElementById('cf-calls-schema');
+    const info = document.getElementById('cf-pg-info');
+    if (sel.dataset.filled) { onEsquemaChange(); return; }
+    info.textContent = 'Buscando orígenes disponibles…';
+    try {
+      const r = await fetch(`${CALLS_API}/esquemas`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      _esquemas = (await r.json()).esquemas || [];
+      if (!_esquemas.length) {
+        info.textContent = 'No hay ningún origen con llamadas de Callpicker en la base.';
+        return;
+      }
+      sel.innerHTML = '<option value="">— Elige el origen —</option>' + _esquemas.map(e =>
+        `<option value="${_esc(e.esquema)}">${_esc(e.esquema)} · ${_num(e.analizables)} analizables</option>`
+      ).join('');
+      sel.dataset.filled = '1';
+      onEsquemaChange();
+    } catch (e) {
+      info.textContent = 'No se pudieron cargar los orígenes: ' + e.message;
+    }
+  }
+
+  function _esquemaSel() {
+    return _esquemas.find(e => e.esquema === document.getElementById('cf-calls-schema').value);
+  }
+
+  const _MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const _mesLabel = m => `${_MESES[Number(m.slice(5,7)) - 1]} ${m.slice(0,4)}`;
+
+  // El desglose por mes es lo que permite decidir cuanto historico analizar sin
+  // adivinar el coste: cada opcion dice cuantas llamadas implica.
+  function onEsquemaChange() {
+    const e = _esquemaSel();
+    const info = document.getElementById('cf-pg-info');
+    const bf   = document.getElementById('cf-pg-backfill-wrap');
+    const asw  = document.getElementById('cf-pg-asesores-wrap');
+    if (!e) {
+      info.textContent = 'La tabla de análisis se crea sola al guardar.';
+      bf.style.display = 'none'; asw.style.display = 'none';
+      return;
+    }
+    // El dato que decide lleva el peso; el contexto se queda en el tono de nota.
+    // Mismo año: no repetirlo dos veces ("ene – ago 2026", no "ene 2026 – ago 2026").
+    const [m1, m2] = [e.desde.slice(0,7), e.hasta.slice(0,7)];
+    const per = m1 === m2 ? _mesLabel(m1)
+              : m1.slice(0,4) === m2.slice(0,4)
+                ? `${_MESES[Number(m1.slice(5,7)) - 1]} – ${_mesLabel(m2)}`
+                : `${_mesLabel(m1)} – ${_mesLabel(m2)}`;
+    info.innerHTML = `<b>${_num(e.analizables)} llamadas analizables</b> de ${_num(e.total)} · ${_esc(per)}`
+      + `<br>Más de 100 s y con grabación. `
+      + (e.habilitado ? `Ya está activo: ${_num(e.ya_analizadas)} analizadas.`
+                      : 'La tabla de análisis se creará al guardar.');
+
+    const sel = document.getElementById('cf-pg-desde');
+    const acum = [];
+    let resto = e.analizables;
+    for (const m of e.por_mes) { acum.push({ mes: m.mes, n: resto }); resto -= m.n; }
+    sel.innerHTML =
+      `<option value="">No analizar las existentes (solo de ahora en adelante)</option>` +
+      acum.map(a => `<option value="${a.mes}-01">Desde ${_mesLabel(a.mes)} · ${_num(a.n)} llamadas</option>`).join('');
+    // Por defecto, el mes en curso: lo mas barato que sigue siendo util.
+    const ultimo = e.por_mes[e.por_mes.length - 1];
+    if (ultimo) sel.value = `${ultimo.mes}-01`;
+    bf.style.display = '';
+    onDesdeChange();
+
+    // Como chips y no como parrafo corrido: sirven para reconocer de un vistazo
+    // si el origen es el correcto, y una lista separada por comas no se escanea.
+    asw.style.display = e.asesores.length ? '' : 'none';
+    document.getElementById('cf-pg-asesores').innerHTML =
+      e.asesores.map(a => `<span>${_esc(a)}</span>`).join('');
+  }
+
+  function onDesdeChange() {
+    const e = _esquemaSel();
+    const desde = document.getElementById('cf-pg-desde').value;
+    const out = document.getElementById('cf-pg-costo');
+    if (!e || !desde) {
+      out.textContent = 'Solo se analizarán las llamadas que entren a partir de ahora.';
+      return;
+    }
+    const n = e.por_mes.filter(m => m.mes >= desde.slice(0,7)).reduce((a,m) => a + m.n, 0);
+    // ~26 s por llamada, medido sobre el primer lote real de 41.
+    const min = Math.round(n * 26 / 60);
+    const dur = min >= 60 ? `${Math.floor(min/60)} h ${min%60} min` : `${min} min`;
+    out.innerHTML = `<b>${_num(n)} llamadas</b> · unos ${dur} de proceso · consume Gemini y OpenAI.`;
+  }
+
   function _wizValidateStep(step) {
     _clearClientErrors();
     // La carpeta de reportes solo es obligatoria si la app no la va a crear.
     const laCrea = !!document.getElementById('cf-parent-folder-id').value
                 && document.getElementById('cf-create-reports').checked;
     const missing = [];
+    // Con fuente Postgres, los campos de la hoja dejan de aplicar: exigirlos
+    // impediria guardar un cliente que no tiene hoja ninguna.
+    const pg = fuenteActual() === 'postgres';
+    const DE_SHEETS = ['cf-spreadsheet-id','cf-sheet-name','cf-col-fecha','cf-col-asesor',
+                       'cf-col-calif','cf-col-analisis','cf-col-transcripcion'];
+    if (pg && step === 2 && !document.getElementById('cf-calls-schema').value) {
+      missing.push('Origen en Postgres');
+      document.getElementById('cf-calls-schema').classList.add('field-error');
+    }
     _CF_REQUIRED.forEach(f => {
       if ((_WIZ_STEP_OF[f.id] || 1) !== step) return;
       if (f.id === 'cf-folder-id' && laCrea) return;
+      if (pg && DE_SHEETS.includes(f.id)) return;
       const el = document.getElementById(f.id);
       if (!el || !el.value.trim()) {
         missing.push(f.label);
@@ -4314,6 +4487,8 @@
       transcripcion_max_chars: parseInt(document.getElementById('cf-max-chars').value) || 3000,
       prompt_individual:       document.getElementById('cf-prompt-individual').value.trim(),
       prompt_general:          document.getElementById('cf-prompt-general').value.trim(),
+      calls_source:            fuenteActual(),
+      calls_schema:            document.getElementById('cf-calls-schema').value || undefined,
     };
 
     // La carpeta de Radar se gestiona en el paso 1, junto a la de análisis, así
@@ -4341,6 +4516,29 @@
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${r.status}`);
       }
+      // Con fuente Postgres hay un segundo paso: crear la tabla de analisis del
+      // schema y guardar desde cuando analizar. Va DESPUES de guardar el cliente
+      // para no crear tablas por un formulario que acabo rechazado.
+      if (fuenteActual() === 'postgres') {
+        const esquema = document.getElementById('cf-calls-schema').value;
+        const desde   = document.getElementById('cf-pg-desde').value || null;
+        try {
+          const ar = await fetch(`${CALLS_API}/activar`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ esquema, desde }),
+          });
+          const ad = await ar.json().catch(() => ({}));
+          if (!ar.ok) throw new Error(ad.error || `HTTP ${ar.status}`);
+          alert(ad.creada
+            ? `Listo. Se creó la tabla de análisis de ${esquema}.` +
+              (ad.pendientes ? ` Van a procesarse ${ad.pendientes} llamadas; puedes seguirlo en la pestaña Llamadas.`
+                             : ' Se analizarán las llamadas que entren a partir de ahora.')
+            : `Origen actualizado. ${ad.pendientes || 0} llamadas por procesar.`);
+        } catch (e) {
+          alert('El cliente se guardó, pero no se pudo activar el origen: ' + e.message);
+        }
+      }
+
       _clearDraft();
       closeClientModal();
       renderClientList();
@@ -5462,12 +5660,16 @@
   }
 
   // ── Pestaña Llamadas ───────────────────────────────────────────────────────
+  // Los datos vienen de la base de Callpicker, no de esta app: una fila por
+  // llamada en <schema>.llamadas, y su analisis al lado en <schema>.analisis.
+  // Por eso el selector es de CUENTA (callpicker_registro) y no de cliente.
   const CALLS_API = '/api/calls';
-  let _callsAbiertaId = null;
+  let _callsAbierta = null;   // { slug, call_id } de la fila desplegada
 
-  const _CALL_EST_LABEL = {
+  const _CALL_EST = {
     analizada:'Analizada', fallida:'Fallida', descartada:'Descartada',
-    recibida:'Pendiente', transcrita:'Transcrita', sin_asignar:'Sin asignar',
+    pendiente:'Pendiente', transcrita:'Transcrita', sin_procesar:'Sin procesar',
+    corta:'Corta',
   };
 
   function _dur(s) {
@@ -5482,37 +5684,42 @@
          + ' ' + d.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
   }
 
-  async function _fillCallsClients() {
-    const sel = document.getElementById('calls-client');
+  // Una cuenta sin tabla `analisis` en su schema no se procesa: se puede mirar,
+  // pero no hay donde escribir. Se marca en el selector para que no parezca un
+  // fallo del pipeline.
+  async function _fillCuentas() {
+    const sel = document.getElementById('calls-cuenta');
     if (!sel || sel.dataset.filled) return;
     try {
-      const r = await fetch(CLIENTS_API);
+      const r = await fetch(`${CALLS_API}/cuentas`);
       if (!r.ok) return;
-      for (const c of await r.json()) {
-        sel.insertAdjacentHTML('beforeend', `<option value="${_esc(c.id)}">${_esc(c.name)}</option>`);
-      }
+      const { cuentas } = await r.json();
+      // Las habilitadas primero, y una de ellas seleccionada: arrancar en una
+      // cuenta sin activar mostraba un error nada mas abrir la pestaña.
+      const orden = [...cuentas].sort((a, b) => Number(b.habilitada) - Number(a.habilitada));
+      sel.innerHTML = orden.map(c =>
+        `<option value="${_esc(c.slug)}">${_esc(c.cliente)}${c.habilitada ? '' : ' (sin activar)'}</option>`
+      ).join('') || '<option value="">Sin cuentas</option>';
+      const activa = orden.find(c => c.habilitada);
+      if (activa) sel.value = activa.slug;
       sel.dataset.filled = '1';
-    } catch (_) { /* el filtro se queda en "Todos" */ }
+    } catch (_) { /* se queda vacio; renderCalls mostrara el error */ }
   }
 
   async function renderCalls() {
     const box = document.getElementById('calls-list');
     if (!box) return;
-    await _fillCallsClients();
+    await _fillCuentas();
 
-    // Primera entrada: aplica el preset por defecto para no consultar sin rango.
-    // onCallsPeriodo() vuelve a llamar aquí, ya con las fechas puestas.
     if (!box.dataset.periodoAplicado) {
       box.dataset.periodoAplicado = '1';
-      onCallsPeriodo();
+      onCallsPeriodo();      // aplica el preset y vuelve a entrar aqui
       return;
     }
 
     const q = new URLSearchParams();
-    // 'calls-from' y 'calls-to' son inputs hidden que rellena el date picker
-    // del repo (toggleDateCal/_setPickerDate), no <input type="date"> nativos.
-    for (const [k, id] of [['client_id','calls-client'],['estado','calls-estado'],
-                           ['from','calls-from'],['to','calls-to']]) {
+    for (const [k, id] of [['cuenta','calls-cuenta'],['estado','calls-estado'],
+                           ['desde','calls-from'],['hasta','calls-to']]) {
       const v = document.getElementById(id)?.value;
       if (v) q.set(k, v);
     }
@@ -5520,11 +5727,18 @@
     try {
       const r = await fetch(`${CALLS_API}?${q}`);
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      const { calls, counts } = await r.json();
+      const { calls, counts, cuenta, aviso } = await r.json();
+      const slug = cuenta?.slug || '';
+      if (aviso) {
+        document.getElementById('calls-counts').innerHTML = '';
+        box.innerHTML = `<div class="calls-empty">${_esc(aviso)}</div>`;
+        return;
+      }
 
       document.getElementById('calls-counts').innerHTML = Object.entries(counts || {})
-        .map(([e, n]) => `<span class="calls-chip">${_esc(_CALL_EST_LABEL[e] || e)} ${n}</span>`)
-        .join('') || '<span class="calls-chip">Sin llamadas todavía</span>';
+        .sort((a, b) => b[1] - a[1])
+        .map(([e, n]) => `<span class="calls-chip">${_esc(_CALL_EST[e] || e)} ${n}</span>`)
+        .join('') || '<span class="calls-chip">Sin llamadas en el periodo</span>';
 
       if (!calls.length) {
         box.innerHTML = '<div class="calls-empty">No hay llamadas con esos filtros.</div>';
@@ -5534,44 +5748,48 @@
       box.innerHTML =
         `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div>Duración</div>
          <div>Estado</div><div>Calif.</div><div></div></div>` +
-        calls.map(c => `
-          <div class="calls-row item" onclick="toggleCallDetail('${_esc(c.call_id)}')">
+        calls.map(c => {
+          const est = c.estado || 'sin_procesar';
+          return `
+          <div class="calls-row item" onclick="toggleCallDetail('${_esc(slug)}','${_esc(c.call_id)}')">
             <div>${_esc(_fechaHora(c.fecha))}</div>
             <div>${_esc(c.asesor || '—')}</div>
-            <div>${_dur(c.duracion_segundos)}</div>
-            <div><span class="calls-est est-${_esc(c.estado)}">${_esc(_CALL_EST_LABEL[c.estado] || c.estado)}</span></div>
+            <div>${_dur(c.duracion_seg)}</div>
+            <div><span class="calls-est est-${_esc(est)}">${_esc(_CALL_EST[est] || est)}</span></div>
             <div>${c.calif_global ?? '—'}</div>
-            <div>${c.estado === 'fallida'
-              ? `<button class="btn-sm" onclick="event.stopPropagation();reprocessOne('${_esc(c.call_id)}')">Reintentar</button>`
+            <div>${est === 'fallida' || est === 'sin_procesar'
+              ? `<button class="btn-sm" onclick="event.stopPropagation();processOne('${_esc(slug)}','${_esc(c.call_id)}')">${est === 'fallida' ? 'Reintentar' : 'Procesar'}</button>`
               : ''}</div>
           </div>
-          <div id="cd-${_esc(c.call_id)}"></div>`).join('');
+          <div id="cd-${_esc(c.call_id)}"></div>`;
+        }).join('');
 
-      if (_callsAbiertaId) { const id = _callsAbiertaId; _callsAbiertaId = null; toggleCallDetail(id); }
+      if (_callsAbierta) { const a = _callsAbierta; _callsAbierta = null; toggleCallDetail(a.slug, a.call_id); }
     } catch (e) {
       box.innerHTML = `<div class="calls-err">No se pudieron cargar las llamadas: ${_esc(e.message)}</div>`;
     }
   }
 
-  async function toggleCallDetail(callId) {
+  async function toggleCallDetail(slug, callId) {
     const slot = document.getElementById('cd-' + callId);
     if (!slot) return;
-    if (slot.innerHTML) { slot.innerHTML = ''; _callsAbiertaId = null; return; }
+    if (slot.innerHTML) { slot.innerHTML = ''; _callsAbierta = null; return; }
 
-    _callsAbiertaId = callId;
+    _callsAbierta = { slug, call_id: callId };
     slot.innerHTML = '<div class="calls-detail">Cargando…</div>';
     try {
-      const r = await fetch(`${CALLS_API}/${encodeURIComponent(callId)}`);
+      const r = await fetch(`${CALLS_API}/${encodeURIComponent(slug)}/${encodeURIComponent(callId)}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const c = await r.json();
       const campo = (l, v) => v ? `<span class="lbl">${l}</span><div class="calls-val">${_esc(String(v))}</div>` : '';
+      const califs = [c.presentacion, c.precalif, c.exploracion, c.agenda].some(Boolean)
+        ? `${c.presentacion || '—'} · ${c.precalif || '—'} · ${c.exploracion || '—'} · ${c.agenda || '—'}` : '';
       slot.innerHTML = `<div class="calls-detail">
         ${c.error ? `<div class="calls-err">${_esc(c.error)}${c.intentos ? ` · ${c.intentos} intento(s)` : ''}</div>` : ''}
-        ${campo('Teléfono del prospecto', [c.callee_number, c.callee_city].filter(Boolean).join(' · '))}
+        ${campo('Prospecto', [c.contraparte_numero, c.ciudad].filter(Boolean).join(' · '))}
+        ${campo('Estatus de la llamada', c.estatus)}
         ${campo('Tipo de contacto', c.tipo_contacto)}
-        ${campo('Presentación / Precalif. / Exploración / Agenda',
-                [c.presentacion, c.precalif, c.exploracion, c.agenda].some(Boolean)
-                  ? `${c.presentacion || '—'} · ${c.precalif || '—'} · ${c.exploracion || '—'} · ${c.agenda || '—'}` : '')}
+        ${campo('Presentación / Precalif. / Exploración / Agenda', califs)}
         ${campo('Análisis', c.analisis)}
         ${campo('Transcripción', c.transcripcion)}
         ${c.record ? `<span class="lbl">Grabación</span><a href="${_esc(c.record)}" target="_blank" rel="noopener">Escuchar audio</a>` : ''}
@@ -5581,25 +5799,26 @@
     }
   }
 
-  async function reprocessOne(callId) {
+  async function processOne(slug, callId) {
     try {
-      const r = await fetch(`${CALLS_API}/${encodeURIComponent(callId)}/process`, { method: 'POST' });
+      const r = await fetch(`${CALLS_API}/${encodeURIComponent(slug)}/${encodeURIComponent(callId)}/process`,
+                            { method: 'POST' });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) alert('No se pudo reprocesar: ' + (d.error || `HTTP ${r.status}`));
-    } catch (e) { alert('No se pudo reprocesar: ' + e.message); }
+      if (!r.ok) alert('No se pudo procesar: ' + (d.error || `HTTP ${r.status}`));
+    } catch (e) { alert('No se pudo procesar: ' + e.message); }
     renderCalls();
   }
 
   async function reprocessCalls() {
-    if (!await _ask('Reprocesar pendientes',
-                    'Se reintentarán las llamadas pendientes y fallidas. Consume transcripción y análisis.',
-                    { okLabel: 'Reprocesar' })) return;
+    if (!await _ask('Procesar pendientes',
+                    'Se transcribirán y analizarán las llamadas pendientes y las que fallaron. Consume Gemini y OpenAI.',
+                    { okLabel: 'Procesar' })) return;
     try {
       const r = await fetch(`${CALLS_API}/reprocess`, { method: 'POST' });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       alert(`${d.procesadas ?? 0} procesada(s), ${d.fallidas ?? 0} con error.`);
-    } catch (e) { alert('No se pudo reprocesar: ' + e.message); }
+    } catch (e) { alert('No se pudo procesar: ' + e.message); }
     renderCalls();
   }
 

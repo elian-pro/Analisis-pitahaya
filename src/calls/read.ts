@@ -46,7 +46,11 @@ export async function readCalls(client: ClientConfig, o: ReadOpts): Promise<Call
       month:       o.month,
       dateFrom:    o.dateFrom,
       dateTo:      o.dateTo,
-      minDuracion: o.minDuracion,
+      // El umbral del cliente, el mismo que decide qué se transcribe. Sin esto,
+      // un cliente con 90 s pagaría por transcribir llamadas de 90 a 99 s que el
+      // reporte descartaría después por su cuenta (el lector default es 100).
+      // El Radar pasa 0 a propósito para contar el total, y 0 no es nullish.
+      minDuracion: o.minDuracion ?? client.call_min_duration_seconds,
       maxChars:    o.maxChars ?? client.transcripcion_max_chars,
       excluded:    client.excluded_phrases,
     });
@@ -86,11 +90,12 @@ export async function readAdvisorCallCounts(
 ): Promise<Map<string, number>> {
   const crudo = fuenteDe(client) === 'postgres'
     ? await getAdvisorCallCountsFromDb({
-        esquema:  requireEsquema(client),
-        month:    o.month,
-        dateFrom: o.dateFrom,
-        dateTo:   o.dateTo,
-        excluded: client.excluded_phrases,
+        esquema:     requireEsquema(client),
+        month:       o.month,
+        dateFrom:    o.dateFrom,
+        dateTo:      o.dateTo,
+        minDuracion: client.call_min_duration_seconds,
+        excluded:    client.excluded_phrases,
       })
     : await getAdvisorCallCounts(
         client.spreadsheet_id, client.data_sheet_name, client.col_fecha, client.col_asesor,
@@ -133,11 +138,12 @@ export async function readAdvisorNamesWithCalls(
 ): Promise<Set<string>> {
   const crudo = fuenteDe(client) === 'postgres'
     ? await getAdvisorNamesFromDb({
-        esquema:  requireEsquema(client),
-        month:    o.month,
-        dateFrom: o.dateFrom,
-        dateTo:   o.dateTo,
-        excluded: client.excluded_phrases,
+        esquema:     requireEsquema(client),
+        month:       o.month,
+        dateFrom:    o.dateFrom,
+        dateTo:      o.dateTo,
+        minDuracion: client.call_min_duration_seconds,
+        excluded:    client.excluded_phrases,
       })
     : await getAdvisorNamesWithCalls(
         client.spreadsheet_id, client.data_sheet_name, client.col_fecha, client.col_asesor,

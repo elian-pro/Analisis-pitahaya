@@ -23,6 +23,43 @@ const url = (): string => process.env.CALLS_DATABASE_URL ?? '';
 
 export const callsDbEnabled = (): boolean => url().length > 0;
 
+/**
+ * Estado de la conexión, SIN la contraseña. Existe porque diagnosticar esto a
+ * ciegas es carísimo: al desplegar, un fallo puede ser la variable ausente, mal
+ * escrita, apuntando a otra red, o —lo más traicionero— correcta pero con el
+ * proceso arrancado ANTES del cambio, porque las variables de entorno se leen
+ * una sola vez. `uptimeMin` contra la hora del cambio responde eso último.
+ */
+export interface CallsDbInfo {
+  configurada: boolean;
+  host?:       string;
+  puerto?:     string;
+  base?:       string;
+  usuario?:    string;
+  ssl:         boolean;
+  arrancadoEn: string;
+  uptimeMin:   number;
+  poolCreado:  boolean;
+}
+
+export function callsDbInfo(): CallsDbInfo {
+  const conn = url();
+  const base: CallsDbInfo = {
+    configurada: conn.length > 0,
+    ssl:         process.env.CALLS_DATABASE_SSL === 'true' || /[?&]sslmode=require/.test(conn),
+    arrancadoEn: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+    uptimeMin:   Math.round(process.uptime() / 60),
+    poolCreado:  _pool !== null,
+  };
+  if (!conn) return base;
+  // Parseo a mano y no con new URL(): la contraseña puede llevar "@" sin
+  // codificar, que es justo el caso que rompe el parser estándar.
+  const m = conn.match(/^\w+:\/\/([^:]+):(.*)@([^@/:]+)(?::(\d+))?\/([^?]*)/);
+  return m
+    ? { ...base, usuario: m[1], host: m[3], puerto: m[4] ?? '5432', base: m[5] || '(por defecto)' }
+    : { ...base, host: '(no se pudo interpretar la URL)' };
+}
+
 export function callsDb(): Pool {
   if (_pool) return _pool;
 

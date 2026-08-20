@@ -5,7 +5,7 @@ import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registr
 import { listCalls, getCall, countByEstado, type CallEstadoUI } from '../calls/store';
 import { processCall, matchClient, minDuracion } from '../calls/pipeline';
 import { sweepOnce, DESDE } from '../calls/sweeper';
-import { callsDbEnabled, explainConnError } from '../calls/db';
+import { callsDbEnabled, explainConnError, callsDb, callsDbInfo } from '../calls/db';
 import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from '../calls/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +15,29 @@ import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const router = Router();
+
+/**
+ * Diagnóstico de la conexión. Va ANTES del guard a propósito: tiene que poder
+ * responder justo cuando la configuración está mal, que es cuando hace falta.
+ * No devuelve la contraseña.
+ */
+router.get('/diagnostico', async (_req: Request, res: Response): Promise<void> => {
+  const info = callsDbInfo();
+  if (!info.configurada) {
+    res.json({ ...info, conexion: { ok: false, error: 'Falta CALLS_DATABASE_URL.' } });
+    return;
+  }
+  const t = Date.now();
+  try {
+    const { rows: [r] } = await callsDb().query(
+      `SELECT current_database() AS base, current_user AS usuario,
+              (SELECT count(*)::int FROM information_schema.tables
+                WHERE table_name = 'llamadas') AS tablas_llamadas`);
+    res.json({ ...info, conexion: { ok: true, ms: Date.now() - t, ...r } });
+  } catch (e) {
+    res.json({ ...info, conexion: { ok: false, ms: Date.now() - t, error: explainConnError(e) } });
+  }
+});
 
 // Sin la base de llamadas configurada, cualquier ruta de aqui fallaria con un
 // error de conexion crudo. Un 503 con el nombre de la variable que falta dice

@@ -198,6 +198,28 @@ export async function markFallida(c: Cuenta, callId: string, err: unknown): Prom
     [c.slug, callId, 'fallida', msg, 1]);
 }
 
+/**
+ * Los asesores que aparecen en las llamadas del periodo configurado, con cuántas
+ * tiene cada uno.
+ *
+ * Con el filtro de fecha, que es lo que lo hace útil: `listEsquemas` saca los
+ * nombres de la tabla entera, así que ahí salen los que se fueron hace dos años
+ * y cualquier aviso construido sobre esa lista se vuelve ruido a la tercera vez.
+ */
+export async function asesoresDelPeriodo(
+  c: Cuenta, desde?: string, minDuracion = 100,
+): Promise<Array<{ asesor: string; n: number }>> {
+  const { rows } = await callsDb().query(
+    `SELECT btrim(l.asesor) AS asesor, count(*)::int AS n
+       FROM ${esquemaDe(c)}.llamadas l
+      WHERE l.asesor IS NOT NULL AND btrim(l.asesor) <> ''
+        AND l.n_grabaciones > 0 AND l.duracion_seg >= $2
+        AND ($1::date IS NULL OR (l.fecha AT TIME ZONE 'America/Mexico_City') >= $1::date)
+      GROUP BY 1 ORDER BY 2 DESC`,
+    [desde ?? null, minDuracion]);
+  return rows as Array<{ asesor: string; n: number }>;
+}
+
 /** Resumen por estado para la cabecera de la pestaña. */
 export async function countByEstado(
   c: Cuenta, desde?: string, minDuracion = 100,

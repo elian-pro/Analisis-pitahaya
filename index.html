@@ -470,6 +470,17 @@
 /* Traer la oferta de ZCIS: selector + botón, encima del textarea del contexto.
    Oculta entera si el servidor no tiene ZCIS_API_KEY. */
 .zcis-row{display:flex;gap:8px;align-items:center;margin-bottom:2px}
+/* Con los avanzados abiertos la tarjeta crece, y un interruptor centrado
+   verticalmente queda flotando a media altura: se ancla arriba, junto al nombre
+   del origen, que es lo que gobierna. */
+.client-row.origen>.client-row-actions{align-self:flex-start;margin-top:1px}
+.origen-av{margin-top:10px}
+.origen-av>summary{cursor:pointer;font-size:11px;color:var(--faint);letter-spacing:.04em;list-style:none}
+.origen-av>summary::-webkit-details-marker{display:none}
+.origen-av>summary::before{content:'▸ ';font-size:9px}
+.origen-av[open]>summary::before{content:'▾ '}
+.origen-av>summary:hover{color:var(--muted)}
+.origen-av-body{margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)}
 .chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
 .chip-row span{font-size:10px;letter-spacing:.02em;padding:3px 8px;border-radius:999px;
   border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap}
@@ -3719,7 +3730,7 @@
 
   function _origenRow(c) {
     const row = document.createElement('div');
-    row.className = 'client-row';
+    row.className = 'client-row origen';
     const pendientes = c.counts?.sin_procesar || 0;
 
     // En rojo SOLO si el origen esta procesando llamadas que nadie lee: ahi si
@@ -3747,6 +3758,7 @@
             ? ` · <a href="#" onclick="event.preventDefault();verLlamadasDe('${_esc(c.esquema)}')" style="color:inherit;">Ver llamadas →</a>`
             : ` · se activa al elegir este origen en el paso Fuente de un cliente`) +
         `</div>` +
+        (c.habilitada ? _origenAvanzado(c) : '') +
       `</div>`;
 
     const acciones = document.createElement('div');
@@ -3763,6 +3775,111 @@
     }
     row.appendChild(acciones);
     return row;
+  }
+
+  // Cerrado por defecto y sin pedir nada hasta que se abre: el diagnóstico de
+  // asesores cuesta una consulta por cliente vinculado, y la tarjeta ya dice lo
+  // que hace falta el 90% de las veces.
+  function _origenAvanzado(c) {
+    const id = `av-${_esc(c.esquema).replace(/\W+/g, '-')}`;
+    return `<details class="origen-av" data-esquema="${_esc(c.esquema)}" ontoggle="_cargarAvanzado(this)">`
+      + `<summary>Ajustes avanzados</summary>`
+      + `<div class="origen-av-body" id="${id}">`
+        + `<div class="form-group" style="margin-bottom:10px;">`
+          + `<label class="form-label">Analizar desde</label>`
+          + `<input class="form-control-sm" type="date" data-campo="desde" value="${_esc(c.desde || '')}" style="max-width:190px;">`
+          + `<div class="form-hint">Las llamadas anteriores a esta fecha no se transcriben. Moverla hacia atrás encola el histórico que quede en medio.</div>`
+        + `</div>`
+        + `<div class="form-group" style="margin-bottom:10px;">`
+          + `<label class="form-label">Contexto del negocio de esta cuenta</label>`
+          + `<textarea class="form-textarea" rows="4" data-campo="contexto" placeholder="Vacío = se usa el contexto del cliente. Solo hace falta cuando dos clientes comparten origen y necesitan uno común."></textarea>`
+          + `<div class="form-hint">Se usa para <b>transcribir</b>, y <b>sustituye</b> al del cliente: el audio se transcribe una sola vez para todos los que leen de aquí.</div>`
+        + `</div>`
+        + `<button type="button" class="btn-sm btn-sm-cancel" onclick="_guardarAvanzado(this)">Guardar</button>`
+        + `<div class="origen-diag" style="margin-top:14px;">Cargando asesores…</div>`
+      + `</div></details>`;
+  }
+
+  async function _cargarAvanzado(det) {
+    if (!det.open || det.dataset.cargado) return;
+    det.dataset.cargado = '1';
+    const esquema = det.dataset.esquema;
+    const diag = det.querySelector('.origen-diag');
+    try {
+      // El contexto no viaja en /cuentas (puede ser largo): se pide al abrir.
+      const url = `${CALLS_API}/origenes/${encodeURIComponent(esquema)}`;
+      const [cfg, d] = await Promise.all([
+        fetch(`${url}/config`).then(r => r.json()),
+        fetch(`${url}/asesores`).then(r => r.json()),
+      ]);
+      if (d.error) throw new Error(d.error);
+      // El texto tiene que llegar SI o SI: con el textarea vacio, pulsar
+      // Guardar mandaria null y borraria el contexto de la cuenta.
+      det.querySelector('[data-campo=contexto]').value = cfg.contexto_negocio || '';
+      diag.innerHTML = _diagAsesores(d);
+    } catch (e) {
+      diag.innerHTML = `<span style="color:var(--danger);">No se pudo revisar el roster: ${_esc(e.message)}</span>`;
+    }
+  }
+
+  // Los dos fallos silenciosos de una cuenta compartida, y su espejo. Nada de
+  // esto rompe nada: los numeros salen mal y nadie se entera.
+  function _diagAsesores(d) {
+    const bloques = [];
+    bloques.push(`<div class="form-hint" style="margin:0 0 8px;">`
+      + (d.clientes.length
+        ? d.clientes.map(c => `${_esc(c.name)} · ${c.asesores} asesor(es)`).join(' &nbsp;·&nbsp; ')
+        : 'Ningún cliente vinculado')
+      + `</div>`);
+
+    if (d.duplicados.length) {
+      bloques.push(`<div class="form-note" style="border-color:color-mix(in srgb, var(--danger) 35%, transparent);">`
+        + `<b>Sus llamadas se cuentan dos veces.</b> `
+        + d.duplicados.map(x => `${_esc(x.asesor)} está en el roster de ${x.clientes.map(_esc).join(' y ')}`).join('; ')
+        + `. Quítalo del cliente que no le corresponda.</div>`);
+    }
+    if (d.sin_dueno.length) {
+      const top = d.sin_dueno.slice(0, 8)
+        .map(x => `${_esc(x.asesor)} (${x.llamadas})`).join(', ');
+      bloques.push(`<div class="form-note" style="margin-top:8px;">`
+        + `<b>Nadie los reclama.</b> Estos nombres aparecen en las llamadas y no están en el roster `
+        + `de ningún cliente vinculado, así que sus llamadas no entran en ningún reporte: ${top}`
+        + (d.sin_dueno.length > 8 ? ` y ${d.sin_dueno.length - 8} más` : '')
+        + `. Parte puede ser ruido del proveedor.</div>`);
+    }
+    if (d.sin_llamadas.length) {
+      bloques.push(`<div class="form-hint" style="margin-top:8px;">`
+        + `En el roster y sin llamadas en el periodo: ${d.sin_llamadas.map(_esc).join(', ')}. `
+        + `Suele ser un nombre escrito distinto al de Callpicker.</div>`);
+    }
+    if (!d.duplicados.length && !d.sin_dueno.length && !d.sin_llamadas.length) {
+      bloques.push(`<div class="form-hint" style="margin:0;">Cada asesor de las llamadas tiene exactamente un cliente. ✓</div>`);
+    }
+    return bloques.join('');
+  }
+
+  async function _guardarAvanzado(btn) {
+    const det = btn.closest('details');
+    const esquema = det.dataset.esquema;
+    const cuerpo = {
+      desde: det.querySelector('[data-campo=desde]').value || null,
+      contexto_negocio: det.querySelector('[data-campo=contexto]').value.trim() || null,
+    };
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      const r = await fetch(`${CALLS_API}/origenes/${encodeURIComponent(esquema)}/config`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cuerpo),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      _showToast('✓ Origen actualizado');
+      renderOrigenes();
+    } catch (e) {
+      alert('No se pudo guardar: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Guardar';
+    }
   }
 
   async function _toggleOrigen(input, c, pendientes) {

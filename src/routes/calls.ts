@@ -1,8 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { loadClients } from '../clients/manager';
+import { listAdvisors } from '../advisors/store';
+import { normalizeAdvisorName } from '../advisors/match';
 import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registry';
-import { listCalls, getCall, countByEstado, type CallEstadoUI } from '../calls/store';
+import { listCalls, getCall, countByEstado, asesoresDelPeriodo, type CallEstadoUI } from '../calls/store';
 import { processCall, matchClient, minDuracion } from '../calls/pipeline';
 import { sweepOnce, DESDE } from '../calls/sweeper';
 import { callsDbEnabled, explainConnError, callsDb, callsDbInfo } from '../calls/db';
@@ -274,6 +276,97 @@ router.post('/origenes/:esquema/auto', async (req: Request, res: Response): Prom
     await ensureConfigTable();
     await setAuto(esquema, parsed.data.auto);
     res.json({ ok: true, esquema, auto: parsed.data.auto });
+  } catch (e) {
+    res.status(500).json({ error: explainConnError(e) });
+  }
+});
+
+/**
+ * Quién se queda las llamadas de un origen, y quién no se las queda nadie.
+ *
+ * Es el diagnóstico de una cuenta compartida, y son los dos fallos que hoy no
+ * tienen forma de verse: un asesor que no está en el roster de ningún cliente
+ * vinculado no aparece en NINGÚN reporte, y uno que está en dos rosters cuenta
+ * sus llamadas dos veces, en dos reportes distintos que se le entregan a dos
+ * clientes. Nada falla; los números simplemente salen mal.
+ *
+ * Aparte de `/cuentas` porque cuesta una consulta por cliente vinculado y solo
+ * hace falta al abrir los ajustes avanzados de un origen.
+ */
+router.get('/origenes/:esquema/asesores', async (req: Request, res: Response): Promise<void> => {
+  const esquema = req.params.esquema;
+  try {
+    const [cuentas, clients, cfg] = await Promise.all([
+      listCuentas(), loadClients(), getConfig(esquema),
+    ]);
+    const cuenta = cuentas.find(c => c.esquema === esquema);
+    if (!cuenta) {
+      res.status(404).json({ error: `No hay ningún origen con el schema '${esquema}'.` });
+      return;
+    }
+
+    const vinculados = clients.filter(x => x.calls_schema === esquema);
+    const enLlamadas = await asesoresDelPeriodo(
+      cuenta, cfg?.desde ?? undefined, minDuracion(matchClient(cuenta, clients)));
+
+    // Cada nombre del roster, con los clientes que lo reclaman. El mismo
+    // normalizado que usa el filtro real en SQL (lower + btrim), o el aviso
+    // contradiría a los reportes.
+    const duenos = new Map<string, { nombre: string; clientes: string[] }>();
+    const rosters = await Promise.all(vinculados.map(async (c) => ({
+      id: c.id, name: c.name,
+      asesores: (await listAdvisors(c.id, { includeInactive: true })).map(a => a.name),
+    })));
+    for (const r of rosters) {
+      for (const nombre of r.asesores) {
+        const k = normalizeAdvisorName(nombre);
+        // La clave va normalizada para comparar, pero lo que se enseña es el
+        // nombre tal como lo escribieron: "ernesto marín" en un aviso parece
+        // otro error mas.
+        const y = duenos.get(k) ?? { nombre, clientes: [] };
+        y.clientes.push(r.name);
+        duenos.set(k, y);
+      }
+    }
+
+    const conLlamadas = new Set(enLlamadas.map(a => normalizeAdvisorName(a.asesor)));
+    res.json({
+      esquema,
+      desde: cfg?.desde ?? null,
+      clientes: rosters.map(r => ({ id: r.id, name: r.name, asesores: r.asesores.length })),
+      // Nombres en las llamadas que no reclama nadie: sus llamadas no entran en
+      // ningún reporte. Parte de lo que sale aquí es ruido del proveedor
+      // ("whats", "Zebra"), así que se devuelve con el conteo y que decida quien
+      // mira.
+      sin_dueno: enLlamadas
+        .filter(a => !duenos.has(normalizeAdvisorName(a.asesor)))
+        .map(a => ({ asesor: a.asesor, llamadas: a.n })),
+      // El caso caro: dos clientes reclaman al mismo asesor.
+      duplicados: [...duenos.values()]
+        .filter(d => d.clientes.length > 1)
+        .map(d => ({ asesor: d.nombre, clientes: d.clientes })),
+      // El typo al dar de alta a alguien: está en el roster y no llama nunca.
+      sin_llamadas: [...duenos.entries()]
+        .filter(([k]) => !conLlamadas.has(k))
+        .map(([, d]) => d.nombre),
+    });
+  } catch (e) {
+    res.status(500).json({ error: explainConnError(e) });
+  }
+});
+
+/**
+ * La configuración de un origen, con el texto del contexto incluido.
+ *
+ * Aparte de `/cuentas` porque ahí solo viaja un booleano —el contexto puede ser
+ * largo y se pide para los tres orígenes a la vez—, y porque el formulario de
+ * avanzados NECESITA el texto: sin él, abrir y guardar lo borraría.
+ */
+router.get('/origenes/:esquema/config', async (req: Request, res: Response): Promise<void> => {
+  try {
+    res.json((await getConfig(req.params.esquema)) ?? {
+      esquema: req.params.esquema, desde: null, contexto_negocio: null, auto: false,
+    });
   } catch (e) {
     res.status(500).json({ error: explainConnError(e) });
   }

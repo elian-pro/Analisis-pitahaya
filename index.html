@@ -772,6 +772,14 @@
       <button class="btn-sm btn-sm-green" onclick="openClientForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo cliente</button>
     </div>
     <div id="client-list"></div>
+
+    <div class="panel-header" style="margin-top:38px;">
+      <div>
+        <div class="panel-title">Análisis automático</div>
+        <div class="panel-sub">Transcribe y analiza las llamadas nuevas cada minuto. Un origen se procesa si tiene tabla de análisis y su interruptor encendido.</div>
+      </div>
+    </div>
+    <div id="origen-list"></div>
   </div>
 
   <!-- ── Automation panel ── -->
@@ -3339,7 +3347,7 @@
       document.getElementById('tab-btn-'+t).classList.toggle('active', t === tab);
       document.getElementById('tab-'+t).classList.toggle('active', t === tab);
     });
-    if (tab === 'settings')   renderClientList();
+    if (tab === 'settings')   { renderClientList(); renderOrigenes(); }
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
@@ -3663,6 +3671,150 @@
     } catch(e) {
       el.innerHTML = `<div class="token-empty" style="color:var(--danger);">Error cargando clientes: ${_esc(e.message)}</div>`;
     }
+  }
+
+  // ── Análisis automático: un origen por tarjeta ──────────────────────────────
+  // El interruptor va por ORIGEN y no por cliente porque el proceso es por
+  // schema: Midstorage y Grupo Tactical comparten cuenta y el audio se
+  // transcribe una sola vez para los dos. Un interruptor "de Grupo Tactical" no
+  // podría apagar nada sin apagárselo también a Midstorage.
+  let _volumenes = null;   // cache de /esquemas: caro (1,7 s) y cambia poco
+
+  // La fecha exacta y no el mes: `desde` puede ser cualquier dia, y "ago 2026"
+  // para un 15 de agosto seria una media verdad justo en el dato que decide
+  // cuanto historico se paga. El mediodia evita que la zona horaria lo mueva.
+  const _diaCorto = f => new Date(`${f}T12:00:00`)
+    .toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  // "unos 0 min" para una llamada suelta era peor que no decir nada.
+  function _duracionAprox(llamadas) {
+    const min = Math.round(llamadas * 26 / 60);
+    if (min < 2)  return 'un par de minutos';
+    if (min < 60) return `unos ${min} min`;
+    return `unas ${Math.floor(min / 60)} h ${min % 60} min`;
+  }
+
+  async function renderOrigenes() {
+    const el = document.getElementById('origen-list');
+    el.innerHTML = '<div class="token-empty" style="padding:16px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>';
+    try {
+      const r = await fetch(`${CALLS_API}/cuentas`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      const cuentas = d.cuentas || [];
+      if (!cuentas.length) {
+        el.innerHTML = '<div class="token-empty">No hay ninguna cuenta de Callpicker en la base.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      cuentas.forEach(c => el.appendChild(_origenRow(c)));
+      // Cuántas llamadas esperan en los orígenes que aún no se han activado: es
+      // el dato que decide si encender uno cuesta una tarde de Gemini. Va aparte
+      // porque sale de /esquemas, que escanea las tablas enteras.
+      void _fillVolumenes(cuentas.filter(c => !c.habilitada).map(c => c.esquema));
+    } catch (e) {
+      el.innerHTML = `<div class="token-empty" style="color:var(--danger);">No se pudieron leer los orígenes: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  function _origenRow(c) {
+    const row = document.createElement('div');
+    row.className = 'client-row';
+    const pendientes = c.counts?.sin_procesar || 0;
+
+    // En rojo SOLO si el origen esta procesando llamadas que nadie lee: ahi si
+    // hay algo roto. Un origen sin activar y sin cliente es el estado normal de
+    // una cuenta que todavia no se ha conectado, y pintarlo de rojo entrena al
+    // equipo a ignorar el color.
+    const clientes = c.clientes.length
+      ? `<span class="chip-row" style="display:inline-flex;">${c.clientes.map(x => `<span>${_esc(x.name)}</span>`).join('')}</span>`
+      : c.habilitada
+        ? `<span style="color:var(--danger);">Se está procesando y ningún cliente lo lee</span>`
+        : `<span>Sin clientes vinculados</span>`;
+
+    const cifras = c.habilitada
+      ? `${_num(c.counts?.analizada || 0)} analizadas`
+        + (pendientes ? ` · <b>${_num(pendientes)} sin procesar</b>` : ' · al día')
+        + (c.desde ? ` · desde el ${_diaCorto(c.desde)}` : '')
+      : `<span class="origen-vol" data-esquema="${_esc(c.esquema)}">Sin tabla de análisis</span>`;
+
+    row.innerHTML =
+      `<div style="flex:1;min-width:0;">` +
+        `<div class="client-row-name">${_esc(c.esquema)}</div>` +
+        `<div class="client-row-meta">${clientes}</div>` +
+        `<div class="client-row-meta">${cifras}` +
+          (c.habilitada
+            ? ` · <a href="#" onclick="event.preventDefault();verLlamadasDe('${_esc(c.esquema)}')" style="color:inherit;">Ver llamadas →</a>`
+            : ` · se activa al elegir este origen en el paso Fuente de un cliente`) +
+        `</div>` +
+      `</div>`;
+
+    const acciones = document.createElement('div');
+    acciones.className = 'client-row-actions';
+    if (c.habilitada) {
+      const lbl = document.createElement('label');
+      lbl.className = 'wiz-toggle';
+      lbl.style.margin = '0';
+      lbl.innerHTML = `<input type="checkbox"${c.auto ? ' checked' : ''}><span>${c.auto ? 'Encendido' : 'En pausa'}</span>`;
+      lbl.querySelector('input').addEventListener('change', ev => _toggleOrigen(ev.target, c, pendientes));
+      acciones.appendChild(lbl);
+    } else {
+      acciones.innerHTML = `<span class="calls-chip">Sin activar</span>`;
+    }
+    row.appendChild(acciones);
+    return row;
+  }
+
+  async function _toggleOrigen(input, c, pendientes) {
+    const quiere = input.checked;
+    // Encender con backlog cuesta dinero de verdad —Sofía son 2.098 llamadas—,
+    // pero preguntar por tres pendientes es ruido que enseña a pulsar "sí" sin
+    // leer. Se avisa a partir de diez, que es donde el proceso pasa de un
+    // momento a una espera. El cálculo es el mismo del asistente: 26 s por
+    // llamada, medido sobre el primer lote real.
+    if (quiere && pendientes >= 10) {
+      const ok = await _ask('Encender el análisis automático',
+        `Hay ${_num(pendientes)} llamadas sin procesar en ${c.esquema}. Se transcribirán y `
+        + `analizarán a razón de 5 por minuto: ${_duracionAprox(pendientes)}. `
+        + `Consume Gemini y OpenAI.`,
+        { okLabel: 'Encender' });
+      if (!ok) { input.checked = false; return; }
+    }
+    input.disabled = true;
+    try {
+      const r = await fetch(`${CALLS_API}/origenes/${encodeURIComponent(c.esquema)}/auto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto: quiere }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      _showToast(quiere
+        ? '✓ Análisis automático encendido'
+        : '✓ En pausa · se detiene al terminar la llamada en curso');
+      renderOrigenes();
+    } catch (e) {
+      input.checked = !quiere;   // el interruptor no puede mentir sobre el estado
+      alert('No se pudo cambiar el interruptor: ' + e.message);
+    } finally {
+      input.disabled = false;
+    }
+  }
+
+  async function _fillVolumenes(esquemas) {
+    if (!esquemas.length) return;
+    try {
+      if (!_volumenes) {
+        const d = await fetch(`${CALLS_API}/esquemas`).then(r => r.json());
+        _volumenes = new Map((d.esquemas || []).map(e => [e.esquema, e]));
+      }
+      document.querySelectorAll('#origen-list .origen-vol').forEach(span => {
+        const e = _volumenes.get(span.dataset.esquema);
+        if (!e) return;
+        span.innerHTML = e.analizables
+          ? `<b>${_num(e.analizables)} llamadas</b> listas para analizar, de ${_num(e.total)}`
+          : 'Ninguna llamada supera el umbral todavía';
+      });
+    } catch { /* sin volumen la tarjeta sigue siendo útil */ }
   }
 
   let _editingClientId = null;

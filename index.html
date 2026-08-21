@@ -4089,6 +4089,7 @@
                       : 'La tabla de análisis se creará al guardar.');
 
     const sel = document.getElementById('cf-pg-desde');
+    delete sel.dataset.tocado;      // se repuebla: lo de antes ya no cuenta
     const acum = [];
     let resto = e.analizables;
     for (const m of e.por_mes) { acum.push({ mes: m.mes, n: resto }); resto -= m.n; }
@@ -4109,6 +4110,7 @@
   }
 
   function onDesdeChange() {
+    document.getElementById('cf-pg-desde').dataset.tocado = '1';
     const e = _esquemaSel();
     const desde = document.getElementById('cf-pg-desde').value;
     const out = document.getElementById('cf-pg-costo');
@@ -4729,11 +4731,20 @@
       // para no crear tablas por un formulario que acabo rechazado.
       if (fuenteActual() === 'postgres') {
         const esquema = document.getElementById('cf-calls-schema').value;
-        const desde   = document.getElementById('cf-pg-desde').value || null;
+        const selDesde = document.getElementById('cf-pg-desde');
+        // La fecha SOLO viaja si es una decisión de este guardado: al activar el
+        // origen por primera vez, o si se tocó el selector. Antes viajaba
+        // siempre, con el valor que el selector se autopropone (el último mes
+        // con llamadas), así que editar la carpeta de Drive de un cliente ya
+        // activo le empujaba la fecha hacia adelante y abandonaba su backlog.
+        const cuerpo = { esquema };
+        if (!_esquemaSel()?.habilitado || selDesde.dataset.tocado) {
+          cuerpo.desde = selDesde.value || null;
+        }
         try {
           const ar = await fetch(`${CALLS_API}/activar`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ esquema, desde }),
+            body: JSON.stringify(cuerpo),
           });
           const ad = await ar.json().catch(() => ({}));
           if (!ar.ok) throw new Error(ad.error || `HTTP ${ar.status}`);

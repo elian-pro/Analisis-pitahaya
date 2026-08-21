@@ -189,6 +189,12 @@ export interface EsquemaInfo {
   por_mes:      Array<{ mes: string; n: number }>;
   asesores:     string[];
   habilitado:   boolean;
+  /**
+   * El interruptor de Análisis automático. Va aquí para que el asistente pueda
+   * avisar al vincular un cliente a un origen en pausa: si no, se ve "Listo, se
+   * creó la tabla" y no se procesa una sola llamada.
+   */
+  auto:         boolean;
 }
 
 /**
@@ -198,6 +204,8 @@ export interface EsquemaInfo {
  */
 export async function listEsquemas(minDuracion = 100): Promise<EsquemaInfo[]> {
   const db = callsDb();
+  // Una sola consulta para todos, fuera del bucle: son tres filas.
+  const autoDe = new Map((await listConfigs()).map(c => [c.esquema, c.auto]));
   const { rows: esquemas } = await db.query(`
     SELECT t.table_schema AS esquema,
            EXISTS (SELECT 1 FROM information_schema.tables x
@@ -241,6 +249,8 @@ export async function listEsquemas(minDuracion = 100): Promise<EsquemaInfo[]> {
       por_mes: meses.map((m: any) => ({ mes: m.mes, n: m.n })),
       asesores: as.map((a: any) => a.asesor),
       habilitado: e.habilitado,
+      // Sin fila de configuración el barrido no lo toca: se reporta apagado.
+      auto: autoDe.get(e.esquema) ?? false,
     });
   }
   return out;

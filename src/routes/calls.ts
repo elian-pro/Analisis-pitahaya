@@ -6,7 +6,10 @@ import { listCalls, getCall, countByEstado, type CallEstadoUI } from '../calls/s
 import { processCall, matchClient, minDuracion } from '../calls/pipeline';
 import { sweepOnce, DESDE } from '../calls/sweeper';
 import { callsDbEnabled, explainConnError, callsDb, callsDbInfo } from '../calls/db';
-import { listEsquemas, ensureAnalisisTable, ensureConfigTable, setConfig } from '../calls/config';
+import {
+  listEsquemas, ensureAnalisisTable, ensureConfigTable,
+  setConfig, setAuto, listConfigs, getConfig,
+} from '../calls/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API de la pestaña de llamadas. Toda detrás de la sesión, como el resto de
@@ -82,6 +85,13 @@ const ActivarSchema = z.object({
   contexto_negocio: z.string().optional(),
 });
 
+// Los dos campos son opcionales y nullable: ausente = "no toques", null = "sin
+// valor". Distinguirlos es lo que evita que guardar una cosa borre la otra.
+const ConfigPatchSchema = z.object({
+  desde:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  contexto_negocio: z.string().nullable().optional(),
+});
+
 /**
  * Activa una cuenta: crea su tabla `analisis` y guarda desde cuando analizar.
  * Con la tabla creada el barrido la recoge solo en el siguiente tick, asi que
@@ -118,19 +128,57 @@ router.post('/activar', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-/** Cuentas disponibles, para el selector de la pestaña. */
+/**
+ * Cuentas disponibles: alimenta el selector de la pestaña Llamadas y la sección
+ * "Análisis automático" de Ajustes.
+ *
+ * Todo en una sola respuesta y con consultas baratas —el registro, los clientes
+ * y la tabla de config entera— porque esto se pide al abrir Ajustes. Lo caro
+ * (`listEsquemas`, que son 1+4×N escaneos completos de `llamadas`) se queda
+ * fuera a propósito: vive en `/esquemas` y solo lo pide el asistente.
+ *
+ * Los contadores sí exigen una consulta por origen, así que solo se calculan
+ * para los habilitados: `countByEstado` hace JOIN contra `analisis` y en un
+ * schema sin esa tabla reventaría.
+ */
 router.get('/cuentas', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const [cuentas, clients] = await Promise.all([listCuentas(), loadClients()]);
-    res.json({
-      desde: DESDE,
-      cuentas: cuentas.map(c => ({
+    const [cuentas, clients, configs] = await Promise.all([
+      listCuentas(), loadClients(), listConfigs(),
+    ]);
+    const cfgDe = new Map(configs.map(c => [c.esquema, c]));
+
+    const filas = await Promise.all(cuentas.map(async (c) => {
+      const cfg = cfgDe.get(c.esquema);
+      // Los clientes que LEEN de este origen. Pueden ser dos —Midstorage y
+      // Grupo Tactical comparten cuenta— y lo que los separa es su roster.
+      const vinculados = clients.filter(x => x.calls_schema === c.esquema);
+      let counts: Record<string, number> | null = null;
+      if (c.habilitada) {
+        // Mismo umbral que la pestaña Llamadas (`minDuracion(matchClient(...))`),
+        // o la tarjeta diría "3 sin procesar" y la pestaña otra cosa.
+        try { counts = await countByEstado(c, cfg?.desde ?? undefined, minDuracion(matchClient(c, clients))); }
+        catch (e) { console.warn(`[calls] contadores de ${c.esquema}:`, (e as Error).message); }
+      }
+      return {
         ...c,
         // Si no empareja con ningún cliente de Zebra Reports, se usan los
         // prompts por defecto: conviene que se vea en la UI.
         tiene_cliente: clients.some(x => x.id === c.slug || x.name === c.cliente),
-      })),
-    });
+        // El interruptor de Ajustes. Sin fila de config el barrido no lo toca,
+        // así que se reporta como apagado y no como "encendido por defecto".
+        auto:          cfg ? cfg.auto : false,
+        configurado:   Boolean(cfg),
+        desde:         cfg?.desde ?? null,
+        // El contenido no viaja: puede ser largo y aquí solo hace falta saber si
+        // esta cuenta pisa el contexto de sus clientes.
+        contexto_propio: Boolean(cfg?.contexto_negocio?.trim()),
+        clientes: vinculados.map(x => ({ id: x.id, name: x.name })),
+        counts,
+      };
+    }));
+
+    res.json({ desde: DESDE, cuentas: filas });
   } catch (e) {
     res.status(500).json({ error: explainConnError(e) });
   }
@@ -183,6 +231,72 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 router.post('/reprocess', async (req: Request, res: Response): Promise<void> => {
   try {
     res.json(await sweepOnce(Number(req.query.lote) || undefined));
+  } catch (e) {
+    res.status(500).json({ error: explainConnError(e) });
+  }
+});
+
+const AutoSchema = z.object({ auto: z.boolean() });
+
+/**
+ * El interruptor de "Análisis automático" de un origen.
+ *
+ * Va aquí arriba, con las literales, por la misma razón que `/reprocess`: si
+ * algún día se añade `GET /origenes/:esquema` (dos segmentos), `/:slug/:call_id`
+ * se lo tragaría. El schema llega con espacios y mayúsculas ("Grupo Gira"), que
+ * Express decodifica solo; el frontend lo manda con encodeURIComponent.
+ */
+router.post('/origenes/:esquema/auto', async (req: Request, res: Response): Promise<void> => {
+  const parsed = AutoSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Falta el campo "auto" (true o false).' });
+    return;
+  }
+  const esquema = req.params.esquema;
+  try {
+    // Contra el registro y no contra la lista de schemas: los orígenes que se
+    // ven en Ajustes salen de ahí, y sin esta comprobación un nombre mal escrito
+    // dejaría en la tabla una fila fantasma que nadie va a leer nunca.
+    const cuentas = await listCuentas();
+    const cuenta  = cuentas.find(c => c.esquema === esquema);
+    if (!cuenta) {
+      res.status(404).json({ error: `No hay ningún origen con el schema '${esquema}'.` });
+      return;
+    }
+    if (!cuenta.habilitada && parsed.data.auto) {
+      res.status(409).json({
+        error: `'${esquema}' todavía no tiene tabla de análisis. Se crea al elegir este `
+             + `origen en el paso Fuente de un cliente, que es donde se decide desde qué `
+             + `fecha analizar.`,
+      });
+      return;
+    }
+    await ensureConfigTable();
+    await setAuto(esquema, parsed.data.auto);
+    res.json({ ok: true, esquema, auto: parsed.data.auto });
+  } catch (e) {
+    res.status(500).json({ error: explainConnError(e) });
+  }
+});
+
+/** Los avanzados de un origen: desde cuándo analizar y su contexto de negocio. */
+router.post('/origenes/:esquema/config', async (req: Request, res: Response): Promise<void> => {
+  const parsed = ConfigPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
+    return;
+  }
+  const esquema = req.params.esquema;
+  try {
+    const cuentas = await listCuentas();
+    if (!cuentas.some(c => c.esquema === esquema)) {
+      res.status(404).json({ error: `No hay ningún origen con el schema '${esquema}'.` });
+      return;
+    }
+    await ensureConfigTable();
+    // Solo lo que venga: el cuerpo puede traer una cosa, la otra o las dos.
+    await setConfig(esquema, parsed.data);
+    res.json({ ok: true, esquema, ...(await getConfig(esquema)) });
   } catch (e) {
     res.status(500).json({ error: explainConnError(e) });
   }

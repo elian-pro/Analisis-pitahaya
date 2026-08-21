@@ -25,10 +25,14 @@ const envSchema = z.object({
   // ── Pipeline de llamadas (lee de la base de Callpicker, transcribe, analiza) ─
   // CALLS_DATABASE_URL no se valida aquí: se lee con process.env en calls/db.ts,
   // igual que DATABASE_URL en config/db.ts.
-  // Todas opcionales a propósito: el pipeline nace apagado y la app tiene que
-  // poder arrancar sin ninguna de ellas. Se validan en tiempo de uso con los
-  // getters de más abajo, igual que las de OAuth.
-  CALLS_PIPELINE:      z.enum(['on', 'off']).default('off'),
+  // Todas opcionales a propósito: la app tiene que poder arrancar sin ninguna de
+  // ellas. Se validan en tiempo de uso con los getters de más abajo, igual que
+  // las de OAuth.
+  //
+  // Aquí vivía CALLS_PIPELINE, el interruptor global del barrido. Se quitó: era
+  // invisible desde la app y estuvo un día entero en `off` sin que nadie lo
+  // notara, con las llamadas acumulándose. Ahora el interruptor está en Ajustes,
+  // por origen, y se ve.
   GEMINI_API_KEY:      z.string().optional(),
   OPENAI_API_KEY:      z.string().optional(),
 
@@ -93,13 +97,6 @@ export function getGoogleOAuthAppCreds(): { clientId: string; clientSecret: stri
  * solo CLIENT_ID/SECRET y generar el refresh token que falta.
  */
 // ── Pipeline de llamadas ─────────────────────────────────────────────────────
-
-/**
- * Apagado, el barrido automático no arranca. La lectura y el procesamiento
- * manual de una llamada sí funcionan: así se puede recorrer el pipeline entero,
- * llamada a llamada, antes de dejar que corra solo.
- */
-export const callsPipelineEnabled = (): boolean => env.CALLS_PIPELINE === 'on';
 
 export function getGeminiKey(): string {
   if (!env.GEMINI_API_KEY) {

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { callsDbInfo } from '../calls/db';
+import { sweeperCorriendo } from '../calls/sweeper';
 
 const router = Router();
 
@@ -24,13 +25,16 @@ router.get('/', (_req, res) => {
     // `features` es lo que distingue una versión de otra sin necesidad de un
     // número de build: si esta clave no viene en la respuesta, lo desplegado es
     // anterior al pipeline de llamadas.
-    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta'],
+    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta', 'analisis-automatico'],
     proceso: {
       arrancadoEn: calls.arrancadoEn,
       uptimeMin:   calls.uptimeMin,
     },
     calls: {
-      pipeline:   process.env.CALLS_PIPELINE === 'on' ? 'on' : 'off',
+      // Antes esto reportaba una variable de entorno; ahora reporta el hecho:
+      // si el tick está vivo en este proceso. Qué orígenes procesa lo decide su
+      // interruptor de Ajustes, y eso se ve en la propia pantalla.
+      barrido:    sweeperCorriendo() ? 'activo' : 'parado',
       dbUrl:      calls.configurada,
       geminiKey:  Boolean(process.env.GEMINI_API_KEY),
       openaiKey:  Boolean(process.env.OPENAI_API_KEY),

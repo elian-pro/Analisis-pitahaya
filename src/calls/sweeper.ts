@@ -91,8 +91,21 @@ export async function sweepOnce(lote = LOTE): Promise<SweepResult> {
   }
 }
 
+/** Si el tick está vivo en ESTE proceso. Lo publica /api/health. */
+export const sweeperCorriendo = (): boolean => _interval !== null;
+
 export function startCallsSweeper(): void {
   if (_interval) return;
+  // Freno de mano SOLO para desarrollo. El interruptor de verdad está en
+  // Ajustes, pero vive en la base compartida: sin esto, un `npm run dev` en un
+  // portátil con las llaves reales se pondría a transcribir llamadas de
+  // producción, y apagarlo desde la UI lo apagaría también para todos.
+  // Al revés que la variable que sustituye: aquí el valor por defecto es
+  // ENCENDIDO, y /api/health dice cuál de los dos está pasando.
+  if (process.env.CALLS_SWEEP === 'off') {
+    console.log('[calls/sweep] barrido apagado por CALLS_SWEEP=off (solo desarrollo)');
+    return;
+  }
   _interval = setInterval(() => { void sweepOnce(); }, INTERVALO_MS);
   // La primera pasada espera a que la tabla de configuración esté al día. Antes
   // no esperaba, y ahora sí importa: sin la columna `auto`, getConfig no puede

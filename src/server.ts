@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { env, callsPipelineEnabled } from './config/env';
+import { env } from './config/env';
 import { dbEnabled, ensureSchema } from './config/db';
 import { callsDbEnabled } from './calls/db';
 import { seedClientsFromFileIfEmpty } from './clients/manager';
@@ -83,8 +83,10 @@ async function bootstrap(): Promise<void> {
   app.listen(env.PORT, () => {
     console.log(`✅ Zebra Reports listening on port ${env.PORT}`);
     startScheduler();
-    // Solo con el pipeline encendido: apagado no debe haber ni un tick de fondo.
-    if (callsPipelineEnabled() && callsDbEnabled()) startCallsSweeper();
+    // El barrido arranca siempre que haya base de llamadas. Lo que decide si un
+    // origen se procesa es su interruptor de Ajustes, no una variable que nadie
+    // ve: sin fila de configuración o con el switch apagado, el tick no lo toca.
+    if (callsDbEnabled()) startCallsSweeper();
   });
 }
 

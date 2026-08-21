@@ -98,7 +98,14 @@ router.post('/activar', async (req: Request, res: Response): Promise<void> => {
     await ensureConfigTable();
     const creada = await ensureAnalisisTable(esquema);
     const hoy = new Date().toISOString().slice(0, 10);
-    await setConfig(esquema, desde ?? hoy, contexto_negocio ?? null);
+    // Solo lo que venga en el cuerpo. `desde: null` explicito sigue queriendo
+    // decir "de aqui en adelante" (se guarda hoy); `desde` AUSENTE quiere decir
+    // "no toques la fecha que ya tenia", que es lo que hace falta cuando el
+    // asistente guarda un cliente por cualquier otro motivo.
+    const patch: { desde?: string | null; contexto_negocio?: string } = {};
+    if (desde !== undefined)            patch.desde = desde ?? hoy;
+    if (contexto_negocio !== undefined) patch.contexto_negocio = contexto_negocio;
+    await setConfig(esquema, patch);
 
     // Cuantas quedan por procesar con esa fecha, para poder avisar del volumen.
     const info = (await listEsquemas()).find(e => e.esquema === esquema);

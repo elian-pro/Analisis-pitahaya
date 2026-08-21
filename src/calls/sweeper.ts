@@ -1,7 +1,7 @@
 import { loadClients } from '../clients/manager';
 import { listCuentasHabilitadas, logCuentas } from './registry';
 import { listPendientes } from './store';
-import { getConfig, ensureConfigTable } from './config';
+import { getConfig, ensureConfigTable, debeBarrer } from './config';
 import { processCall, matchClient, minDuracion } from './pipeline';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,23 +32,36 @@ export const DESDE = process.env.CALLS_DESDE || '2026-08-01';
 let _interval: NodeJS.Timeout | null = null;
 let _corriendo = false;
 
-export interface SweepResult { procesadas: number; fallidas: number; }
+export interface SweepResult {
+  procesadas: number;
+  fallidas:   number;
+  /** Orígenes saltados por tener el interruptor de Ajustes apagado. */
+  pausados:   string[];
+}
+
+const NADA = (): SweepResult => ({ procesadas: 0, fallidas: 0, pausados: [] });
 
 export async function sweepOnce(lote = LOTE): Promise<SweepResult> {
   // El solapamiento importa más que en el scheduler: dos barridos a la vez
   // transcribirían la misma llamada dos veces y se pagaría dos veces.
-  if (_corriendo) return { procesadas: 0, fallidas: 0 };
+  if (_corriendo) return NADA();
   _corriendo = true;
   try {
     const cuentas = await listCuentasHabilitadas();
-    if (cuentas.length === 0) return { procesadas: 0, fallidas: 0 };
+    if (cuentas.length === 0) return NADA();
 
     const clients = await loadClients();
     let procesadas = 0, fallidas = 0;
+    const pausados: string[] = [];
 
     for (const cuenta of cuentas) {
       if (procesadas >= lote) break;
       const cfg = await getConfig(cuenta.esquema);
+      // El interruptor de Ajustes. Va aquí y no en listCuentasHabilitadas para
+      // que "Reprocesar pendientes" —que llama a este mismo sweepOnce— lo
+      // respete gratis. Procesar UNA llamada a mano desde su fila no pasa por
+      // aquí, y así debe ser: es un acto humano explícito.
+      if (!debeBarrer(cfg)) { pausados.push(cuenta.slug); continue; }
       const pendientes = await listPendientes(cuenta, {
         minDuracion: minDuracion(matchClient(cuenta, clients)),
         desde:       cfg?.desde ?? DESDE,
@@ -68,11 +81,11 @@ export async function sweepOnce(lote = LOTE): Promise<SweepResult> {
     if (procesadas > 0) {
       console.log(`[calls/sweep] ${procesadas} procesada(s), ${fallidas} fallida(s)`);
     }
-    return { procesadas, fallidas };
+    return { procesadas, fallidas, pausados };
   } catch (e) {
     // Un fallo del barrido no puede tumbar el tick: la próxima vuelta reintenta.
     console.warn('[calls/sweep] error:', (e as Error).message);
-    return { procesadas: 0, fallidas: 0 };
+    return NADA();
   } finally {
     _corriendo = false;
   }
@@ -80,10 +93,14 @@ export async function sweepOnce(lote = LOTE): Promise<SweepResult> {
 
 export function startCallsSweeper(): void {
   if (_interval) return;
-  void ensureConfigTable().catch(e => console.warn('[calls] config:', e.message));
-  void logCuentas();
   _interval = setInterval(() => { void sweepOnce(); }, INTERVALO_MS);
-  void sweepOnce();
+  // La primera pasada espera a que la tabla de configuración esté al día. Antes
+  // no esperaba, y ahora sí importa: sin la columna `auto`, getConfig no puede
+  // leer el interruptor y el arranque se saltaría todos los orígenes hasta el
+  // segundo tick.
+  void ensureConfigTable()
+    .catch(e => console.warn('[calls] config:', e.message))
+    .then(() => { void logCuentas(); return sweepOnce(); });
   console.log(`[calls/sweep] barrido activo (cada 60 s, desde ${DESDE})`);
 }
 

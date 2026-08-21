@@ -19,6 +19,13 @@ export interface CallsConfig {
   /** Solo se analizan llamadas desde esta fecha. null = no analizar histórico. */
   desde:            string | null;
   contexto_negocio: string | null;
+  /**
+   * El interruptor de "Análisis automático" de Ajustes. Se llama `auto` y no
+   * `activa` para no colisionar con `Cuenta.activa`, que es una columna del
+   * registro de Callpicker, la administra otro equipo y significa otra cosa;
+   * las dos viajan juntas en el JSON de la pestaña.
+   */
+  auto:             boolean;
 }
 
 export async function ensureConfigTable(): Promise<void> {
@@ -29,33 +36,99 @@ export async function ensureConfigTable(): Promise<void> {
       contexto_negocio TEXT,
       actualizado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
+  // Por separado y con IF NOT EXISTS: la tabla ya existe en producción con la
+  // forma vieja, y este es el único camino que la actualiza sin migración aparte.
+  // DEFAULT true porque activar un origen ya es un acto humano explícito (crear
+  // su tabla `analisis` desde el asistente) y quien lo hizo no espera tener que
+  // encenderlo dos veces.
+  await callsDb().query(
+    `ALTER TABLE ${CONFIG_TABLE} ADD COLUMN IF NOT EXISTS auto BOOLEAN NOT NULL DEFAULT true`);
 }
+
+const SELECT_CONFIG =
+  `SELECT esquema, to_char(desde,'YYYY-MM-DD') AS desde, contexto_negocio, auto FROM ${CONFIG_TABLE}`;
+
+/**
+ * 42P01 = la tabla todavía no existe (nadie ha activado ninguna cuenta) y 42703
+ * = existe pero sin la columna `auto` todavía. Los dos son estados normales de
+ * una instalación a medio estrenar, no fallos: se cae a los valores por defecto
+ * en vez de tumbar el barrido o la pantalla de Ajustes.
+ */
+const esTablaSinPreparar = (e: unknown): boolean =>
+  ['42P01', '42703'].includes((e as { code?: string }).code ?? '');
 
 export async function getConfig(esquema: string): Promise<CallsConfig | undefined> {
   try {
-    const { rows } = await callsDb().query(
-      `SELECT esquema, to_char(desde,'YYYY-MM-DD') AS desde, contexto_negocio
-         FROM ${CONFIG_TABLE} WHERE esquema = $1`, [esquema]);
+    const { rows } = await callsDb().query(`${SELECT_CONFIG} WHERE esquema = $1`, [esquema]);
     return rows[0] as CallsConfig | undefined;
   } catch (e) {
-    // 42P01 = la tabla todavía no existe (nadie ha activado ninguna cuenta).
-    // Es un estado normal al estrenar, no un fallo: se cae a los valores por
-    // defecto en vez de tumbar el barrido.
-    if ((e as { code?: string }).code === '42P01') return undefined;
+    if (esTablaSinPreparar(e)) return undefined;
     throw e;
   }
 }
 
-export async function setConfig(
-  esquema: string, desde: string | null, contexto: string | null,
-): Promise<void> {
+/** Todas las configuraciones de una vez, para pintar la pestaña de Ajustes. */
+export async function listConfigs(): Promise<CallsConfig[]> {
+  try {
+    const { rows } = await callsDb().query(`${SELECT_CONFIG} ORDER BY esquema`);
+    return rows as CallsConfig[];
+  } catch (e) {
+    if (esTablaSinPreparar(e)) return [];
+    throw e;
+  }
+}
+
+export interface ConfigPatch {
+  /** Ausente = no tocar. `null` explícito = no analizar histórico. */
+  desde?:            string | null;
+  contexto_negocio?: string | null;
+}
+
+/**
+ * Escribe SOLO lo que viene. Antes escribía los tres campos siempre, y eso tenía
+ * una consecuencia que nadie veía: el asistente de cliente llama a `/activar` en
+ * cada guardado mandando únicamente `{esquema, desde}`, con `desde` recalculado
+ * al último mes con llamadas. Así que editar la carpeta de Drive de un cliente
+ * de Postgres le movía la fecha de inicio hacia adelante y abandonaba el backlog,
+ * y de paso borraba el contexto de negocio de la cuenta.
+ *
+ * `auto` no entra nunca por aquí: se cambia solo desde su interruptor, para que
+ * un guardado del asistente no reactive un origen que alguien puso en pausa.
+ */
+export async function setConfig(esquema: string, patch: ConfigPatch = {}): Promise<void> {
+  const tocaDesde    = 'desde' in patch;
+  const tocaContexto = 'contexto_negocio' in patch;
   await callsDb().query(
     `INSERT INTO ${CONFIG_TABLE} (esquema, desde, contexto_negocio)
      VALUES ($1, $2::date, $3)
      ON CONFLICT (esquema) DO UPDATE
-       SET desde = EXCLUDED.desde, contexto_negocio = EXCLUDED.contexto_negocio,
-           actualizado_en = now()`,
-    [esquema, desde, contexto]);
+       SET desde            = CASE WHEN $4 THEN EXCLUDED.desde            ELSE ${CONFIG_TABLE}.desde END,
+           contexto_negocio = CASE WHEN $5 THEN EXCLUDED.contexto_negocio ELSE ${CONFIG_TABLE}.contexto_negocio END,
+           actualizado_en   = now()`,
+    [esquema, patch.desde ?? null, patch.contexto_negocio ?? null, tocaDesde, tocaContexto]);
+}
+
+/** El interruptor. Crea la fila si el origen aún no tenía configuración. */
+export async function setAuto(esquema: string, auto: boolean): Promise<void> {
+  await callsDb().query(
+    `INSERT INTO ${CONFIG_TABLE} (esquema, auto) VALUES ($1, $2)
+     ON CONFLICT (esquema) DO UPDATE SET auto = EXCLUDED.auto, actualizado_en = now()`,
+    [esquema, auto]);
+}
+
+/**
+ * Si el barrido debe tocar este origen. Función pura y aparte del sweeper a
+ * propósito: es la única lógica del interruptor que se puede probar sin base de
+ * datos, y `sweeper.ts` arrastra `config/env` (que hace process.exit al importar
+ * sin credenciales) hasta el runner de tests.
+ *
+ * Sin fila de configuración NO se barre. Importa desde que el barrido dejó de
+ * depender de una variable de entorno: `.env.example` documenta crear la tabla
+ * `analisis` a mano, y sin esta regla cualquier schema con esa tabla se pondría
+ * a procesar su histórico en el primer tick sin que nadie lo hubiera pedido.
+ */
+export function debeBarrer(cfg?: CallsConfig): boolean {
+  return cfg !== undefined && cfg.auto !== false;
 }
 
 /**

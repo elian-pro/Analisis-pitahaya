@@ -4,13 +4,16 @@ import { loadClients } from '../clients/manager';
 import { listAdvisors } from '../advisors/store';
 import { normalizeAdvisorName } from '../advisors/match';
 import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registry';
-import { listCalls, getCall, countByEstado, asesoresDelPeriodo, type CallEstadoUI } from '../calls/store';
+import {
+  listCalls, getCall, countByEstado, asesoresDelPeriodo, reactivarFallidas,
+  type CallEstadoUI,
+} from '../calls/store';
 import { processCall, matchClient, minDuracion } from '../calls/pipeline';
 import { sweepOnce, DESDE } from '../calls/sweeper';
 import { callsDbEnabled, explainConnError, callsDb, callsDbInfo } from '../calls/db';
 import {
   listEsquemas, ensureAnalisisTable, ensureConfigTable,
-  setConfig, setAuto, listConfigs, getConfig,
+  setConfig, setAuto, listConfigs, getConfig, debeBarrer,
 } from '../calls/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,11 +231,44 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Las rutas literales van antes que las que llevan parámetro, para que Express
-// no interprete 'reprocess' como un call_id. Misma nota que en report.ts:259.
+/**
+ * "Reprocesar pendientes", el botón de la pestaña. Literal, así que va antes que
+ * las rutas con parámetro o Express leería 'reprocess' como un call_id (misma
+ * nota que en report.ts:259).
+ *
+ * Antes de barrer devuelve al pipeline las llamadas que agotaron sus tres
+ * intentos: sin eso el botón contestaba "0 procesadas" teniendo 34 llamadas en
+ * rojo delante, porque el barrido las da por perdidas para siempre y el humano
+ * que pulsa no tenía otra forma de decir "vuelve a intentarlo".
+ *
+ * Solo en los orígenes que el barrido va a mirar. Reactivarlas en uno con el
+ * análisis automático apagado las dejaría en 'pendiente' sin nadie que las
+ * procese: peor que no tocarlas, porque desaparecerían del contador de fallidas
+ * sin que nada avance. `pausados` dice cuáles se quedaron fuera y por qué.
+ */
 router.post('/reprocess', async (req: Request, res: Response): Promise<void> => {
   try {
-    res.json(await sweepOnce(Number(req.query.lote) || undefined));
+    const clients = await loadClients();
+    const barridas = [];
+    let reactivadas = 0;
+    for (const cuenta of await listCuentasHabilitadas()) {
+      const cfg = await getConfig(cuenta.esquema);
+      if (!debeBarrer(cfg)) continue;
+      barridas.push({ cuenta, desde: cfg?.desde ?? DESDE });
+      reactivadas += await reactivarFallidas(cuenta, cfg?.desde ?? DESDE);
+    }
+    const r = await sweepOnce(Number(req.query.lote) || undefined);
+
+    // Lo que queda en cola DESPUÉS de esta vuelta. El barrido toma cinco por
+    // minuto, así que reactivar 33 y contestar "5 procesadas" se leía como que
+    // las otras 28 se habían vuelto a quedar fuera. Se cuenta de la base y no
+    // restando: en la cola también hay llamadas que nunca fallaron.
+    const enCola = await Promise.all(barridas.map(async ({ cuenta, desde }) => {
+      const c = await countByEstado(cuenta, desde, minDuracion(matchClient(cuenta, clients)));
+      return (c.pendiente ?? 0) + (c.transcrita ?? 0) + (c.sin_procesar ?? 0);
+    }));
+
+    res.json({ ...r, reactivadas, pendientes: enCola.reduce((a, n) => a + n, 0) });
   } catch (e) {
     res.status(500).json({ error: explainConnError(e) });
   }

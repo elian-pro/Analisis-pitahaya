@@ -1,5 +1,5 @@
 import { callsDb } from './db';
-import { humanizeError } from '../humanizeError';
+import { humanizeError, esTransitorio } from '../humanizeError';
 import { esquemaDe, type Cuenta } from './registry';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,13 +189,47 @@ export async function markBuzon(c: Cuenta, callId: string, texto: string): Promi
     [c.slug, callId, 'analizada', texto, 'Buzón de voz']);
 }
 
+/**
+ * Los intentos suben SOLO con los fallos que son culpa de la llamada. Un 429 o
+ * una caída de red no dicen nada de este audio, solo que había que esperar, y
+ * gastarlos ahí es lo que congeló 34 llamadas de Midstorage: el barrido únicamente
+ * mira las que llevan menos de MAX_INTENTOS, así que al tercer pico del proveedor
+ * la llamada desaparece del pipeline y ya nadie la vuelve a mirar.
+ */
 export async function markFallida(c: Cuenta, callId: string, err: unknown): Promise<void> {
-  const msg = humanizeError(err instanceof Error ? err.message : String(err));
+  const raw = err instanceof Error ? err.message : String(err);
+  const suma = esTransitorio(raw) ? 0 : 1;
   await callsDb().query(
     upsert(esquemaDe(c), 'estado, error, intentos',
       `estado = 'fallida', error = EXCLUDED.error,
-       intentos = ${esquemaDe(c)}.analisis.intentos + 1`),
-    [c.slug, callId, 'fallida', msg, 1]);
+       intentos = ${esquemaDe(c)}.analisis.intentos + ${suma}`),
+    [c.slug, callId, 'fallida', humanizeError(raw), suma]);
+}
+
+/**
+ * Devuelve al pipeline las llamadas que agotaron sus intentos.
+ *
+ * Hace falta porque el tope es permanente: una llamada que falló tres veces por
+ * un bug ya corregido —la URL de la grabación que llegaba mal formada— no vuelve
+ * sola ni aunque el bug esté arreglado, y "Reprocesar pendientes" respondía "0
+ * pendientes" con 34 llamadas fallidas a la vista. Solo lo dispara una acción
+ * humana, así que no hay riesgo de bucle de gasto.
+ *
+ * No las procesa: las deja pendientes y el barrido de cada minuto las va tomando
+ * de cinco en cinco. Procesarlas aquí tardaría minutos y la petición moriría por
+ * timeout a mitad.
+ */
+export async function reactivarFallidas(c: Cuenta, desde?: string): Promise<number> {
+  const esq = esquemaDe(c);
+  const { rowCount } = await callsDb().query(
+    `UPDATE ${esq}.analisis a
+        SET estado = 'pendiente', intentos = 0, error = NULL
+       FROM ${esq}.llamadas l
+      WHERE l.cuenta = a.cuenta AND l.call_id = a.call_id
+        AND a.estado = 'fallida'
+        AND ($1::date IS NULL OR (l.fecha AT TIME ZONE 'America/Mexico_City') >= $1::date)`,
+    [desde ?? null]);
+  return rowCount ?? 0;
 }
 
 /**

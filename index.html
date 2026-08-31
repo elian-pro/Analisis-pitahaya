@@ -924,7 +924,7 @@
         <div class="panel-title">Llamadas</div>
         <div class="panel-sub">Pipeline propio: Callpicker → transcripción → análisis · sustituye a los flujos de n8n</div>
       </div>
-      <button class="btn-sm" onclick="reprocessCalls()"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
+      <button class="btn-sm" onclick="reprocessCalls(this)"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
     </div>
 
     <div class="card" style="margin-bottom:14px;">
@@ -1686,17 +1686,28 @@
   // que antes: `if (!await _ask(...)) return;`. Esc cancela, Enter confirma.
   let _askResolve = null;
 
-  function _ask(title, text, { okLabel = 'Confirmar', danger = false } = {}) {
+  function _ask(title, text, { okLabel = 'Confirmar', danger = false, soloOk = false } = {}) {
     document.getElementById('ask-title').textContent = title;
     document.getElementById('ask-text').textContent  = text || '';
     const ok = document.getElementById('ask-ok');
     ok.textContent = okLabel;
     ok.classList.toggle('danger', danger);
+    // Un aviso no se "cancela": con los dos botones, "Cancelar" en un resultado
+    // ya ocurrido invita a pensar que algo se puede deshacer.
+    document.querySelector('#ask-backdrop .confirm-cancel').style.display = soloOk ? 'none' : '';
     const b = document.getElementById('ask-backdrop');
     b.style.display = 'flex'; b.classList.add('show');
     ok.focus();
     return new Promise(resolve => { _askResolve = resolve; });
   }
+
+  /**
+   * El aviso de la casa, en lugar del alert() del navegador: mismo modal que las
+   * confirmaciones, con un solo botón. El nativo se salta el tema, dice el
+   * dominio encima del texto y en algunos navegadores deja bloquear los
+   * siguientes, que aquí significa perder el resultado del reproceso.
+   */
+  const _info = (title, text) => _ask(title, text, { okLabel: 'Entendido', soloOk: true });
 
   function _askClose(value) {
     const b = document.getElementById('ask-backdrop');
@@ -6252,7 +6263,7 @@
             <div><span class="calls-est est-${_esc(est)}">${_esc(_CALL_EST[est] || est)}</span></div>
             <div>${c.calif_global ?? '—'}</div>
             <div>${est === 'fallida' || est === 'sin_procesar'
-              ? `<button class="btn-sm" onclick="event.stopPropagation();processOne('${_esc(slug)}','${_esc(c.call_id)}')">${est === 'fallida' ? 'Reintentar' : 'Procesar'}</button>`
+              ? `<button class="btn-sm" onclick="event.stopPropagation();processOne('${_esc(slug)}','${_esc(c.call_id)}',this)">${est === 'fallida' ? 'Reintentar' : 'Procesar'}</button>`
               : ''}</div>
           </div>
           <div id="cd-${_esc(c.call_id)}"></div>`;
@@ -6293,26 +6304,57 @@
     }
   }
 
-  async function processOne(slug, callId) {
+  // La petición no vuelve hasta que Gemini transcribió el audio y OpenAI lo
+  // analizó: 20 s en una llamada corta y más de un minuto en una de 15 minutos.
+  // Sin decirlo, el botón se veía exactamente igual que uno que no hace nada.
+  async function processOne(slug, callId, btn) {
+    const original = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = 'Procesando…'; }
     try {
       const r = await fetch(`${CALLS_API}/${encodeURIComponent(slug)}/${encodeURIComponent(callId)}/process`,
                             { method: 'POST' });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) alert('No se pudo procesar: ' + (d.error || `HTTP ${r.status}`));
-    } catch (e) { alert('No se pudo procesar: ' + e.message); }
+      if (!r.ok) await _info('No se pudo procesar la llamada', d.error || `HTTP ${r.status}`);
+    } catch (e) {
+      await _info('No se pudo procesar la llamada', e.message);
+    } finally {
+      // Por si renderCalls falla: el botón no puede quedarse en "Procesando…".
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+    }
     renderCalls();
   }
 
-  async function reprocessCalls() {
+  async function reprocessCalls(btn) {
     if (!await _ask('Procesar pendientes',
-                    'Se transcribirán y analizarán las llamadas pendientes y las que fallaron. Consume Gemini y OpenAI.',
+                    'Se transcribirán y analizarán las llamadas pendientes, y las que fallaron '
+                    + 'volverán a la cola aunque ya hubieran agotado sus intentos.\n\n'
+                    + 'Consume Gemini y OpenAI.',
                     { okLabel: 'Procesar' })) return;
+    const original = btn?.innerHTML;
+    if (btn) { btn.disabled = true; btn.textContent = 'Procesando…'; }
     try {
       const r = await fetch(`${CALLS_API}/reprocess`, { method: 'POST' });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      alert(`${d.procesadas ?? 0} procesada(s), ${d.fallidas ?? 0} con error.`);
-    } catch (e) { alert('No se pudo procesar: ' + e.message); }
+      // El barrido toma cinco por vuelta, así que lo normal es que quede cola:
+      // decir solo "2 procesadas" con 34 reactivadas se leía como que el resto
+      // se había vuelto a quedar fuera.
+      const l = [];
+      if (d.reactivadas) l.push(`${d.reactivadas} llamada(s) fallida(s) volvieron a la cola.`);
+      l.push(`${d.procesadas ?? 0} procesada(s) en esta vuelta, ${d.fallidas ?? 0} con error.`);
+      if (d.pendientes) {
+        l.push(`Quedan ${d.pendientes} en cola: el análisis automático las va tomando `
+             + `de cinco en cinco cada minuto.`);
+      }
+      if (d.pausados?.length) {
+        l.push(`Sin tocar, con el análisis automático apagado: ${d.pausados.join(', ')}.`);
+      }
+      await _info('Reproceso lanzado', l.join('\n'));
+    } catch (e) {
+      await _info('No se pudo procesar', e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = original; }
+    }
     renderCalls();
   }
 

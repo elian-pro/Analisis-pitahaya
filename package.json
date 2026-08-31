@@ -13,7 +13,7 @@
     "migrate:db": "tsx src/cli/migrate-to-db.ts",
     "backfill:metrics": "tsx src/cli/backfill-metrics.ts",
     "type-check": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test 'src/**/*.test.ts'",
     "docs:generate": "node scripts/generate-doc.mjs"
   },
   "dependencies": {

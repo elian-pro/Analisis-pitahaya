@@ -41,7 +41,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 const SaveSchema = z.object({
-  client_id: z.string().min(1),
+  client_id: z.string().min(1).optional(),   // un tenant lo toma de su sesión
   host:      z.string().min(1),
   port:      z.number().int().min(1).max(65535).default(5432),
   database:  z.string().min(1),
@@ -63,11 +63,18 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
   const d = parsed.data;
-  if (!(await getClient(d.client_id))) {
-    res.status(400).json({ error: `No existe el cliente ${d.client_id}.` });
+  const clientId = (req as AuthedRequest).user?.role === 'client'
+    ? (req as AuthedRequest).user!.client_id!
+    : d.client_id;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta client_id.' });
     return;
   }
-  const previa = await getTenantDbConfig(d.client_id);
+  if (!(await getClient(clientId))) {
+    res.status(400).json({ error: `No existe el cliente ${clientId}.` });
+    return;
+  }
+  const previa = await getTenantDbConfig(clientId);
   if (!d.password && !previa) {
     res.status(400).json({ error: 'Falta la contraseña de la base.' });
     return;
@@ -79,7 +86,7 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     probado_en: previa?.probado_en ?? null,
   };
   try {
-    await saveTenantDbConfig(d.client_id, cfg);
+    await saveTenantDbConfig(clientId, cfg);
     res.json({ ok: true, ...redacted(cfg) });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
@@ -97,7 +104,8 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
   // tenant esto sería una sonda de red con hosts arbitrarios.
   const b = req.body as Record<string, unknown> | undefined;
   let cfg = stored;
-  if (b?.host && user?.role !== 'client') {
+  void user;
+  if (b?.host) {
     const password_enc = typeof b.password === 'string' && b.password
       ? sealPassword(b.password) : stored?.password_enc;
     if (!password_enc) {

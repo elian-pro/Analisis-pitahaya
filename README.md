@@ -107,7 +107,7 @@ Hay dos formas de entrar, y cada una fija un rol dentro de la cookie firmada:
 | Rol | Cómo entra | Qué ve |
 |---|---|---|
 | **admin** | Google Sign-In con correo del dominio permitido | Todo el dashboard |
-| **client** | Usuario y contraseña creados por un admin (Ajustes → Usuarios externos) | Solo Reportes, Llamadas y un Ajustes propio, acotado a SU cliente |
+| **client** | Usuario y contraseña creados por un admin (Admin → Agregar acceso) | Solo Reportes, Llamadas y un Ajustes propio, acotado a SU cliente |
 
 La autorización vive en **una tabla única** (`src/auth/policy.ts`) que clasifica
 cada ruta `/api/*` como `public`, `admin` o `tenant`; el middleware la aplica
@@ -115,10 +115,17 @@ completa y un test de arquitectura (`src/auth/policy.test.ts`) falla si alguien
 agrega una ruta sin clasificarla. Un cliente externo queda clavado a su
 `client_id` sin importar qué pida.
 
+Dónde vive cada cosa: **Ajustes** es todo lo local (clientes gestionados, sus
+hojas u orígenes de Callpicker) y **Admin** es todo lo externo (alta de clientes
+externos y sus accesos). Un cliente externo no aparece en Ajustes ni se
+configura desde ahí.
+
 Un **cliente externo** usa la fuente `calls_source: 'cliente_pg'`: su base
 Postgres (en su servidor, conexión cifrada con `TENANT_DB_SECRET`) con el
-esquema estándar del pipeline, que Zebra crea desde el wizard. El sweeper
-transcribe y analiza sus llamadas igual que las de Callpicker. Su PDF **no toca
+esquema estándar del pipeline. **La conecta él mismo** desde sus Ajustes, con
+"Guardar y preparar", que crea las tablas del pipeline en su base; el guard
+anti-SSRF de `src/calls/tenant.ts` rechaza hosts que resuelvan a direcciones
+internas. El sweeper transcribe y analiza sus llamadas igual que las de Callpicker. Su PDF **no toca
 Drive ni disco**: vive 30 minutos en memoria y se borra al descargarlo — por eso
 no tiene Automatización, y por eso el servicio debe correr en **una sola
 instancia**.

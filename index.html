@@ -861,8 +861,39 @@
     <div id="settings-client" style="display:none;max-width:560px;">
       <div class="card" style="margin-bottom:16px;">
         <div class="card-title"><i class="ti ti-database ti-lead"></i>Tu base de datos</div>
-        <div id="tenant-db-status" style="font-size:13px;color:var(--muted);margin:10px 0 14px;">Cargando…</div>
-        <button class="btn-sm" onclick="testTenantDb(this)">Probar conexión</button>
+        <div id="tenant-db-status" style="font-size:13px;color:var(--muted);margin:10px 0 16px;">Cargando…</div>
+        <div class="form-grid-2">
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">Host *</label>
+            <input class="form-control" id="tdb-host" placeholder="db.tuempresa.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Puerto</label>
+            <input class="form-control" id="tdb-port" type="number" placeholder="5432">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Base *</label>
+            <input class="form-control" id="tdb-database" placeholder="llamadas">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Usuario *</label>
+            <input class="form-control" id="tdb-user" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña <span id="tdb-pass-note" style="color:var(--faint);font-weight:400;"></span></label>
+            <input class="form-control" id="tdb-password" type="password" autocomplete="new-password"
+                   title="Si ya hay una guardada, déjala vacía para conservarla.">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:2px 0 14px;cursor:pointer;">
+          <input type="checkbox" id="tdb-ssl" checked> Conexión con SSL
+        </label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button class="btn-sm btn-sm-cancel" onclick="testTenantDb(this)">Probar conexión</button>
+          <button class="btn-sm btn-sm-green" onclick="saveTenantDb(this)">Guardar y preparar</button>
+          <span id="tdb-result" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+        <div class="form-hint" style="margin-top:10px;">Usa un usuario con permiso de lectura y escritura: guardamos ahí el análisis de cada llamada.</div>
       </div>
       <div class="card">
         <div class="card-title"><i class="ti ti-user ti-lead"></i>Tu cuenta</div>
@@ -874,6 +905,10 @@
 
   <!-- ── Admin panel: clientes externos y sus accesos ── -->
   <div id="tab-admin" class="tab-panel">
+    <div class="panel-header">
+      <div></div>
+      <button class="btn-sm btn-sm-green" onclick="openExternalClientForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo cliente externo</button>
+    </div>
     <div id="admin-list"></div>
   </div>
 
@@ -1181,7 +1216,6 @@
           <select class="form-control" id="cf-calls-source" onchange="onFuenteChange()">
             <option value="sheets">Google Sheets</option>
             <option value="postgres">Postgres · Callpicker</option>
-            <option value="cliente_pg">Base del cliente · externa</option>
           </select>
           <div class="form-hint">
             Con Postgres, los reportes y el Radar dejan de leer la hoja y usan las
@@ -1207,40 +1241,6 @@
           </div>
         </div>
 
-        <!-- Base propia del cliente externo: Zebra la crea con el esquema estándar,
-             así que aquí solo va la conexión. La contraseña nunca vuelve del server. -->
-        <div id="cf-tenant-wrap" style="display:none;">
-          <div class="form-grid-2">
-            <div class="form-group" style="grid-column:1/-1;">
-              <label class="form-label">Host *</label>
-              <input class="form-control" id="cf-tdb-host" placeholder="db.cliente.com">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Puerto</label>
-              <input class="form-control" id="cf-tdb-port" type="number" placeholder="5432">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Base *</label>
-              <input class="form-control" id="cf-tdb-database" placeholder="ventas">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Usuario *</label>
-              <input class="form-control" id="cf-tdb-user" autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Contraseña <span id="cf-tdb-pass-note" style="color:var(--faint);font-weight:400;"></span></label>
-              <input class="form-control" id="cf-tdb-password" type="password" autocomplete="new-password">
-            </div>
-          </div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:2px 0 12px;cursor:pointer;">
-            <input type="checkbox" id="cf-tdb-ssl" checked> Conexión con SSL
-          </label>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <button type="button" class="btn-sm btn-sm-cancel" onclick="wizTestTenantDb(this)">Probar conexión</button>
-            <span id="cf-tdb-test-result" style="font-size:12px;color:var(--muted);"></span>
-          </div>
-          <div class="form-note" style="margin-top:10px;">Las tablas del pipeline se crean solas al guardar.</div>
-        </div>
       </div>
 
       <div id="cf-sheets-wrap">
@@ -1766,6 +1766,35 @@
 </div>
 
 <!-- Modal de progreso -->
+<!-- Alta/edicion de cliente externo (admin). Solo el nombre y su contexto:
+     la base la conecta el propio cliente desde sus Ajustes. -->
+<div class="form-modal-backdrop" id="extclient-modal-backdrop">
+  <div class="form-modal" style="max-width:520px;">
+    <div class="form-modal-header">
+      <div>
+        <div class="modal-title" id="ecf-title">Nuevo cliente externo</div>
+        <div class="modal-subtitle">Compra solo el dashboard y conecta su propia base</div>
+      </div>
+      <button class="modal-close show" onclick="closeExternalClientForm()">✕</button>
+    </div>
+    <div class="form-modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre del cliente *</label>
+        <input class="form-control" id="ecf-name" maxlength="80" placeholder="Ej. Acme Ventas">
+        <div class="form-hint">Aparece en el encabezado de sus reportes.</div>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Contexto del negocio</label>
+        <textarea class="form-control" id="ecf-contexto" rows="4" placeholder="Qué vende, a quién y con qué propuesta. Opcional, pero el análisis mejora bastante con esto."></textarea>
+      </div>
+    </div>
+    <div class="form-modal-footer">
+      <button class="btn-sm btn-sm-cancel" onclick="closeExternalClientForm()">Cancelar</button>
+      <button class="btn-sm btn-sm-green" onclick="saveExternalClient(this)" id="ecf-save">Crear cliente</button>
+    </div>
+  </div>
+</div>
+
 <!-- Alta de acceso para un cliente externo (admin). El cliente NO se elige:
      viene de la tarjeta desde la que se abrio este modal. -->
 <div class="form-modal-backdrop" id="user-modal-backdrop">
@@ -3901,9 +3930,6 @@
   // nuestro: la pestaña Llamadas con esa cuenta puesta. Por eso la flecha es "→"
   // y no "↗": no se sale de la app.
   function _fuenteDelCliente(c) {
-    if (c.calls_source === 'cliente_pg') {
-      return `<span title="Base Postgres en el servidor del cliente">Base del cliente · externa</span>`;
-    }
     if (c.calls_source === 'postgres') {
       return c.calls_schema
         ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();verLlamadasDe('${_esc(c.calls_schema)}')" style="color:inherit;" title="Ver sus llamadas en la pestaña Llamadas">Postgres · ${_esc(c.calls_schema)} →</a>`
@@ -3933,7 +3959,10 @@
     const el = document.getElementById('client-list');
     el.innerHTML = '<div class="token-empty" style="padding:16px 0;"><div class="spin-xs" style="margin:0 auto;"></div></div>';
     try {
-      const clients = await fetch(CLIENTS_API).then(r => { if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+      // Solo los clientes gestionados: Ajustes es lo local. Los externos (su
+      // base, sus accesos) viven en Admin y no se configuran desde aquí.
+      const clients = (await fetch(CLIENTS_API).then(r => { if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }))
+        .filter(c => c.calls_source !== 'cliente_pg');
       if (!clients.length) {
         el.innerHTML = '<div class="token-empty">No hay clientes configurados. Crea el primero con el botón de arriba.</div>';
         return;
@@ -3983,6 +4012,11 @@
   }
 
   // ── Ajustes del cliente externo ─────────────────────────────────────────────
+  // El cliente conecta SU base aquí: es suya y él tiene las credenciales. El
+  // servidor nunca le devuelve la contraseña, solo si hay una guardada, y
+  // rechaza hosts que resuelvan a direcciones internas (calls/tenant.ts).
+  let _tdbPasswordSet = false;
+
   async function renderClientSettings() {
     document.getElementById('settings-client').style.display = '';
     document.getElementById('tenant-account-email').textContent = ME?.email || '';
@@ -3992,9 +4026,18 @@
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       if (!d.configured) {
-        el.innerHTML = `<span style="color:var(--danger);">●</span> Sin configurar · escríbenos para conectarla`;
+        _tdbPasswordSet = false;
+        el.innerHTML = `<span style="color:var(--muted);">●</span> Sin conectar · llena los datos y pulsa Guardar`;
+        document.getElementById('tdb-pass-note').textContent = '';
         return;
       }
+      _tdbPasswordSet = !!d.password_set;
+      document.getElementById('tdb-host').value     = d.host;
+      document.getElementById('tdb-port').value     = d.port;
+      document.getElementById('tdb-database').value = d.database;
+      document.getElementById('tdb-user').value     = d.user;
+      document.getElementById('tdb-ssl').checked    = !!d.ssl;
+      document.getElementById('tdb-pass-note').textContent = _tdbPasswordSet ? '· guardada' : '';
       const ok = !!d.probado_en;
       el.innerHTML =
         `<span style="color:${ok ? 'var(--success)' : 'var(--faint)'};">●</span> ` +
@@ -4013,20 +4056,76 @@
     return h < 24 ? `hace ${h} h` : `el ${new Date(iso).toLocaleDateString('es-MX')}`;
   }
 
+  function _tdbPayload() {
+    const p = {
+      host:     document.getElementById('tdb-host').value.trim(),
+      port:     parseInt(document.getElementById('tdb-port').value, 10) || 5432,
+      database: document.getElementById('tdb-database').value.trim(),
+      user:     document.getElementById('tdb-user').value.trim(),
+      ssl:      document.getElementById('tdb-ssl').checked,
+    };
+    const pass = document.getElementById('tdb-password').value;
+    if (pass) p.password = pass;
+    return p;
+  }
+
+  function _tdbFaltantes(p) {
+    const faltan = [];
+    if (!p.host)     faltan.push('host');
+    if (!p.database) faltan.push('base');
+    if (!p.user)     faltan.push('usuario');
+    if (!p.password && !_tdbPasswordSet) faltan.push('contraseña');
+    return faltan;
+  }
+
+  function _tdbSay(msg, color) {
+    const out = document.getElementById('tdb-result');
+    out.textContent = msg;
+    out.style.color = color;
+  }
+
   async function testTenantDb(btn) {
+    const p = _tdbPayload();
+    const faltan = _tdbFaltantes(p);
+    if (faltan.length) { _tdbSay(`Falta ${faltan.join(', ')}`, 'var(--danger)'); return; }
     const original = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Probando…';
+    btn.disabled = true; btn.textContent = 'Probando…'; _tdbSay('', 'var(--muted)');
     try {
-      const r = await fetch('/api/tenant/db/test', { method: 'POST' });
+      const r = await fetch('/api/tenant/db/test', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p),
+      });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      _showToast(`Conexión OK en ${d.ms} ms`);
+      _tdbSay(`Conectada en ${d.ms} ms` + (d.schema_ready ? ' · lista' : ' · falta preparar'), 'var(--success)');
     } catch (e) {
-      await _info('No se pudo conectar', e.message);
-    } finally {
-      btn.disabled = false; btn.textContent = original;
-      if (esCliente()) renderClientSettings();
-    }
+      _tdbSay(e.message, 'var(--danger)');
+    } finally { btn.disabled = false; btn.textContent = original; }
+  }
+
+  // Guardar y preparar en un solo gesto: una conexión guardada sin las tablas
+  // del pipeline no sirve para nada, así que no son dos botones.
+  async function saveTenantDb(btn) {
+    const p = _tdbPayload();
+    const faltan = _tdbFaltantes(p);
+    if (faltan.length) { _tdbSay(`Falta ${faltan.join(', ')}`, 'var(--danger)'); return; }
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Guardando…'; _tdbSay('', 'var(--muted)');
+    try {
+      const r = await fetch('/api/tenant/db', {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      btn.textContent = 'Preparando…';
+      const pr = await fetch('/api/tenant/db/provision', { method: 'POST' });
+      const pd = await pr.json().catch(() => ({}));
+      if (!pr.ok) throw new Error(pd.error || `HTTP ${pr.status}`);
+      document.getElementById('tdb-password').value = '';
+      _tdbSay('Conectada y lista', 'var(--success)');
+      renderClientSettings();
+    } catch (e) {
+      _tdbSay(e.message, 'var(--danger)');
+    } finally { btn.disabled = false; btn.textContent = original; }
   }
 
   function openChangePassword() {
@@ -4071,7 +4170,7 @@
         <div class="card" style="text-align:center;padding:40px 24px;">
           <div style="font-size:13px;color:var(--muted);">Todavía no hay clientes externos.</div>
           <div style="font-size:12px;color:var(--faint);margin-top:6px;">
-            Créalos en Ajustes → Nuevo cliente, con la fuente <strong>Base del cliente · externa</strong>.
+            Crea el primero con el botón de arriba. Después él conecta su base desde sus propios Ajustes.
           </div>
         </div>`;
       return;
@@ -4091,10 +4190,11 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:${users.length ? '14px' : '4px'};">
           <div style="flex:1;min-width:0;">
             <div class="card-title" style="margin:0;">${_esc(c.name)}</div>
-            <div style="font-size:11px;color:var(--faint);margin-top:3px;">
+            <div style="font-size:11px;color:var(--faint);margin-top:3px;" id="admin-db-${_esc(c.id)}">
               ${users.length} acceso${users.length === 1 ? '' : 's'}
             </div>
           </div>
+          <button class="link-btn" onclick="openExternalClientForm('${_esc(c.id)}')">Editar</button>
           <button class="btn-sm btn-sm-green" onclick="openUserForm('${_esc(c.id)}')">
             <i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Agregar acceso
           </button>
@@ -4111,6 +4211,65 @@
           </div>`).join('')}
       </div>`;
     }).join('');
+
+    // Estado de la base de cada cliente, en segundo plano: la tarjeta se pinta
+    // sin esperar a que respondan todas.
+    externos.forEach(async (c) => {
+      const slot = document.getElementById(`admin-db-${c.id}`);
+      if (!slot) return;
+      const n = _adminUsers.filter(u => u.client_id === c.id).length;
+      const accesos = `${n} acceso${n === 1 ? '' : 's'}`;
+      try {
+        const d = await fetch(`/api/tenant/db?client_id=${encodeURIComponent(c.id)}`).then(r => r.json());
+        slot.innerHTML = d.configured
+          ? `${accesos} · <span style="color:var(--success);">●</span> ${_esc(d.host)}:${d.port}/${_esc(d.database)}`
+          : `${accesos} · <span style="color:var(--muted);">●</span> sin base conectada`;
+      } catch { /* el estado es informativo */ }
+    });
+  }
+
+  // ── Alta/edición de un cliente externo ──────────────────────────────────────
+  // Solo nombre y contexto: su base la conecta él desde sus Ajustes, y no
+  // entrega por Drive, así que no hay carpetas ni hoja que configurar.
+  let _ecfEditingId = null;
+
+  function openExternalClientForm(clientId) {
+    _ecfEditingId = clientId || null;
+    const c = clientId ? allClients.find(x => x.id === clientId) : null;
+    document.getElementById('ecf-title').textContent = c ? 'Editar cliente externo' : 'Nuevo cliente externo';
+    document.getElementById('ecf-save').textContent  = c ? 'Guardar' : 'Crear cliente';
+    document.getElementById('ecf-name').value     = c?.name ?? '';
+    document.getElementById('ecf-contexto').value  = c?.contexto_negocio ?? '';
+    const b = document.getElementById('extclient-modal-backdrop');
+    b.style.display = 'flex'; b.classList.add('show');
+    document.getElementById('ecf-name').focus();
+  }
+  function closeExternalClientForm() {
+    const b = document.getElementById('extclient-modal-backdrop');
+    b.style.display = 'none'; b.classList.remove('show');
+    _ecfEditingId = null;
+  }
+  async function saveExternalClient(btn) {
+    const name = document.getElementById('ecf-name').value.trim();
+    if (!name) { await _info('Falta el nombre', 'El cliente necesita un nombre.'); return; }
+    const payload = {
+      name,
+      contexto_negocio: document.getElementById('ecf-contexto').value.trim(),
+      calls_source: 'cliente_pg',
+    };
+    btn.disabled = true;
+    try {
+      const r = _ecfEditingId
+        ? await fetch(`${CLIENTS_API}/${_ecfEditingId}`, { method:'PUT',  headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+        : await fetch(CLIENTS_API,                       { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      closeExternalClientForm();
+      await _refreshClientSelector();
+      renderAdmin();
+    } catch (e) {
+      await _info('No se pudo guardar', e.message);
+    } finally { btn.disabled = false; }
   }
 
   // El cliente viene de la tarjeta desde la que se abre: nunca se elige.
@@ -4445,11 +4604,6 @@
     // Cliente nuevo: fuente Sheets, que es como se han dado de alta siempre.
     const _fSel = document.getElementById('cf-calls-source');
     if (_fSel) { _fSel.value = 'sheets'; void onFuenteChange(); }
-    _tdbPasswordSet = false;
-    ['cf-tdb-host','cf-tdb-port','cf-tdb-database','cf-tdb-user','cf-tdb-password'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('cf-tdb-ssl').checked = true;
-    document.getElementById('cf-tdb-test-result').textContent = '';
-    document.getElementById('cf-tdb-pass-note').textContent = '';
     document.getElementById('cf-sheet-hint').style.display = '';
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
@@ -4544,22 +4698,6 @@
             const sel = document.getElementById('cf-calls-schema');
             sel.value = c.calls_schema;
             onEsquemaChange();
-          }
-          if (c.calls_source === 'cliente_pg') {
-            try {
-              const r = await fetch(`/api/tenant/db?client_id=${encodeURIComponent(c.id)}`);
-              const d = await r.json();
-              if (r.ok && d.configured) {
-                document.getElementById('cf-tdb-host').value     = d.host;
-                document.getElementById('cf-tdb-port').value     = d.port;
-                document.getElementById('cf-tdb-database').value = d.database;
-                document.getElementById('cf-tdb-user').value     = d.user;
-                document.getElementById('cf-tdb-ssl').checked    = !!d.ssl;
-                _tdbPasswordSet = !!d.password_set;
-                document.getElementById('cf-tdb-pass-note').textContent =
-                  _tdbPasswordSet ? '(guardada · déjala vacía para conservarla)' : '';
-              }
-            } catch { /* el formulario sigue sirviendo sin la conexión */ }
           }
         })();
       } catch(e) {
@@ -4798,50 +4936,6 @@
     return document.getElementById('cf-calls-source')?.value || 'sheets';
   }
 
-  // true si el cliente en edición ya tiene contraseña de base guardada (el
-  // server nunca la devuelve; solo dice que existe).
-  let _tdbPasswordSet = false;
-
-  function _tdbPayload(clientId) {
-    const p = {
-      client_id: clientId,
-      host:      document.getElementById('cf-tdb-host').value.trim(),
-      port:      parseInt(document.getElementById('cf-tdb-port').value, 10) || 5432,
-      database:  document.getElementById('cf-tdb-database').value.trim(),
-      user:      document.getElementById('cf-tdb-user').value.trim(),
-      ssl:       document.getElementById('cf-tdb-ssl').checked,
-    };
-    const pass = document.getElementById('cf-tdb-password').value;
-    if (pass) p.password = pass;
-    return p;
-  }
-
-  async function wizTestTenantDb(btn) {
-    const out = document.getElementById('cf-tdb-test-result');
-    btn.disabled = true; out.textContent = 'Probando…'; out.style.color = 'var(--muted)';
-    try {
-      const r = await fetch('/api/tenant/db/test', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(_tdbPayload(_editingClientId || undefined)),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      out.textContent = `✓ Conectada en ${d.ms} ms` + (d.schema_ready ? ' · estructura lista' : ' · faltan tablas (se crean al guardar)');
-      out.style.color = 'var(--success)';
-    } catch (e) {
-      out.textContent = e.message;
-      out.style.color = 'var(--danger)';
-    } finally { btn.disabled = false; }
-  }
-
-  async function onFuenteChange() {
-    const f = fuenteActual();
-    document.getElementById('cf-sheets-wrap').style.display = f === 'sheets'     ? '' : 'none';
-    document.getElementById('cf-pg-wrap').style.display     = f === 'postgres'   ? '' : 'none';
-    document.getElementById('cf-tenant-wrap').style.display = f === 'cliente_pg' ? '' : 'none';
-    if (f === 'postgres') await _fillEsquemas();
-  }
-
   const _num = n => Number(n).toLocaleString('es-MX');
 
   async function _fillEsquemas() {
@@ -4943,30 +5037,17 @@
     const missing = [];
     // Con fuente Postgres o base del cliente, los campos de la hoja dejan de
     // aplicar: exigirlos impediria guardar un cliente que no tiene hoja ninguna.
-    const fuente = fuenteActual();
-    const pg = fuente === 'postgres';
-    const tenant = fuente === 'cliente_pg';
+    const pg = fuenteActual() === 'postgres';
     const DE_SHEETS = ['cf-spreadsheet-id','cf-sheet-name','cf-col-fecha','cf-col-asesor',
                        'cf-col-calif','cf-col-analisis','cf-col-transcripcion'];
     if (pg && step === 2 && !document.getElementById('cf-calls-schema').value) {
       missing.push('Origen en Postgres');
       document.getElementById('cf-calls-schema').classList.add('field-error');
     }
-    if (tenant && step === 2) {
-      for (const [id, label] of [['cf-tdb-host','Host de la base'],['cf-tdb-database','Nombre de la base'],['cf-tdb-user','Usuario de la base']]) {
-        const el = document.getElementById(id);
-        if (!el.value.trim()) { missing.push(label); el.classList.add('field-error'); }
-      }
-      // La contraseña solo es obligatoria si aun no hay una guardada (alta).
-      if (!document.getElementById('cf-tdb-password').value && !_tdbPasswordSet) {
-        missing.push('Contraseña de la base');
-        document.getElementById('cf-tdb-password').classList.add('field-error');
-      }
-    }
     _CF_REQUIRED.forEach(f => {
       if ((_WIZ_STEP_OF[f.id] || 1) !== step) return;
-      if (f.id === 'cf-folder-id' && (laCrea || tenant)) return;
-      if ((pg || tenant) && DE_SHEETS.includes(f.id)) return;
+      if (f.id === 'cf-folder-id' && laCrea) return;
+      if (pg && DE_SHEETS.includes(f.id)) return;
       const el = document.getElementById(f.id);
       if (!el || !el.value.trim()) {
         missing.push(f.label);
@@ -5549,32 +5630,6 @@
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${r.status}`);
       }
-      const savedClient = await r.json().catch(() => ({}));
-      const savedId = _editingClientId || savedClient.id;
-
-      // Base del cliente externo: guardar la conexión (la contraseña viaja solo
-      // si se escribió) y crear la estructura estándar. DESPUÉS de guardar el
-      // cliente, para no dejar conexiones de formularios rechazados.
-      if (fuenteActual() === 'cliente_pg' && savedId) {
-        try {
-          const tr = await fetch('/api/tenant/db', {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(_tdbPayload(savedId)),
-          });
-          const td = await tr.json().catch(() => ({}));
-          if (!tr.ok) throw new Error(td.error || `HTTP ${tr.status}`);
-          const pr = await fetch('/api/tenant/db/provision', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_id: savedId }),
-          });
-          const pd = await pr.json().catch(() => ({}));
-          if (!pr.ok) throw new Error(pd.error || `HTTP ${pr.status}`);
-          alert(`Listo. Estructura creada en el schema "${pd.schema}" de la base del cliente.`);
-        } catch (e) {
-          alert('El cliente se guardó, pero su base quedó pendiente: ' + e.message);
-        }
-      }
-
       // Con fuente Postgres hay un segundo paso: crear la tabla de analisis del
       // schema y guardar desde cuando analizar. Va DESPUES de guardar el cliente
       // para no crear tablas por un formulario que acabo rechazado.

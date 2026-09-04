@@ -65,10 +65,13 @@ export const POLITICAS: Record<string, PolicyEntry> = {
   'POST /api/calls/origenes/:esquema/config':   { rol: 'admin' },
 
   // ── Base del cliente externo ───────────────────────────────────────────────
+  // El cliente conecta SU base desde sus Ajustes, así que estas cuatro son
+  // suyas. El riesgo de que escriba host y puerto (apuntar a la red interna de
+  // Zebra) lo ataja assertHostAllowed en calls/tenant.ts, no el rol.
   'GET /api/tenant/db':                  { rol: 'tenant', own: 'handler' },
+  'PUT /api/tenant/db':                  { rol: 'tenant', own: 'handler' },
   'POST /api/tenant/db/test':            { rol: 'tenant', own: 'handler' },
-  'PUT /api/tenant/db':                  { rol: 'admin' },
-  'POST /api/tenant/db/provision':       { rol: 'admin' },
+  'POST /api/tenant/db/provision':       { rol: 'tenant', own: 'handler' },
 
   // ── Todo lo demás es infraestructura de la agencia ─────────────────────────
   'GET /api/stats':                      { rol: 'admin' },

@@ -586,6 +586,7 @@
     <button class="app-tab" id="tab-btn-calls" onclick="setTab('calls')" title="Llamadas"><i class="ti ti-phone"></i><span>Llamadas</span></button>
     <div class="sb-group">Sistema</div>
     <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')" title="Ajustes"><i class="ti ti-settings"></i><span>Ajustes</span></button>
+    <button class="app-tab" id="tab-btn-admin" data-admin onclick="setTab('admin')" title="Admin"><i class="ti ti-shield-lock"></i><span>Admin</span></button>
   </nav>
   <div class="sb-foot">
     <button class="theme-btn" onclick="toggleTheme()" title="Cambiar tema">
@@ -854,14 +855,6 @@
     </div>
     <div id="origen-list"></div>
 
-    <div class="panel-header" style="margin-top:38px;">
-      <div>
-        <div class="panel-title">Usuarios externos</div>
-        <div class="panel-sub">Accesos con contraseña para clientes que usan solo el dashboard</div>
-      </div>
-      <button class="btn-sm btn-sm-green" onclick="openUserForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo usuario</button>
-    </div>
-    <div id="user-list"></div>
     </div><!-- /settings-admin -->
 
     <!-- Ajustes del cliente externo: dos tarjetas, cero parrafos. -->
@@ -877,6 +870,11 @@
         <button class="btn-sm" onclick="openChangePassword()">Cambiar contraseña</button>
       </div>
     </div>
+  </div>
+
+  <!-- ── Admin panel: clientes externos y sus accesos ── -->
+  <div id="tab-admin" class="tab-panel">
+    <div id="admin-list"></div>
   </div>
 
   <!-- ── Automation panel ── -->
@@ -1768,53 +1766,58 @@
 </div>
 
 <!-- Modal de progreso -->
-<!-- Alta de usuario externo (admin) -->
+<!-- Alta de acceso para un cliente externo (admin). El cliente NO se elige:
+     viene de la tarjeta desde la que se abrio este modal. -->
 <div class="form-modal-backdrop" id="user-modal-backdrop">
-  <div class="form-modal" style="max-width:420px;">
+  <div class="form-modal" style="max-width:440px;">
     <div class="form-modal-header">
       <div>
-        <div class="modal-title">Nuevo usuario externo</div>
-        <div class="modal-subtitle">Acceso con contraseña, limitado a su cliente</div>
+        <div class="modal-title">Nuevo acceso</div>
+        <div class="modal-subtitle" id="uf-client-label"></div>
       </div>
       <button class="modal-close show" onclick="closeUserForm()">✕</button>
     </div>
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Correo *</label>
-      <input class="form-control" id="uf-email" type="email" placeholder="persona@cliente.com">
+    <div class="form-modal-body">
+      <div class="form-group">
+        <label class="form-label">Correo *</label>
+        <input class="form-control" id="uf-email" type="email" placeholder="persona@cliente.com" autocomplete="off">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Nombre *</label>
+        <input class="form-control" id="uf-name" maxlength="80" placeholder="Nombre y apellido">
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Nombre *</label>
-      <input class="form-control" id="uf-name" maxlength="80" placeholder="Nombre y apellido">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Cliente *</label>
-      <select class="form-control" id="uf-client" data-placeholder="— Elige el cliente —"></select>
-    </div>
-    <div class="form-row" style="margin-top:14px;gap:6px;display:flex;">
-      <button class="btn-sm btn-sm-green" onclick="saveUser(this)">Crear usuario</button>
+    <div class="form-modal-footer">
       <button class="btn-sm btn-sm-cancel" onclick="closeUserForm()">Cancelar</button>
+      <button class="btn-sm btn-sm-green" onclick="saveUser(this)">Crear acceso</button>
     </div>
   </div>
 </div>
 
 <!-- Cambio de contraseña (cliente externo) -->
 <div class="form-modal-backdrop" id="pw-modal-backdrop">
-  <div class="form-modal" style="max-width:380px;">
+  <div class="form-modal" style="max-width:400px;">
     <div class="form-modal-header">
-      <div><div class="modal-title">Cambiar contraseña</div></div>
+      <div>
+        <div class="modal-title">Cambiar contraseña</div>
+        <div class="modal-subtitle">Cerrará tus otras sesiones abiertas</div>
+      </div>
       <button class="modal-close show" onclick="closePwModal()">✕</button>
     </div>
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Contraseña actual</label>
-      <input class="form-control" id="pw-current" type="password" autocomplete="current-password">
+    <div class="form-modal-body">
+      <div class="form-group">
+        <label class="form-label">Contraseña actual</label>
+        <input class="form-control" id="pw-current" type="password" autocomplete="current-password">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Contraseña nueva</label>
+        <input class="form-control" id="pw-next" type="password" autocomplete="new-password" minlength="8">
+        <div class="form-hint">Mínimo 8 caracteres.</div>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Contraseña nueva (mínimo 8)</label>
-      <input class="form-control" id="pw-next" type="password" autocomplete="new-password" minlength="8">
-    </div>
-    <div class="form-row" style="margin-top:14px;gap:6px;display:flex;">
-      <button class="btn-sm btn-sm-green" onclick="submitChangePassword(this)">Guardar</button>
+    <div class="form-modal-footer">
       <button class="btn-sm btn-sm-cancel" onclick="closePwModal()">Cancelar</button>
+      <button class="btn-sm btn-sm-green" onclick="submitChangePassword(this)">Guardar</button>
     </div>
   </div>
 </div>
@@ -3593,7 +3596,7 @@
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
   // let y no const: al resolver la sesión, un rol client la recorta a sus 3 pestañas.
-  let _APP_TABS = ['reports','radar','dashboard','automation','calls','settings'];
+  let _APP_TABS = ['reports','radar','dashboard','automation','calls','settings','admin'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -3606,6 +3609,7 @@
     automation: ['Automatizaciones',    'Programa la generación automática de reportes'],
     calls:      ['Llamadas',            'Todas las llamadas del equipo, transcritas y analizadas automáticamente'],
     settings:   ['Ajustes',             'Clientes, fuentes de datos y carpetas de Drive'],
+    admin:      ['Admin',               'Clientes externos y sus accesos al dashboard'],
   };
 
   // Bajadas distintas para el cliente externo: sin jerga interna.
@@ -3627,7 +3631,8 @@
       document.getElementById('topbar-title').textContent = meta[0];
       document.getElementById('topbar-sub').textContent   = meta[1];
     }
-    if (tab === 'settings')   { if (esCliente()) { renderClientSettings(); } else { renderClientList(); renderOrigenes(); renderUsers(); } }
+    if (tab === 'settings')   { if (esCliente()) { renderClientSettings(); } else { renderClientList(); renderOrigenes(); } }
+    if (tab === 'admin')      renderAdmin();
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
@@ -4053,53 +4058,86 @@
     } finally { btn.disabled = false; }
   }
 
-  // ── Usuarios externos (admin) ───────────────────────────────────────────────
-  async function renderUsers() {
-    const el = document.getElementById('user-list');
+  // ── Admin · clientes externos y sus accesos ─────────────────────────────────
+  // Agrupado POR CLIENTE, no una lista plana de usuarios: un acceso solo existe
+  // dentro de un cliente externo, así que ahí es donde se crea. Sin selector.
+  let _adminUsers = [];
+
+  async function renderAdmin() {
+    const el = document.getElementById('admin-list');
+    const externos = allClients.filter(c => c.calls_source === 'cliente_pg');
+    if (externos.length === 0) {
+      el.innerHTML = `
+        <div class="card" style="text-align:center;padding:40px 24px;">
+          <div style="font-size:13px;color:var(--muted);">Todavía no hay clientes externos.</div>
+          <div style="font-size:12px;color:var(--faint);margin-top:6px;">
+            Créalos en Ajustes → Nuevo cliente, con la fuente <strong>Base del cliente · externa</strong>.
+          </div>
+        </div>`;
+      return;
+    }
     try {
       const r = await fetch('/api/users');
-      const users = await r.json();
-      if (!r.ok) throw new Error(users.error || `HTTP ${r.status}`);
-      if (users.length === 0) {
-        el.innerHTML = `<div class="calls-empty">Sin usuarios externos todavía.</div>`;
-        return;
-      }
-      const nameOf = id => allClients.find(c => c.id === id)?.name || id;
-      el.innerHTML = users.map(u => `
-        <div class="card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;margin-bottom:8px;${u.activo ? '' : 'opacity:.55;'}">
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:500;">${_esc(u.name)} <span style="color:var(--faint);font-weight:400;">· ${_esc(u.email)}</span></div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${_esc(nameOf(u.client_id))}${u.activo ? '' : ' · desactivado'}</div>
-          </div>
-          <button class="link-btn" onclick="resetUserPassword('${_esc(u.email)}')">Resetear contraseña</button>
-          <button class="link-btn" onclick="toggleUserActive('${_esc(u.email)}', ${u.activo ? 'false' : 'true'})">${u.activo ? 'Desactivar' : 'Activar'}</button>
-          <button class="link-btn" style="color:var(--danger);" onclick="deleteUserRow('${_esc(u.email)}')">Eliminar</button>
-        </div>`).join('');
+      _adminUsers = await r.json();
+      if (!r.ok) throw new Error(_adminUsers.error || `HTTP ${r.status}`);
     } catch (e) {
       el.innerHTML = `<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>${_esc(e.message)}</div>`;
+      return;
     }
+    el.innerHTML = externos.map(c => {
+      const users = _adminUsers.filter(u => u.client_id === c.id);
+      return `
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${users.length ? '14px' : '4px'};">
+          <div style="flex:1;min-width:0;">
+            <div class="card-title" style="margin:0;">${_esc(c.name)}</div>
+            <div style="font-size:11px;color:var(--faint);margin-top:3px;">
+              ${users.length} acceso${users.length === 1 ? '' : 's'}
+            </div>
+          </div>
+          <button class="btn-sm btn-sm-green" onclick="openUserForm('${_esc(c.id)}')">
+            <i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Agregar acceso
+          </button>
+        </div>
+        ${users.map(u => `
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-top:0.5px solid var(--border);${u.activo ? '' : 'opacity:.5;'}">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;">${_esc(u.name)} <span style="color:var(--faint);">· ${_esc(u.email)}</span></div>
+              ${u.activo ? '' : '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Desactivado</div>'}
+            </div>
+            <button class="link-btn" onclick="resetUserPassword('${_esc(u.email)}')">Resetear contraseña</button>
+            <button class="link-btn" onclick="toggleUserActive('${_esc(u.email)}', ${u.activo ? 'false' : 'true'})">${u.activo ? 'Desactivar' : 'Activar'}</button>
+            <button class="link-btn" style="color:var(--danger);" onclick="deleteUserRow('${_esc(u.email)}')">Eliminar</button>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
   }
 
-  function openUserForm() {
-    const sel = document.getElementById('uf-client');
-    sel.innerHTML = '<option value="">— Elige el cliente —</option>' +
-      allClients.map(c => `<option value="${_esc(c.id)}">${_esc(c.name)}</option>`).join('');
+  // El cliente viene de la tarjeta desde la que se abre: nunca se elige.
+  let _ufClientId = null;
+
+  function openUserForm(clientId) {
+    _ufClientId = clientId;
+    const c = allClients.find(x => x.id === clientId);
+    document.getElementById('uf-client-label').textContent = c ? c.name : clientId;
     ['uf-email','uf-name'].forEach(id => document.getElementById(id).value = '');
     const b = document.getElementById('user-modal-backdrop');
     b.style.display = 'flex'; b.classList.add('show');
+    document.getElementById('uf-email').focus();
   }
   function closeUserForm() {
     const b = document.getElementById('user-modal-backdrop');
     b.style.display = 'none'; b.classList.remove('show');
+    _ufClientId = null;
   }
   async function saveUser(btn) {
     const body = {
       email:     document.getElementById('uf-email').value.trim(),
       name:      document.getElementById('uf-name').value.trim(),
-      client_id: document.getElementById('uf-client').value,
+      client_id: _ufClientId,
     };
     if (!body.email || !body.name || !body.client_id) {
-      await _info('Faltan datos', 'Correo, nombre y cliente son obligatorios.');
+      await _info('Faltan datos', 'Correo y nombre son obligatorios.');
       return;
     }
     btn.disabled = true;
@@ -4111,13 +4149,14 @@
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       closeUserForm();
       // Única vez que la contraseña existe en claro: después solo vive su hash.
-      await _info('Usuario creado',
+      await _info('Acceso creado',
         `Contraseña de ${d.email}:\n\n${d.password}\n\nCópiala AHORA y entrégasela al cliente: no se puede volver a consultar.`);
-      renderUsers();
+      renderAdmin();
     } catch (e) {
       await _info('No se pudo crear', e.message);
     } finally { btn.disabled = false; }
   }
+
   async function resetUserPassword(email) {
     if (!await _ask('Resetear contraseña', `Se generará una contraseña nueva para ${email} y sus sesiones abiertas se cerrarán.`, { okLabel: 'Resetear' })) return;
     try {
@@ -4137,7 +4176,7 @@
         body: JSON.stringify({ activo: activo === 'true' || activo === true }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      renderUsers();
+      renderAdmin();
     } catch (e) { await _info('No se pudo actualizar', e.message); }
   }
   async function deleteUserRow(email) {
@@ -4145,7 +4184,7 @@
     try {
       const r = await fetch(`/api/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      renderUsers();
+      renderAdmin();
     } catch (e) { await _info('No se pudo eliminar', e.message); }
   }
 

@@ -3096,6 +3096,12 @@
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
+  function _isoDaysAgo(n) {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
   function _isoWeekStart() {
     const d = new Date();
     const day = d.getDay();
@@ -4199,6 +4205,7 @@
             <i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Agregar acceso
           </button>
         </div>
+        <div id="admin-tok-${_esc(c.id)}" style="margin-bottom:14px;"></div>
         ${users.map(u => `
           <div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-top:0.5px solid var(--border);${u.activo ? '' : 'opacity:.5;'}">
             <div style="flex:1;min-width:0;">
@@ -4212,20 +4219,50 @@
       </div>`;
     }).join('');
 
-    // Estado de la base de cada cliente, en segundo plano: la tarjeta se pinta
-    // sin esperar a que respondan todas.
+    // Estado de la base y consumo de IA de cada cliente, en segundo plano: la
+    // tarjeta se pinta sin esperar a que respondan todas.
+    const hasta = _isoToday();
+    const desde = _isoDaysAgo(30);
     externos.forEach(async (c) => {
-      const slot = document.getElementById(`admin-db-${c.id}`);
-      if (!slot) return;
+      const dbSlot  = document.getElementById(`admin-db-${c.id}`);
+      const tokSlot = document.getElementById(`admin-tok-${c.id}`);
       const n = _adminUsers.filter(u => u.client_id === c.id).length;
       const accesos = `${n} acceso${n === 1 ? '' : 's'}`;
-      try {
-        const d = await fetch(`/api/tenant/db?client_id=${encodeURIComponent(c.id)}`).then(r => r.json());
-        slot.innerHTML = d.configured
-          ? `${accesos} · <span style="color:var(--success);">●</span> ${_esc(d.host)}:${d.port}/${_esc(d.database)}`
-          : `${accesos} · <span style="color:var(--muted);">●</span> sin base conectada`;
-      } catch { /* el estado es informativo */ }
+      if (dbSlot) {
+        try {
+          const d = await fetch(`/api/tenant/db?client_id=${encodeURIComponent(c.id)}`).then(r => r.json());
+          dbSlot.innerHTML = d.configured
+            ? `${accesos} · <span style="color:var(--success);">●</span> ${_esc(d.host)}:${d.port}/${_esc(d.database)}`
+            : `${accesos} · <span style="color:var(--muted);">●</span> sin base conectada`;
+        } catch { /* el estado es informativo */ }
+      }
+      if (tokSlot) {
+        try {
+          const st = await fetch(`/api/stats?from=${desde}&to=${hasta}&client_id=${encodeURIComponent(c.id)}`)
+            .then(r => r.json());
+          tokSlot.innerHTML = _adminTokenRow(st);
+        } catch { /* idem */ }
+      }
     });
+  }
+
+  // Consumo de IA del cliente, partido por proveedor. Es lo que se le factura,
+  // así que va en su tarjeta y no escondido tras un filtro en otra pestaña.
+  function _adminTokenRow(st) {
+    const provs = st?.by_provider ?? [];
+    if (!provs.length) {
+      return `<div style="font-size:11px;color:var(--faint);">Sin consumo de IA en los últimos 30 días.</div>`;
+    }
+    return `
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);">30 días</span>
+        ${provs.map(p => `
+          <span style="display:inline-flex;align-items:center;gap:6px;border:0.5px solid var(--border);border-radius:100px;padding:4px 11px;font-size:11px;color:var(--muted);">
+            <strong style="color:var(--fg);font-weight:500;">${_esc(_PROV_LABEL[p.provider] ?? p.provider)}</strong>
+            ${_fmtNum(p.total)} · ${_fmtCost(p.cost_usd)}
+          </span>`).join('')}
+        <span style="font-size:11px;color:var(--faint);">Total ${_fmtCost(st.cost_usd)}</span>
+      </div>`;
   }
 
   // ── Alta/edición de un cliente externo ──────────────────────────────────────

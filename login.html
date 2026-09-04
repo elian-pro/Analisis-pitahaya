@@ -46,6 +46,24 @@
   }
   .error.show { display: block; }
   .loading { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  details.pw { margin-top: 20px; text-align: left; }
+  details.pw summary {
+    cursor: pointer; list-style: none; text-align: center;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  details.pw summary:hover { color: var(--text); }
+  details.pw[open] summary { margin-bottom: 14px; }
+  .pw input {
+    width: 100%; margin-bottom: 10px; padding: 11px 13px; font: 13px var(--sans);
+    background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  }
+  .pw input:focus { outline: none; border-color: rgba(255,255,255,.35); }
+  .pw button {
+    width: 100%; padding: 11px; font: 600 13px var(--sans); cursor: pointer;
+    background: var(--text); color: var(--bg); border: none; border-radius: 100px;
+  }
+  .pw button:disabled { opacity: .6; cursor: default; }
 </style>
 </head>
 <body>
@@ -53,10 +71,20 @@
     <img class="logo" src="/Logo Zebra Blanco.png" alt="ZEBRA">
     <p class="eyebrow">Inteligencia Comercial</p>
     <h1>Zebra Reports</h1>
-    <p class="sub">Acceso exclusivo del equipo. Inicia sesión con tu cuenta de Google corporativa.</p>
+    <p class="sub">Inicia sesión con tu cuenta de Google corporativa.</p>
 
     <div class="gbtn" id="gbtn"></div>
     <div class="loading" id="loading">Cargando acceso…</div>
+
+    <details class="pw">
+      <summary>Entrar con usuario y contraseña</summary>
+      <form id="pw-form">
+        <input id="pw-email" type="email" placeholder="Correo" autocomplete="username" required>
+        <input id="pw-pass" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+        <button id="pw-btn" type="submit">Entrar</button>
+      </form>
+    </details>
+
     <div class="error" id="error"></div>
 
     <div class="hint" id="hint">Solo cuentas <b>@zebradigital.marketing</b></div>
@@ -84,6 +112,28 @@
         showError('Error de red al iniciar sesión. Intenta de nuevo.');
       }
     }
+
+    document.getElementById('pw-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $err.classList.remove('show');
+      const btn = document.getElementById('pw-btn');
+      btn.disabled = true;
+      try {
+        const r = await fetch('/auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email:    document.getElementById('pw-email').value,
+            password: document.getElementById('pw-pass').value,
+          }),
+        });
+        if (r.ok) { window.location.replace('/'); return; }
+        const data = await r.json().catch(() => ({}));
+        showError(data.error || 'No se pudo iniciar sesión.');
+      } catch {
+        showError('Error de red al iniciar sesión. Intenta de nuevo.');
+      } finally { btn.disabled = false; }
+    });
 
     async function init() {
       let cfg;

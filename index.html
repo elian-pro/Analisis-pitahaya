@@ -295,6 +295,9 @@
     .app-tab:hover{background:var(--sb-hover);color:var(--sb-fg);}
     .app-tab:focus-visible{outline:none;box-shadow:0 0 0 1px var(--sb-fg);}
     .app-tab.active{background:var(--sb-active-bg);color:var(--sb-active-fg);}
+    /* Vista por rol: lo marcado data-admin desaparece para el cliente externo.
+       Esto es ergonomía, NO seguridad: la política real vive en el servidor. */
+    body[data-role="client"] [data-admin]{display:none!important;}
     .tab-panel{display:none;}
     .tab-panel.active{display:block;}
     /* ── Client / schedule rows ── */
@@ -577,9 +580,9 @@
   <nav class="app-nav">
     <div class="sb-group">Día a día</div>
     <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')" title="Reportes"><i class="ti ti-file-analytics"></i><span>Reportes</span></button>
-    <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')" title="Radar"><i class="ti ti-radar"></i><span>Radar</span></button>
-    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')" title="Dashboard"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
-    <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')" title="Automatización"><i class="ti ti-bolt"></i><span>Automatización</span></button>
+    <button class="app-tab" id="tab-btn-radar" data-admin onclick="setTab('radar')" title="Radar"><i class="ti ti-radar"></i><span>Radar</span></button>
+    <button class="app-tab" id="tab-btn-dashboard" data-admin onclick="setTab('dashboard')" title="Dashboard"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
+    <button class="app-tab" id="tab-btn-automation" data-admin onclick="setTab('automation')" title="Automatización"><i class="ti ti-bolt"></i><span>Automatización</span></button>
     <button class="app-tab" id="tab-btn-calls" onclick="setTab('calls')" title="Llamadas"><i class="ti ti-phone"></i><span>Llamadas</span></button>
     <div class="sb-group">Sistema</div>
     <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')" title="Ajustes"><i class="ti ti-settings"></i><span>Ajustes</span></button>
@@ -707,7 +710,7 @@
     </div>
   </div>
 
-  <div style="margin-top:28px;">
+  <div style="margin-top:28px;" data-admin>
     <div class="section-label">Consumo de tokens · IA</div>
     <div class="token-card">
       <div class="token-tabs">
@@ -836,6 +839,7 @@
 
   <!-- ── Settings panel ── -->
   <div id="tab-settings" class="tab-panel">
+    <div id="settings-admin" data-admin>
     <div class="panel-header">
       <div></div>
       <button class="btn-sm btn-sm-green" onclick="openClientForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo cliente</button>
@@ -849,6 +853,30 @@
       </div>
     </div>
     <div id="origen-list"></div>
+
+    <div class="panel-header" style="margin-top:38px;">
+      <div>
+        <div class="panel-title">Usuarios externos</div>
+        <div class="panel-sub">Accesos con contraseña para clientes que usan solo el dashboard</div>
+      </div>
+      <button class="btn-sm btn-sm-green" onclick="openUserForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo usuario</button>
+    </div>
+    <div id="user-list"></div>
+    </div><!-- /settings-admin -->
+
+    <!-- Ajustes del cliente externo: dos tarjetas, cero parrafos. -->
+    <div id="settings-client" style="display:none;max-width:560px;">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title"><i class="ti ti-database ti-lead"></i>Tu base de datos</div>
+        <div id="tenant-db-status" style="font-size:13px;color:var(--muted);margin:10px 0 14px;">Cargando…</div>
+        <button class="btn-sm" onclick="testTenantDb(this)">Probar conexión</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-user ti-lead"></i>Tu cuenta</div>
+        <div id="tenant-account-email" style="font-size:13px;color:var(--muted);margin:10px 0 14px;"></div>
+        <button class="btn-sm" onclick="openChangePassword()">Cambiar contraseña</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Automation panel ── -->
@@ -973,7 +1001,7 @@
   <div id="tab-calls" class="tab-panel">
     <div class="panel-header">
       <div></div>
-      <button class="btn-sm" onclick="reprocessCalls(this)"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
+      <button class="btn-sm" data-admin onclick="reprocessCalls(this)"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
     </div>
 
     <div class="card" style="margin-bottom:14px;">
@@ -1155,6 +1183,7 @@
           <select class="form-control" id="cf-calls-source" onchange="onFuenteChange()">
             <option value="sheets">Google Sheets</option>
             <option value="postgres">Postgres · Callpicker</option>
+            <option value="cliente_pg">Base del cliente · externa</option>
           </select>
           <div class="form-hint">
             Con Postgres, los reportes y el Radar dejan de leer la hoja y usan las
@@ -1178,6 +1207,41 @@
             <label class="form-label">Asesores en estas llamadas</label>
             <div class="chip-row" id="cf-pg-asesores"></div>
           </div>
+        </div>
+
+        <!-- Base propia del cliente externo: Zebra la crea con el esquema estándar,
+             así que aquí solo va la conexión. La contraseña nunca vuelve del server. -->
+        <div id="cf-tenant-wrap" style="display:none;">
+          <div class="form-grid-2">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">Host *</label>
+              <input class="form-control" id="cf-tdb-host" placeholder="db.cliente.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Puerto</label>
+              <input class="form-control" id="cf-tdb-port" type="number" placeholder="5432">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Base *</label>
+              <input class="form-control" id="cf-tdb-database" placeholder="ventas">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Usuario *</label>
+              <input class="form-control" id="cf-tdb-user" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Contraseña <span id="cf-tdb-pass-note" style="color:var(--faint);font-weight:400;"></span></label>
+              <input class="form-control" id="cf-tdb-password" type="password" autocomplete="new-password">
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:2px 0 12px;cursor:pointer;">
+            <input type="checkbox" id="cf-tdb-ssl" checked> Conexión con SSL
+          </label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button type="button" class="btn-sm btn-sm-cancel" onclick="wizTestTenantDb(this)">Probar conexión</button>
+            <span id="cf-tdb-test-result" style="font-size:12px;color:var(--muted);"></span>
+          </div>
+          <div class="form-note" style="margin-top:10px;">Las tablas del pipeline se crean solas al guardar.</div>
         </div>
       </div>
 
@@ -1704,6 +1768,57 @@
 </div>
 
 <!-- Modal de progreso -->
+<!-- Alta de usuario externo (admin) -->
+<div class="form-modal-backdrop" id="user-modal-backdrop">
+  <div class="form-modal" style="max-width:420px;">
+    <div class="form-modal-header">
+      <div>
+        <div class="modal-title">Nuevo usuario externo</div>
+        <div class="modal-subtitle">Acceso con contraseña, limitado a su cliente</div>
+      </div>
+      <button class="modal-close show" onclick="closeUserForm()">✕</button>
+    </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Correo *</label>
+      <input class="form-control" id="uf-email" type="email" placeholder="persona@cliente.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre *</label>
+      <input class="form-control" id="uf-name" maxlength="80" placeholder="Nombre y apellido">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cliente *</label>
+      <select class="form-control" id="uf-client" data-placeholder="— Elige el cliente —"></select>
+    </div>
+    <div class="form-row" style="margin-top:14px;gap:6px;display:flex;">
+      <button class="btn-sm btn-sm-green" onclick="saveUser(this)">Crear usuario</button>
+      <button class="btn-sm btn-sm-cancel" onclick="closeUserForm()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cambio de contraseña (cliente externo) -->
+<div class="form-modal-backdrop" id="pw-modal-backdrop">
+  <div class="form-modal" style="max-width:380px;">
+    <div class="form-modal-header">
+      <div><div class="modal-title">Cambiar contraseña</div></div>
+      <button class="modal-close show" onclick="closePwModal()">✕</button>
+    </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label">Contraseña actual</label>
+      <input class="form-control" id="pw-current" type="password" autocomplete="current-password">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña nueva (mínimo 8)</label>
+      <input class="form-control" id="pw-next" type="password" autocomplete="new-password" minlength="8">
+    </div>
+    <div class="form-row" style="margin-top:14px;gap:6px;display:flex;">
+      <button class="btn-sm btn-sm-green" onclick="submitChangePassword(this)">Guardar</button>
+      <button class="btn-sm btn-sm-cancel" onclick="closePwModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-backdrop">
   <div class="modal">
     <div class="modal-header">
@@ -2044,11 +2159,24 @@
 
   // ── Carga clientes desde la API ──
   async function loadClients(){
+    await sessionReady;
     try{
+      const sel=document.getElementById('client-select');
+      if (esCliente()) {
+        // Un tenant es su propio y único cliente: sin selector (menos ruido) y
+        // sin pedir /api/clients completo.
+        allClients=[{ id: ME.client_id, name: ME.client_name || ME.client_id }];
+        const o=document.createElement('option');
+        o.value=ME.client_id; o.textContent=allClients[0].name;
+        sel.appendChild(o);
+        sel.value=ME.client_id;
+        sel.closest('.field').style.display='none';
+        onClientChange();
+        return;
+      }
       const res=await fetch('/api/clients');
       if(!res.ok) throw new Error('No se pudo cargar clientes');
       allClients=await res.json();
-      const sel=document.getElementById('client-select');
       allClients.forEach(c=>{
         const o=document.createElement('option');
         o.value=c.id;
@@ -2291,6 +2419,24 @@
     }
   }
 
+  // ── Sesión y rol ───────────────────────────────────────────────────────────
+  // Se resuelve ANTES de cargar clientes: la vista del cliente externo no llama
+  // a los endpoints de admin (le darían 403) y la CSS de data-admin depende del
+  // atributo del body. Esto solo acomoda la UI; el permiso real es del servidor.
+  let ME = null;
+  const esCliente = () => ME?.role === 'client';
+  const sessionReady = fetch('/auth/me')
+    .then(r => (r.ok ? r.json() : null))
+    .then(me => {
+      ME = me;
+      if (esCliente()) {
+        document.body.dataset.role = 'client';
+        _APP_TABS = ['reports', 'calls', 'settings'];
+      }
+      return me;
+    })
+    .catch(() => null);
+
   // Init
   let busy=false;
   function lock(v){['btn-selected','btn-general'].forEach(id=>document.getElementById(id).disabled=v);}
@@ -2433,6 +2579,17 @@
     b.classList.remove('show');b.style.display='none';
   }
 
+  // El link del reporte terminado: Drive para gestionados; para el cliente
+  // externo, descarga efímera de un solo uso (el backend responde 410 después).
+  function _combinedLinkHtml(combined, labelHtml, style){
+    if (combined.download) {
+      return `<a href="/api/report/${encodeURIComponent(currentJobId)}/download" class="result-link" style="${style}">`+
+             `<span><i class="ti ti-download ti-lead"></i>${labelHtml}</span>`+
+             `<span style="font-size:11px;color:var(--faint);">Disponible 30 min · se borra al descargar</span></a>`;
+    }
+    return `<a href="${combined.driveUrl}" target="_blank" class="result-link" style="${style}"><span>${labelHtml}</span><span class="result-arrow">→</span></a>`;
+  }
+
   function finishModalMulti(individual, general, combined){
     clearInterval(progressInterval);clearInterval(elapsedInterval);
     _hideCancel();
@@ -2455,7 +2612,7 @@
     if(combined){
       const n=combined.advisors?.length||individual.length;
       document.getElementById('modal-subtitle').textContent=`${n} asesor(es) analizados — Reporte listo`;
-      html=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="margin-top:0;border-color:rgba(212,175,55,0.4);"><span>Reporte Completo — ${_displayPeriod}</span><span class="result-arrow">→</span></a>`;
+      html=_combinedLinkHtml(combined, `Reporte Completo — ${_displayPeriod}`, 'margin-top:0;border-color:rgba(212,175,55,0.4);');
     }else{
       document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
       individual.forEach(r=>{
@@ -2697,7 +2854,7 @@
       // Actualizar sección de resultados debajo del modal
       let rhtml='';
       if(combined){
-        rhtml+=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>Reporte Completo — ${displayPeriod}</span><span class="result-arrow">→</span></a>`;
+        rhtml+=_combinedLinkHtml(combined, `Reporte Completo — ${displayPeriod}`, 'border-color:rgba(212,175,55,0.4);');
       }else{
         indiv.forEach(r=>{
           rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span><i class="ti ti-file-text ti-lead"></i>Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
@@ -2930,6 +3087,16 @@
     return '$' + usd.toFixed(usd < 1 ? 2 : 2) + ' USD';
   }
 
+  const _PROV_LABEL = { anthropic: 'Anthropic · Claude', google: 'Google · Gemini', openai: 'OpenAI', desconocido: 'Otro' };
+  function _providerChips(byProvider) {
+    if (!byProvider || byProvider.length === 0) return '';
+    return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 14px;">` + byProvider.map(p => `
+      <span style="display:inline-flex;align-items:center;gap:8px;border:0.5px solid var(--border2);border-radius:100px;padding:5px 12px;font-size:11px;color:var(--muted);">
+        <strong style="color:var(--fg);font-weight:600;">${_esc(_PROV_LABEL[p.provider] ?? p.provider)}</strong>
+        ${_fmtNum(p.total)} tok · ${_fmtCost(p.cost_usd)}
+      </span>`).join('') + `</div>`;
+  }
+
   function _renderTokens(stats, label) {
     const body = document.getElementById('token-body');
     if (!stats || stats.total === 0) {
@@ -2964,9 +3131,10 @@
         <div class="token-kpi">
           <div class="token-kpi-label">Costo estimado</div>
           <div class="token-kpi-value">${_fmtCost(stats.cost_usd)}</div>
-          <div class="token-kpi-sub">Sonnet 4.6</div>
+          <div class="token-kpi-sub">todos los proveedores</div>
         </div>
       </div>
+      ${_providerChips(stats.by_provider)}
       <div class="token-bar-section">
         <div class="token-bar-header">
           <span class="token-bar-title">${jobsLabel}</span>
@@ -2988,6 +3156,8 @@
   }
 
   async function loadTokenStats() {
+    await sessionReady;
+    if (esCliente()) return;   // el consumo de tokens es del admin
     const body = document.getElementById('token-body');
     const today = _isoToday();
 
@@ -3422,7 +3592,8 @@
   }
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
-  const _APP_TABS = ['reports','radar','dashboard','automation','calls','settings'];
+  // let y no const: al resolver la sesión, un rol client la recorta a sus 3 pestañas.
+  let _APP_TABS = ['reports','radar','dashboard','automation','calls','settings'];
   let _currentTab = 'reports';
   let _schedSig   = '';
   let _schedPollTimer = null;
@@ -3437,18 +3608,26 @@
     settings:   ['Ajustes',             'Clientes, fuentes de datos y carpetas de Drive'],
   };
 
+  // Bajadas distintas para el cliente externo: sin jerga interna.
+  const _TAB_META_CLIENT = {
+    reports:  ['Reportes', 'Genera y descarga el análisis de tu equipo comercial'],
+    calls:    ['Llamadas', 'Tus llamadas, transcritas y analizadas automáticamente'],
+    settings: ['Ajustes',  'Tu base de datos y tu cuenta'],
+  };
+
   function setTab(tab) {
+    if (!_APP_TABS.includes(tab)) return;   // el deep-link por hash tampoco entra
     _currentTab = tab;
     _APP_TABS.forEach(t => {
       document.getElementById('tab-btn-'+t).classList.toggle('active', t === tab);
       document.getElementById('tab-'+t).classList.toggle('active', t === tab);
     });
-    const meta = _TAB_META[tab];
+    const meta = (esCliente() && _TAB_META_CLIENT[tab]) || _TAB_META[tab];
     if (meta) {
       document.getElementById('topbar-title').textContent = meta[0];
       document.getElementById('topbar-sub').textContent   = meta[1];
     }
-    if (tab === 'settings')   { renderClientList(); renderOrigenes(); }
+    if (tab === 'settings')   { if (esCliente()) { renderClientSettings(); } else { renderClientList(); renderOrigenes(); renderUsers(); } }
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
@@ -3717,6 +3896,9 @@
   // nuestro: la pestaña Llamadas con esa cuenta puesta. Por eso la flecha es "→"
   // y no "↗": no se sale de la app.
   function _fuenteDelCliente(c) {
+    if (c.calls_source === 'cliente_pg') {
+      return `<span title="Base Postgres en el servidor del cliente">Base del cliente · externa</span>`;
+    }
     if (c.calls_source === 'postgres') {
       return c.calls_schema
         ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();verLlamadasDe('${_esc(c.calls_schema)}')" style="color:inherit;" title="Ver sus llamadas en la pestaña Llamadas">Postgres · ${_esc(c.calls_schema)} →</a>`
@@ -3793,6 +3975,178 @@
     if (min < 2)  return 'un par de minutos';
     if (min < 60) return `unos ${min} min`;
     return `unas ${Math.floor(min / 60)} h ${min % 60} min`;
+  }
+
+  // ── Ajustes del cliente externo ─────────────────────────────────────────────
+  async function renderClientSettings() {
+    document.getElementById('settings-client').style.display = '';
+    document.getElementById('tenant-account-email').textContent = ME?.email || '';
+    const el = document.getElementById('tenant-db-status');
+    try {
+      const r = await fetch('/api/tenant/db');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      if (!d.configured) {
+        el.innerHTML = `<span style="color:var(--danger);">●</span> Sin configurar · escríbenos para conectarla`;
+        return;
+      }
+      const ok = !!d.probado_en;
+      el.innerHTML =
+        `<span style="color:${ok ? 'var(--success)' : 'var(--faint)'};">●</span> ` +
+        `<code style="font-family:'JetBrains Mono',monospace;font-size:12px;">${_esc(d.host)}:${d.port}/${_esc(d.database)}</code>` +
+        (ok ? ` · probada ${_fmtRelative(d.probado_en)}` : ' · sin probar');
+    } catch (e) {
+      el.innerHTML = `<span style="color:var(--danger);">●</span> ${_esc(e.message)}`;
+    }
+  }
+
+  function _fmtRelative(iso) {
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return 'hace un momento';
+    if (min < 60) return `hace ${min} min`;
+    const h = Math.round(min / 60);
+    return h < 24 ? `hace ${h} h` : `el ${new Date(iso).toLocaleDateString('es-MX')}`;
+  }
+
+  async function testTenantDb(btn) {
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Probando…';
+    try {
+      const r = await fetch('/api/tenant/db/test', { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      _showToast(`Conexión OK en ${d.ms} ms`);
+    } catch (e) {
+      await _info('No se pudo conectar', e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+      if (esCliente()) renderClientSettings();
+    }
+  }
+
+  function openChangePassword() {
+    const b = document.getElementById('pw-modal-backdrop');
+    document.getElementById('pw-current').value = '';
+    document.getElementById('pw-next').value = '';
+    b.style.display = 'flex'; b.classList.add('show');
+  }
+  function closePwModal() {
+    const b = document.getElementById('pw-modal-backdrop');
+    b.style.display = 'none'; b.classList.remove('show');
+  }
+  async function submitChangePassword(btn) {
+    const current = document.getElementById('pw-current').value;
+    const next    = document.getElementById('pw-next').value;
+    if (next.length < 8) { await _info('Contraseña corta', 'La nueva contraseña necesita al menos 8 caracteres.'); return; }
+    btn.disabled = true;
+    try {
+      const r = await fetch('/auth/change-password', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ current, next }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      closePwModal();
+      _showToast('Contraseña actualizada');
+    } catch (e) {
+      await _info('No se pudo cambiar', e.message);
+    } finally { btn.disabled = false; }
+  }
+
+  // ── Usuarios externos (admin) ───────────────────────────────────────────────
+  async function renderUsers() {
+    const el = document.getElementById('user-list');
+    try {
+      const r = await fetch('/api/users');
+      const users = await r.json();
+      if (!r.ok) throw new Error(users.error || `HTTP ${r.status}`);
+      if (users.length === 0) {
+        el.innerHTML = `<div class="calls-empty">Sin usuarios externos todavía.</div>`;
+        return;
+      }
+      const nameOf = id => allClients.find(c => c.id === id)?.name || id;
+      el.innerHTML = users.map(u => `
+        <div class="card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;margin-bottom:8px;${u.activo ? '' : 'opacity:.55;'}">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:500;">${_esc(u.name)} <span style="color:var(--faint);font-weight:400;">· ${_esc(u.email)}</span></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${_esc(nameOf(u.client_id))}${u.activo ? '' : ' · desactivado'}</div>
+          </div>
+          <button class="link-btn" onclick="resetUserPassword('${_esc(u.email)}')">Resetear contraseña</button>
+          <button class="link-btn" onclick="toggleUserActive('${_esc(u.email)}', ${u.activo ? 'false' : 'true'})">${u.activo ? 'Desactivar' : 'Activar'}</button>
+          <button class="link-btn" style="color:var(--danger);" onclick="deleteUserRow('${_esc(u.email)}')">Eliminar</button>
+        </div>`).join('');
+    } catch (e) {
+      el.innerHTML = `<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>${_esc(e.message)}</div>`;
+    }
+  }
+
+  function openUserForm() {
+    const sel = document.getElementById('uf-client');
+    sel.innerHTML = '<option value="">— Elige el cliente —</option>' +
+      allClients.map(c => `<option value="${_esc(c.id)}">${_esc(c.name)}</option>`).join('');
+    ['uf-email','uf-name'].forEach(id => document.getElementById(id).value = '');
+    const b = document.getElementById('user-modal-backdrop');
+    b.style.display = 'flex'; b.classList.add('show');
+  }
+  function closeUserForm() {
+    const b = document.getElementById('user-modal-backdrop');
+    b.style.display = 'none'; b.classList.remove('show');
+  }
+  async function saveUser(btn) {
+    const body = {
+      email:     document.getElementById('uf-email').value.trim(),
+      name:      document.getElementById('uf-name').value.trim(),
+      client_id: document.getElementById('uf-client').value,
+    };
+    if (!body.email || !body.name || !body.client_id) {
+      await _info('Faltan datos', 'Correo, nombre y cliente son obligatorios.');
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/users', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      closeUserForm();
+      // Única vez que la contraseña existe en claro: después solo vive su hash.
+      await _info('Usuario creado',
+        `Contraseña de ${d.email}:\n\n${d.password}\n\nCópiala AHORA y entrégasela al cliente: no se puede volver a consultar.`);
+      renderUsers();
+    } catch (e) {
+      await _info('No se pudo crear', e.message);
+    } finally { btn.disabled = false; }
+  }
+  async function resetUserPassword(email) {
+    if (!await _ask('Resetear contraseña', `Se generará una contraseña nueva para ${email} y sus sesiones abiertas se cerrarán.`, { okLabel: 'Resetear' })) return;
+    try {
+      const r = await fetch(`/api/users/${encodeURIComponent(email)}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reset_password: true }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      await _info('Contraseña nueva', `${d.email}:\n\n${d.password}\n\nCópiala AHORA: no se puede volver a consultar.`);
+    } catch (e) { await _info('No se pudo resetear', e.message); }
+  }
+  async function toggleUserActive(email, activo) {
+    try {
+      const r = await fetch(`/api/users/${encodeURIComponent(email)}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ activo: activo === 'true' || activo === true }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      renderUsers();
+    } catch (e) { await _info('No se pudo actualizar', e.message); }
+  }
+  async function deleteUserRow(email) {
+    if (!await _ask('Eliminar usuario', `${email} perderá el acceso de inmediato.`, { okLabel: 'Eliminar', danger: true })) return;
+    try {
+      const r = await fetch(`/api/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      renderUsers();
+    } catch (e) { await _info('No se pudo eliminar', e.message); }
   }
 
   async function renderOrigenes() {
@@ -4052,6 +4406,11 @@
     // Cliente nuevo: fuente Sheets, que es como se han dado de alta siempre.
     const _fSel = document.getElementById('cf-calls-source');
     if (_fSel) { _fSel.value = 'sheets'; void onFuenteChange(); }
+    _tdbPasswordSet = false;
+    ['cf-tdb-host','cf-tdb-port','cf-tdb-database','cf-tdb-user','cf-tdb-password'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('cf-tdb-ssl').checked = true;
+    document.getElementById('cf-tdb-test-result').textContent = '';
+    document.getElementById('cf-tdb-pass-note').textContent = '';
     document.getElementById('cf-sheet-hint').style.display = '';
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
@@ -4146,6 +4505,22 @@
             const sel = document.getElementById('cf-calls-schema');
             sel.value = c.calls_schema;
             onEsquemaChange();
+          }
+          if (c.calls_source === 'cliente_pg') {
+            try {
+              const r = await fetch(`/api/tenant/db?client_id=${encodeURIComponent(c.id)}`);
+              const d = await r.json();
+              if (r.ok && d.configured) {
+                document.getElementById('cf-tdb-host').value     = d.host;
+                document.getElementById('cf-tdb-port').value     = d.port;
+                document.getElementById('cf-tdb-database').value = d.database;
+                document.getElementById('cf-tdb-user').value     = d.user;
+                document.getElementById('cf-tdb-ssl').checked    = !!d.ssl;
+                _tdbPasswordSet = !!d.password_set;
+                document.getElementById('cf-tdb-pass-note').textContent =
+                  _tdbPasswordSet ? '(guardada · déjala vacía para conservarla)' : '';
+              }
+            } catch { /* el formulario sigue sirviendo sin la conexión */ }
           }
         })();
       } catch(e) {
@@ -4384,11 +4759,48 @@
     return document.getElementById('cf-calls-source')?.value || 'sheets';
   }
 
+  // true si el cliente en edición ya tiene contraseña de base guardada (el
+  // server nunca la devuelve; solo dice que existe).
+  let _tdbPasswordSet = false;
+
+  function _tdbPayload(clientId) {
+    const p = {
+      client_id: clientId,
+      host:      document.getElementById('cf-tdb-host').value.trim(),
+      port:      parseInt(document.getElementById('cf-tdb-port').value, 10) || 5432,
+      database:  document.getElementById('cf-tdb-database').value.trim(),
+      user:      document.getElementById('cf-tdb-user').value.trim(),
+      ssl:       document.getElementById('cf-tdb-ssl').checked,
+    };
+    const pass = document.getElementById('cf-tdb-password').value;
+    if (pass) p.password = pass;
+    return p;
+  }
+
+  async function wizTestTenantDb(btn) {
+    const out = document.getElementById('cf-tdb-test-result');
+    btn.disabled = true; out.textContent = 'Probando…'; out.style.color = 'var(--muted)';
+    try {
+      const r = await fetch('/api/tenant/db/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(_tdbPayload(_editingClientId || undefined)),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      out.textContent = `✓ Conectada en ${d.ms} ms` + (d.schema_ready ? ' · estructura lista' : ' · faltan tablas (se crean al guardar)');
+      out.style.color = 'var(--success)';
+    } catch (e) {
+      out.textContent = e.message;
+      out.style.color = 'var(--danger)';
+    } finally { btn.disabled = false; }
+  }
+
   async function onFuenteChange() {
-    const pg = fuenteActual() === 'postgres';
-    document.getElementById('cf-sheets-wrap').style.display = pg ? 'none' : '';
-    document.getElementById('cf-pg-wrap').style.display     = pg ? '' : 'none';
-    if (pg) await _fillEsquemas();
+    const f = fuenteActual();
+    document.getElementById('cf-sheets-wrap').style.display = f === 'sheets'     ? '' : 'none';
+    document.getElementById('cf-pg-wrap').style.display     = f === 'postgres'   ? '' : 'none';
+    document.getElementById('cf-tenant-wrap').style.display = f === 'cliente_pg' ? '' : 'none';
+    if (f === 'postgres') await _fillEsquemas();
   }
 
   const _num = n => Number(n).toLocaleString('es-MX');
@@ -4490,19 +4902,32 @@
     const laCrea = !!document.getElementById('cf-parent-folder-id').value
                 && document.getElementById('cf-create-reports').checked;
     const missing = [];
-    // Con fuente Postgres, los campos de la hoja dejan de aplicar: exigirlos
-    // impediria guardar un cliente que no tiene hoja ninguna.
-    const pg = fuenteActual() === 'postgres';
+    // Con fuente Postgres o base del cliente, los campos de la hoja dejan de
+    // aplicar: exigirlos impediria guardar un cliente que no tiene hoja ninguna.
+    const fuente = fuenteActual();
+    const pg = fuente === 'postgres';
+    const tenant = fuente === 'cliente_pg';
     const DE_SHEETS = ['cf-spreadsheet-id','cf-sheet-name','cf-col-fecha','cf-col-asesor',
                        'cf-col-calif','cf-col-analisis','cf-col-transcripcion'];
     if (pg && step === 2 && !document.getElementById('cf-calls-schema').value) {
       missing.push('Origen en Postgres');
       document.getElementById('cf-calls-schema').classList.add('field-error');
     }
+    if (tenant && step === 2) {
+      for (const [id, label] of [['cf-tdb-host','Host de la base'],['cf-tdb-database','Nombre de la base'],['cf-tdb-user','Usuario de la base']]) {
+        const el = document.getElementById(id);
+        if (!el.value.trim()) { missing.push(label); el.classList.add('field-error'); }
+      }
+      // La contraseña solo es obligatoria si aun no hay una guardada (alta).
+      if (!document.getElementById('cf-tdb-password').value && !_tdbPasswordSet) {
+        missing.push('Contraseña de la base');
+        document.getElementById('cf-tdb-password').classList.add('field-error');
+      }
+    }
     _CF_REQUIRED.forEach(f => {
       if ((_WIZ_STEP_OF[f.id] || 1) !== step) return;
-      if (f.id === 'cf-folder-id' && laCrea) return;
-      if (pg && DE_SHEETS.includes(f.id)) return;
+      if (f.id === 'cf-folder-id' && (laCrea || tenant)) return;
+      if ((pg || tenant) && DE_SHEETS.includes(f.id)) return;
       const el = document.getElementById(f.id);
       if (!el || !el.value.trim()) {
         missing.push(f.label);
@@ -5085,6 +5510,32 @@
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${r.status}`);
       }
+      const savedClient = await r.json().catch(() => ({}));
+      const savedId = _editingClientId || savedClient.id;
+
+      // Base del cliente externo: guardar la conexión (la contraseña viaja solo
+      // si se escribió) y crear la estructura estándar. DESPUÉS de guardar el
+      // cliente, para no dejar conexiones de formularios rechazados.
+      if (fuenteActual() === 'cliente_pg' && savedId) {
+        try {
+          const tr = await fetch('/api/tenant/db', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(_tdbPayload(savedId)),
+          });
+          const td = await tr.json().catch(() => ({}));
+          if (!tr.ok) throw new Error(td.error || `HTTP ${tr.status}`);
+          const pr = await fetch('/api/tenant/db/provision', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: savedId }),
+          });
+          const pd = await pr.json().catch(() => ({}));
+          if (!pr.ok) throw new Error(pd.error || `HTTP ${pr.status}`);
+          alert(`Listo. Estructura creada en el schema "${pd.schema}" de la base del cliente.`);
+        } catch (e) {
+          alert('El cliente se guardó, pero su base quedó pendiente: ' + e.message);
+        }
+      }
+
       // Con fuente Postgres hay un segundo paso: crear la tabla de analisis del
       // schema y guardar desde cuando analizar. Va DESPUES de guardar el cliente
       // para no crear tablas por un formulario que acabo rechazado.
@@ -6342,7 +6793,7 @@
             <div><span class="calls-est est-${_esc(est)}">${_esc(_CALL_EST[est] || est)}</span></div>
             <div>${c.calif_global ?? '—'}</div>
             <div>${est === 'fallida' || est === 'sin_procesar'
-              ? `<button class="btn-sm" onclick="event.stopPropagation();processOne('${_esc(slug)}','${_esc(c.call_id)}',this)">${est === 'fallida' ? 'Reintentar' : 'Procesar'}</button>`
+              ? `<button class="btn-sm" data-admin onclick="event.stopPropagation();processOne('${_esc(slug)}','${_esc(c.call_id)}',this)">${est === 'fallida' ? 'Reintentar' : 'Procesar'}</button>`
               : ''}</div>
           </div>
           <div id="cd-${_esc(c.call_id)}"></div>`;

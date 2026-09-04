@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { AuthedRequest } from '../auth/middleware';
 import {
-  getTenantDbConfig, saveTenantDbConfig, sealPassword, tenantPool,
+  getTenantDbConfig, saveTenantDbConfig, sealPassword, tenantPool, probeTenantDb,
   ensureTenantSchema, TENANT_SCHEMA_DEFAULT, type TenantDbConfig,
 } from '../calls/tenant';
 import { getClient } from '../clients/manager';
@@ -89,25 +89,39 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
 // Prueba la conexión ANTES de generar nada: el error de credenciales se ve aquí
 // y no dentro de un job de cinco minutos.
 router.post('/test', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as AuthedRequest).user;
   const clientId = resolveClientId(req as AuthedRequest);
-  if (!clientId) {
-    res.status(400).json({ error: 'Falta client_id.' });
-    return;
+  const stored = clientId ? await getTenantDbConfig(clientId) : undefined;
+
+  // Credenciales inline (wizard, ANTES de guardar): solo para el admin. Para un
+  // tenant esto sería una sonda de red con hosts arbitrarios.
+  const b = req.body as Record<string, unknown> | undefined;
+  let cfg = stored;
+  if (b?.host && user?.role !== 'client') {
+    const password_enc = typeof b.password === 'string' && b.password
+      ? sealPassword(b.password) : stored?.password_enc;
+    if (!password_enc) {
+      res.status(400).json({ error: 'Falta la contraseña de la base.' });
+      return;
+    }
+    cfg = {
+      host: String(b.host).trim(), port: Number(b.port) || 5432,
+      database: String(b.database ?? '').trim(), user: String(b.user ?? '').trim(),
+      ssl: b.ssl !== false && b.ssl !== 'false',
+      schema: typeof b.schema === 'string' && b.schema ? b.schema : TENANT_SCHEMA_DEFAULT,
+      password_enc,
+    };
   }
-  const cfg = await getTenantDbConfig(clientId);
   if (!cfg) {
     res.status(404).json({ error: 'Este cliente no tiene base de datos configurada.' });
     return;
   }
-  const t0 = Date.now();
   try {
-    const pool = await tenantPool(clientId, cfg);
-    await pool.query('SELECT 1');
-    const { rows } = await pool.query(
-      `SELECT count(*)::int AS n FROM information_schema.tables
-        WHERE table_schema = $1 AND table_name IN ('llamadas','analisis')`, [cfg.schema]);
-    await saveTenantDbConfig(clientId, { ...cfg, probado_en: new Date().toISOString() });
-    res.json({ ok: true, ms: Date.now() - t0, schema_ready: rows[0].n === 2 });
+    const r = await probeTenantDb(cfg);
+    if (stored && cfg === stored && clientId) {
+      await saveTenantDbConfig(clientId, { ...stored, probado_en: new Date().toISOString() });
+    }
+    res.json({ ok: true, ...r });
   } catch (e) {
     res.status(502).json({ ok: false, error: humanizeError((e as Error).message) });
   }

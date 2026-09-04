@@ -147,6 +147,31 @@ setInterval(() => {
   for (const [id, e] of pools) if (t - e.ultimoUso > IDLE_EVICT_MS) evictPool(id);
 }, IDLE_EVICT_MS).unref();
 
+/**
+ * Prueba una conexión SIN pasar por el caché de pools: sirve para credenciales
+ * aún no guardadas (wizard) y para no dejar cacheada una config fallida.
+ */
+export async function probeTenantDb(cfg: TenantDbConfig): Promise<{ ms: number; schema_ready: boolean }> {
+  await assertHostAllowed(cfg.host);
+  const pool = new Pool({
+    host: cfg.host, port: cfg.port, database: cfg.database, user: cfg.user,
+    password: decryptSecret(cfg.password_enc),
+    ssl: cfg.ssl ? { rejectUnauthorized: false } : undefined,
+    max: 1, connectionTimeoutMillis: 5000, statement_timeout: 10_000,
+  });
+  pool.on('error', () => {});
+  const t0 = Date.now();
+  try {
+    await pool.query('SELECT 1');
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM information_schema.tables
+        WHERE table_schema = $1 AND table_name IN ('llamadas','analisis')`, [cfg.schema]);
+    return { ms: Date.now() - t0, schema_ready: rows[0].n === 2 };
+  } finally {
+    void pool.end().catch(() => {});
+  }
+}
+
 /** El pool que corresponde a una cuenta: el del tenant o el de Callpicker. */
 export async function poolDe(cuenta: Cuenta): Promise<Pool> {
   return cuenta.tenant ? tenantPool(cuenta.slug) : callsDb();

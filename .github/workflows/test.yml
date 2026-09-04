@@ -1,0 +1,21 @@
+name: Tests
+
+# Con un modelo de autorización dentro, los tests de arquitectura (política de
+# rutas, tarifas centralizadas) solo protegen si corren en cada push.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run type-check
+      - run: npm test

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
@@ -21,14 +21,58 @@
     .zebra-motif{position:fixed;top:0;right:0;bottom:0;width:38%;pointer-events:none;z-index:0;color:var(--fg);opacity:var(--motif-opacity);background-image:repeating-linear-gradient(var(--motif-angle),currentColor 0 var(--motif-line),transparent var(--motif-line) var(--motif-gap));}
     body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFFFFF;--on-accent:#0A0A0A;--danger:#E24B4A;--success:#46B36B;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.06;}
     body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;--success:#2E7D32;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.05;}
-    .header{display:flex;align-items:center;justify-content:space-between;padding:18px 48px;border-bottom:0.5px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
-    .header-left{display:flex;align-items:center;gap:14px;}
-    .logo-box{width:38px;height:38px;background:#0A0A0A;border:0.5px solid rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;}
-    .brand-name{font-size:13px;font-weight:500;letter-spacing:0.18em;color:var(--fg);}
-    .brand-sub{font-size:10px;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;margin-top:2px;}
-    .theme-btn{background:transparent;border:0.5px solid var(--border2);color:var(--fg);padding:9px 16px;border-radius:100px;cursor:pointer;font-size:11px;letter-spacing:0.12em;font-family:inherit;display:inline-flex;align-items:center;gap:8px;transition:background .15s;}
-    .theme-btn:hover{background:var(--surface2);}
-    .main{max-width:1060px;margin:0 auto;padding:40px 48px;position:relative;z-index:1;}
+    /* LAYOUT · barra lateral + columna de contenido.
+       La barra es la superficie de enfasis invertida (ZR-25b): en dark va clara sobre
+       el lienzo #0A0A0A; en light va negra. Sus tokens propios --sb-* hacen ese espejo
+       en un solo lugar, para que ninguna regla de abajo lleve un hex fijo (ZR-06). */
+    body{display:flex;}
+    .sidebar{
+      --sb-bg:#F4F3EE;--sb-fg:#0A0A0A;--sb-muted:#6B6B66;--sb-faint:#A8A7A0;--sb-border:#E5E4DE;
+      --sb-hover:#EAE9E3;--sb-active-bg:#0A0A0A;--sb-active-fg:#FFFFFF;
+      position:sticky;top:0;height:100vh;flex-shrink:0;width:248px;z-index:120;
+      display:flex;flex-direction:column;
+      background:var(--sb-bg);color:var(--sb-fg);border-right:0.5px solid var(--sb-border);
+      transition:width .2s cubic-bezier(.16,1,.3,1);
+    }
+    body[data-theme="light"] .sidebar{
+      --sb-bg:#0A0A0A;--sb-fg:#F5F5F5;--sb-muted:#8A8A8A;--sb-faint:#5A5A5A;--sb-border:#262626;
+      --sb-hover:#1C1C1C;--sb-active-bg:#FFFFFF;--sb-active-fg:#0A0A0A;
+    }
+    .sb-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 16px 16px;}
+    .sb-brand{display:flex;align-items:center;gap:11px;min-width:0;}
+    .sb-brand-text{min-width:0;}
+    .logo-box{width:36px;height:36px;background:#0A0A0A;border:0.5px solid rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;}
+    .brand-name{font-size:12px;font-weight:600;letter-spacing:0.18em;color:var(--sb-fg);}
+    .brand-sub{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;color:var(--sb-muted);letter-spacing:0.16em;text-transform:uppercase;margin-top:3px;}
+    .sb-collapse{width:30px;height:30px;flex-shrink:0;border-radius:50%;border:0.5px dashed var(--sb-border);background:transparent;color:var(--sb-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:color .15s,border-color .15s;}
+    .sb-collapse:hover{color:var(--sb-fg);border-color:var(--sb-muted);}
+    .sb-collapse i{transition:transform .2s cubic-bezier(.16,1,.3,1);}
+    .sb-foot{padding:12px;border-top:0.5px solid var(--sb-border);display:flex;flex-direction:column;gap:8px;}
+    .theme-btn{background:transparent;border:0.5px solid var(--sb-border);color:var(--sb-fg);padding:9px 10px;border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;font-size:11.5px;font-weight:500;width:100%;display:flex;align-items:center;gap:10px;transition:background .15s;}
+    .theme-btn:hover{background:var(--sb-hover);}
+    .theme-btn i{font-size:15px;color:var(--sb-muted);flex-shrink:0;}
+    .theme-pill{margin-left:auto;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:0.1em;background:var(--sb-active-bg);color:var(--sb-active-fg);border-radius:999px;padding:3px 8px;}
+    .app-body{flex:1;min-width:0;display:flex;flex-direction:column;}
+    .topbar{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:0.5px solid var(--border);padding:22px 48px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+    .topbar-title{font-size:20px;font-weight:600;letter-spacing:-0.01em;color:var(--fg);}
+    .topbar-sep{color:var(--border2);}
+    .topbar-sub{font-size:12px;color:var(--muted);}
+    .main{max-width:1060px;width:100%;margin:0 auto;padding:40px 48px;position:relative;z-index:1;}
+    /* Colapsada: solo iconos. Los rotulos se ocultan, nada cambia de grosor (ZR-14). */
+    body.nav-collapsed .sidebar{width:68px;}
+    body.nav-collapsed .sb-head{flex-direction:column;gap:12px;padding:18px 0;}
+    body.nav-collapsed .sb-brand-text,
+    body.nav-collapsed .app-tab span,
+    body.nav-collapsed .sb-lbl,
+    body.nav-collapsed .theme-pill,
+    body.nav-collapsed #zr-session .email{display:none;}
+    body.nav-collapsed .sb-collapse i{transform:rotate(180deg);}
+    body.nav-collapsed .app-nav{padding:6px 10px 16px;align-items:center;}
+    body.nav-collapsed .app-tab{width:44px;padding:11px;justify-content:center;}
+    body.nav-collapsed .sb-group{height:0;padding:0;margin:10px 8px;font-size:0;border-top:0.5px solid var(--sb-border);}
+    body.nav-collapsed .theme-btn{justify-content:center;padding:9px 0;}
+    body.nav-collapsed .sb-foot{padding:12px 8px;}
+    body.nav-collapsed #zr-session{flex-direction:column;gap:6px;border:none;padding:6px 0;}
     .section-label{display:flex;align-items:center;gap:10px;font-size:10px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
     .section-label::after{content:'';flex:1;height:0.5px;background:var(--border);}
     .config-row{display:flex;gap:12px;align-items:flex-end;padding:18px 22px;background:var(--surface);border:0.5px solid var(--border);border-radius:14px;margin-bottom:28px;}
@@ -209,7 +253,7 @@
     .cal-wk-row.cal-sel .cal-cell.out-mo{color:var(--muted);}
     @keyframes fadeSlideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
     @keyframes spin{to{transform:rotate(360deg);}}
-    @media(max-width:720px){.grid-2,.radar-cols{grid-template-columns:1fr;}.main{padding:28px 20px;}.header{padding:16px 20px;}.modal{padding:24px 18px;}}
+    @media(max-width:720px){.grid-2,.radar-cols{grid-template-columns:1fr;}.main{padding:28px 20px;}.topbar{padding:16px 20px;}.modal{padding:24px 18px;}}
     /* ── Token counter ── */
     .token-card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:22px 24px;}
     .token-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;}
@@ -242,12 +286,13 @@
     .token-empty{text-align:center;padding:24px 0;font-size:12px;color:var(--faint);}
     @media(max-width:720px){.token-kpis{grid-template-columns:repeat(2,1fr);}}
     /* ── App navigation tabs ── */
-    .app-nav{display:flex;gap:0;border-bottom:0.5px solid var(--border);margin-bottom:32px;overflow-x:auto;}
-    .app-tab{background:none;border:none;color:var(--muted);font-family:'Inter',sans-serif;font-size:11px;font-weight:400;letter-spacing:0.18em;padding:14px 22px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:8px;transition:color .15s;white-space:nowrap;flex-shrink:0;}
-    .app-tab:hover{color:var(--fg);}
-    .app-tab i{font-size:14px;color:var(--faint);}
-    .app-tab.active{color:var(--fg);border-bottom-color:var(--accent);}
-    .app-tab.active i{color:var(--accent);}
+    .app-nav{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:6px 12px 16px;}
+    .sb-group{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--sb-faint);padding:16px 10px 8px;}
+    .app-tab{background:none;border:none;color:var(--sb-muted);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:12px;white-space:nowrap;transition:background .15s,color .15s;}
+    .app-tab i{font-size:17px;flex-shrink:0;}
+    .app-tab:hover{background:var(--sb-hover);color:var(--sb-fg);}
+    .app-tab:focus-visible{outline:none;box-shadow:0 0 0 1px var(--sb-fg);}
+    .app-tab.active{background:var(--sb-active-bg);color:var(--sb-active-fg);}
     .tab-panel{display:none;}
     .tab-panel.active{display:block;}
     /* ── Client / schedule rows ── */
@@ -516,28 +561,45 @@
 </head>
 <body data-theme="dark">
 <div class="zebra-motif" aria-hidden="true"></div>
-<header class="header">
-  <div class="header-left">
-    <div class="logo-box"><img src="Logo%20Zebra%20Blanco.png" alt="Logo" style="width:28px;height:28px;object-fit:contain;"></div>
-    <div>
-      <div class="brand-name">ZEBRA · REPORTS</div>
-      <div class="brand-sub">Centro de Inteligencia Comercial</div>
+<aside class="sidebar">
+  <div class="sb-head">
+    <div class="sb-brand">
+      <div class="logo-box"><img src="Logo%20Zebra%20Blanco.png" alt="Zebra" style="width:26px;height:26px;object-fit:contain;"></div>
+      <div class="sb-brand-text">
+        <div class="brand-name">ZEBRA</div>
+        <div class="brand-sub">Reports AI</div>
+      </div>
     </div>
+    <button class="sb-collapse" onclick="toggleNav()" id="nav-collapse-btn" aria-label="Contraer menú" title="Contraer menú">
+      <i class="ti ti-chevron-left" aria-hidden="true"></i>
+    </button>
   </div>
-  <button class="theme-btn" onclick="toggleTheme()">
-    <i class="ti ti-contrast" aria-hidden="true"></i>
-    <span id="theme-label">DARK</span>
-  </button>
+  <nav class="app-nav">
+    <div class="sb-group">Día a día</div>
+    <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')" title="Reportes"><i class="ti ti-file-analytics"></i><span>Reportes</span></button>
+    <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')" title="Radar"><i class="ti ti-radar"></i><span>Radar</span></button>
+    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')" title="Dashboard"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
+    <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')" title="Automatización"><i class="ti ti-bolt"></i><span>Automatización</span></button>
+    <button class="app-tab" id="tab-btn-calls" onclick="setTab('calls')" title="Llamadas"><i class="ti ti-phone"></i><span>Llamadas</span></button>
+    <div class="sb-group">Sistema</div>
+    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')" title="Ajustes"><i class="ti ti-settings"></i><span>Ajustes</span></button>
+  </nav>
+  <div class="sb-foot">
+    <button class="theme-btn" onclick="toggleTheme()" title="Cambiar tema">
+      <i class="ti ti-contrast" aria-hidden="true"></i>
+      <span class="sb-lbl">Modo tema</span>
+      <span id="theme-label" class="theme-pill">DARK</span>
+    </button>
+    <div id="zr-session"><span class="avatar"></span><span class="email"></span><button type="button">Salir</button></div>
+  </div>
+</aside>
+<div class="app-body">
+<header class="topbar">
+  <span class="topbar-title" id="topbar-title">Reportes y Auditorías</span>
+  <span class="topbar-sep" aria-hidden="true">|</span>
+  <span class="topbar-sub" id="topbar-sub">Generación inteligente y análisis directivo de asesores comerciales</span>
 </header>
 <main class="main">
-  <nav class="app-nav">
-    <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')"><i class="ti ti-chart-bar"></i>REPORTES</button>
-    <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')"><i class="ti ti-radar"></i>RADAR</button>
-    <button class="app-tab" id="tab-btn-dashboard" onclick="setTab('dashboard')"><i class="ti ti-chart-line"></i>DASHBOARD</button>
-    <button class="app-tab" id="tab-btn-automation" onclick="setTab('automation')"><i class="ti ti-clock-play"></i>AUTOMATIZACIÓN</button>
-    <button class="app-tab" id="tab-btn-calls" onclick="setTab('calls')"><i class="ti ti-phone"></i>LLAMADAS</button>
-    <button class="app-tab" id="tab-btn-settings" onclick="setTab('settings')"><i class="ti ti-settings"></i>AJUSTES</button>
-  </nav>
   <div id="tab-reports" class="tab-panel active">
   <div class="config-row">
     <div class="field field-wide">
@@ -776,10 +838,7 @@
   <!-- ── Settings panel ── -->
   <div id="tab-settings" class="tab-panel">
     <div class="panel-header">
-      <div>
-        <div class="panel-title">Clientes</div>
-        <div class="panel-sub">Configura clientes, fuentes de datos y carpetas de Drive</div>
-      </div>
+      <div></div>
       <button class="btn-sm btn-sm-green" onclick="openClientForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nuevo cliente</button>
     </div>
     <div id="client-list"></div>
@@ -796,10 +855,7 @@
   <!-- ── Automation panel ── -->
   <div id="tab-automation" class="tab-panel">
     <div class="panel-header">
-      <div>
-        <div class="panel-title">Automatizaciones</div>
-        <div class="panel-sub">Programa la generación automática de reportes</div>
-      </div>
+      <div></div>
       <button class="btn-sm btn-sm-green" onclick="openScheduleForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Nueva automatización</button>
     </div>
     <div id="schedule-list"></div>
@@ -808,10 +864,7 @@
   <!-- ── Radar de Objeciones ─────────────────────────────────────────────── -->
   <div id="tab-radar" class="tab-panel">
     <div class="panel-header">
-      <div>
-        <div class="panel-title">Radar de Objeciones</div>
-        <div class="panel-sub">Detecta qué preguntan los prospectos y cómo responde el equipo · reporte mensual en PDF</div>
-      </div>
+      <div></div>
     </div>
 
     <div class="radar-cols">
@@ -920,10 +973,7 @@
   </div>
   <div id="tab-calls" class="tab-panel">
     <div class="panel-header">
-      <div>
-        <div class="panel-title">Llamadas</div>
-        <div class="panel-sub">Pipeline propio: Callpicker → transcripción → análisis · sustituye a los flujos de n8n</div>
-      </div>
+      <div></div>
       <button class="btn-sm" onclick="reprocessCalls(this)"><i class="ti ti-refresh" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Reprocesar pendientes</button>
     </div>
 
@@ -1000,6 +1050,7 @@
     </div>
   </div>
 </main>
+</div><!-- /app-body -->
 
 <!-- Client form modal -->
 <div class="form-modal-backdrop" id="client-modal-backdrop">
@@ -1722,6 +1773,20 @@
     if (e.key === 'Escape') { e.preventDefault(); _askClose(false); }
     if (e.key === 'Enter')  { e.preventDefault(); _askClose(true); }
   });
+
+  function toggleNav(force) {
+    const on = force === undefined ? !document.body.classList.contains('nav-collapsed') : force;
+    document.body.classList.toggle('nav-collapsed', on);
+    const btn = document.getElementById('nav-collapse-btn');
+    if (btn) btn.title = btn.ariaLabel = on ? 'Expandir menú' : 'Contraer menú';
+    try { localStorage.setItem('zr-nav-collapsed', on ? '1' : '0'); } catch (_) {}
+  }
+  // Preferencia guardada; por debajo de 900px la barra arranca en modo iconos.
+  (function () {
+    let saved = null;
+    try { saved = localStorage.getItem('zr-nav-collapsed'); } catch (_) {}
+    if (saved !== null ? saved === '1' : window.innerWidth < 900) toggleNav(true);
+  })();
 
   function toggleTheme() {
     const body  = document.body;
@@ -3363,12 +3428,27 @@
   let _schedSig   = '';
   let _schedPollTimer = null;
 
+  // Titulo y bajada del topbar por pestaña. Unica fuente: los paneles ya no repiten su titulo.
+  const _TAB_META = {
+    reports:    ['Reportes y Auditorías', 'Generación inteligente y análisis directivo de asesores comerciales'],
+    radar:      ['Radar de Objeciones',   'Detecta qué preguntan los prospectos y cómo responde el equipo · reporte mensual en PDF'],
+    dashboard:  ['Dashboard',             'Métricas de desempeño comercial por cliente y periodo'],
+    automation: ['Automatizaciones',      'Programa la generación automática de reportes'],
+    calls:      ['Llamadas',              'Pipeline propio: Callpicker → transcripción → análisis'],
+    settings:   ['Ajustes',               'Clientes, fuentes de datos y carpetas de Drive'],
+  };
+
   function setTab(tab) {
     _currentTab = tab;
     _APP_TABS.forEach(t => {
       document.getElementById('tab-btn-'+t).classList.toggle('active', t === tab);
       document.getElementById('tab-'+t).classList.toggle('active', t === tab);
     });
+    const meta = _TAB_META[tab];
+    if (meta) {
+      document.getElementById('topbar-title').textContent = meta[0];
+      document.getElementById('topbar-sub').textContent   = meta[1];
+    }
     if (tab === 'settings')   { renderClientList(); renderOrigenes(); }
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
@@ -6592,22 +6672,30 @@
      botón de salir, y redirige a /login si una llamada a la API devuelve 401
      (por ejemplo, sesión expirada). Si la auth está desactivada, no hace nada. -->
 <style>
+  /* Vive en el pie de la barra lateral, asi que hereda sus tokens --sb-* (ZR-06). */
   #zr-session {
-    position: fixed; bottom: 14px; right: 14px; z-index: 2147483000;
-    display: none; align-items: center; gap: 8px;
-    background: rgba(10,10,10,.9); color: #fff; border: 1px solid rgba(255,255,255,.14);
-    border-radius: 999px; padding: 5px 6px 5px 12px;
-    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px;
-    box-shadow: 0 8px 24px -8px rgba(0,0,0,.45); backdrop-filter: blur(4px);
+    display: none; align-items: center; gap: 9px;
+    border: 0.5px solid var(--sb-border); border-radius: 12px; padding: 8px 9px;
+    font-family: 'Inter', sans-serif; font-size: 11px; color: var(--sb-fg);
   }
-  #zr-session .email { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .02em; }
+  #zr-session .avatar {
+    width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%;
+    background: var(--sb-active-bg); color: var(--sb-active-fg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+  }
+  #zr-session .email {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--sb-muted); font-size: 10.5px; letter-spacing: .01em;
+  }
   #zr-session button {
-    cursor: pointer; border: none; background: #fff; color: #0A0A0A; font: inherit; font-size: 10px;
-    text-transform: uppercase; letter-spacing: .06em; border-radius: 999px; padding: 4px 10px;
+    cursor: pointer; border: none; background: var(--sb-active-bg); color: var(--sb-active-fg);
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px;
+    text-transform: uppercase; letter-spacing: .08em; border-radius: 999px; padding: 5px 9px;
+    flex-shrink: 0; transition: opacity .15s;
   }
-  #zr-session button:hover { background: #e5e5e5; }
+  #zr-session button:hover { opacity: .82; }
 </style>
-<div id="zr-session"><span class="email"></span><button type="button">Salir</button></div>
 <script>
   (function () {
     // Redirige a /login cuando cualquier fetch a la API devuelve 401.
@@ -6629,7 +6717,9 @@
       .then((me) => {
         if (!me || !me.email) return; // auth desactivada o sin sesión → sin chip
         const box = document.getElementById('zr-session');
-        box.querySelector('.email').textContent = me.email;
+        box.querySelector('.email').textContent  = me.email;
+        box.querySelector('.avatar').textContent = me.email.charAt(0);
+        box.title = me.email;
         box.style.display = 'flex';
         box.querySelector('button').addEventListener('click', async () => {
           try { await _fetch('/auth/logout', { method: 'POST' }); } catch (_) {}

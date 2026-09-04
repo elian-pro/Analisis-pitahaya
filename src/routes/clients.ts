@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import type { AuthedRequest } from '../auth/middleware';
 import { z } from 'zod';
 import { loadClients, getClient, createClient, updateClient, deleteClient, clientFileLabel } from '../clients/manager';
 
@@ -36,7 +37,7 @@ const ClientBodySchema = z.object({
   radar_min_duration_seconds:    z.number().int().min(0).max(3600).optional(),
   radar_transcripcion_max_chars: z.number().int().min(100).max(50000).optional(),
   // ── Fuente de las llamadas y pipeline (opcionales; ver ClientConfig) ─────────
-  calls_source:                  z.enum(['sheets','postgres']).optional(),
+  calls_source:                  z.enum(['sheets','postgres','cliente_pg']).optional(),
   calls_schema:                  z.string().optional(),
   contexto_negocio:              z.string().optional(),
   zcis_id:                       z.string().optional(),
@@ -50,6 +51,10 @@ const ClientBodySchema = z.object({
 // fuente, asi que la exigencia pasa a depender de cual se eligio.
 .superRefine((d, ctx) => {
   const fuente = d.calls_source ?? 'sheets';
+  // La base del cliente externo la crea Zebra con el esquema estándar: no exige
+  // hoja, ni schema de Callpicker, ni carpeta de Drive. Su conexión vive aparte
+  // (tenant_db) y se valida en /api/tenant/db.
+  if (fuente === 'cliente_pg') return;
   if (fuente === 'postgres') {
     if (!d.calls_schema) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['calls_schema'],
@@ -70,9 +75,14 @@ const ClientBodySchema = z.object({
   }
 });
 
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    res.json(await loadClients());
+    const clients = await loadClients();
+    // Un cliente externo solo se ve a sí mismo. La config completa de los demás
+    // (hojas, carpetas, prompts, contexto_negocio) es inteligencia de otras
+    // cuentas y no sale de aquí.
+    const user = (req as AuthedRequest).user;
+    res.json(user?.role === 'client' ? clients.filter(c => c.id === user.client_id) : clients);
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
@@ -96,7 +106,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
   const { create_reports_folder, create_radar_folder, ...data } = parsed.data;
-  if (!data.folder_id && !(data.parent_folder_id && create_reports_folder)) {
+  // Un cliente externo no entrega por Drive: sin carpeta y sin crearla.
+  if (data.calls_source !== 'cliente_pg' && !data.folder_id && !(data.parent_folder_id && create_reports_folder)) {
     res.status(400).json({
       error: 'Falta la carpeta de reportes: elige una ubicación donde crearla o pega el link de una existente.',
     });

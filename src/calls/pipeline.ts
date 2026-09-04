@@ -1,10 +1,12 @@
 import { getGeminiKey, getOpenAIKey } from '../config/env';
 import { loadClients, type ClientConfig } from '../clients/manager';
 import { resolveTranscriptionPrompt, resolveAnalysisPrompt } from './prompts';
-import { transcribeAudio } from './transcribe';
-import { analyzeTranscript } from './analyze';
+import { transcribeAudio, GEMINI_MODEL } from './transcribe';
+import { analyzeTranscript, ANALYSIS_MODEL } from './analyze';
 import { getCuenta, type Cuenta } from './registry';
 import { getConfig } from './config';
+import { configDeTenant } from './tenant';
+import { recordTokens } from '../tokens/store';
 import {
   getCall, markTranscrita, markAnalizada, markBuzon, markFallida, type CallRow,
 } from './store';
@@ -60,8 +62,16 @@ export async function processCall(
   // CUENTA y no por cliente, porque dos clientes pueden compartir una y el audio
   // se transcribe una sola vez para ambos.
   const client = matchClient(cuenta, await loadClients());
-  const contexto = (await getConfig(cuenta.esquema))?.contexto_negocio
-                ?? client?.contexto_negocio;
+  const cfgCuenta = cuenta.tenant ? await configDeTenant(cuenta) : await getConfig(cuenta.esquema);
+  const contexto = cfgCuenta?.contexto_negocio ?? client?.contexto_negocio;
+
+  // Telemetría de consumo por proveedor. void + catch propio: registrar tokens
+  // jamás puede tumbar el procesamiento de una llamada.
+  const cobrar = (model: string, usage?: { input: number; output: number }) => {
+    if (!usage) return;
+    void recordTokens({ client_id: client?.id ?? cuenta.slug, model, input: usage.input, output: usage.output })
+      .catch(() => {});
+  };
 
   try {
     let transcripcion = force ? null : row.transcripcion;
@@ -72,6 +82,7 @@ export async function processCall(
         resolveTranscriptionPrompt(client?.prompt_transcripcion, contexto ?? undefined),
         getGeminiKey(),
       );
+      cobrar(GEMINI_MODEL, t.usage);
       if (t.esBuzon) {
         // Termina aquí: no hay conversación que analizar y mandarlo al modelo
         // sería pagar por un "Buzón de voz" que ya conocemos.
@@ -87,6 +98,7 @@ export async function processCall(
       resolveAnalysisPrompt(client?.prompt_analisis, contexto ?? undefined),
       getOpenAIKey(),
     );
+    cobrar(ANALYSIS_MODEL, a.usage);
 
     await markAnalizada(cuenta, callId, {
       tipo_contacto: a.TIPO_CONTACTO,

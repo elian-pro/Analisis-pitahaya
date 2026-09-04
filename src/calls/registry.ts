@@ -1,4 +1,5 @@
-import { callsDb, quoteIdent } from './db';
+import { callsDb, callsDbEnabled, quoteIdent } from './db';
+import { tenantCuenta } from './tenant';
 import { listConfigs, debeBarrer } from './config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +25,8 @@ export interface Cuenta {
   activa:    boolean;
   /** true si su schema ya tiene tabla `analisis`. */
   habilitada: boolean;
+  /** true si la cuenta es la base propia de un cliente externo (calls/tenant.ts). */
+  tenant?:    boolean;
 }
 
 export async function listCuentas(): Promise<Cuenta[]> {
@@ -44,6 +47,11 @@ export async function listCuentasHabilitadas(): Promise<Cuenta[]> {
 }
 
 export async function getCuenta(slug: string): Promise<Cuenta | undefined> {
+  // Un cliente externo no vive en callpicker_registro: su cuenta se sintetiza
+  // desde su configuración (y no requiere la base de Callpicker).
+  const t = await tenantCuenta(slug);
+  if (t) return t;
+  if (!callsDbEnabled()) return undefined;
   return (await listCuentas()).find(c => c.slug === slug);
 }
 

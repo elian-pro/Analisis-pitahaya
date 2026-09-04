@@ -1,4 +1,4 @@
-import { callsDb } from './db';
+import { poolDe } from './tenant';
 import { humanizeError, esTransitorio } from '../humanizeError';
 import { esquemaDe, type Cuenta } from './registry';
 
@@ -86,7 +86,7 @@ export interface PendientesOpts {
  */
 export async function listPendientes(c: Cuenta, o: PendientesOpts = {}): Promise<CallRow[]> {
   const esq = esquemaDe(c);
-  const { rows } = await callsDb().query(
+  const { rows } = await (await poolDe(c)).query(
     `${SELECT_BASE(esq, '$1')}
       WHERE l.n_grabaciones > 0
         AND l.duracion_seg >= $1
@@ -125,7 +125,7 @@ export async function listCalls(c: Cuenta, f: ListFilters = {}): Promise<CallRow
   else where.push('(a.estado IS NOT NULL OR l.duracion_seg >= $1)');
 
   args.push(Math.min(f.limit ?? 200, 1000));
-  const { rows } = await callsDb().query(
+  const { rows } = await (await poolDe(c)).query(
     `${SELECT_BASE(esq, '$1')} WHERE ${where.join(' AND ')} ORDER BY l.fecha DESC LIMIT $${args.length}`,
     args,
   );
@@ -133,7 +133,7 @@ export async function listCalls(c: Cuenta, f: ListFilters = {}): Promise<CallRow
 }
 
 export async function getCall(c: Cuenta, callId: string): Promise<CallRow | undefined> {
-  const { rows } = await callsDb().query(
+  const { rows } = await (await poolDe(c)).query(
     `${SELECT_BASE(esquemaDe(c), '0')} WHERE l.call_id = $1 LIMIT 1`, [callId]);
   return rows[0] as CallRow | undefined;
 }
@@ -148,7 +148,7 @@ const upsert = (esq: string, cols: string, sets: string) => `
   ON CONFLICT (cuenta, call_id) DO UPDATE SET ${sets}`;
 
 export async function markTranscrita(c: Cuenta, callId: string, texto: string): Promise<void> {
-  await callsDb().query(
+  await (await poolDe(c)).query(
     upsert(esquemaDe(c), 'estado, transcripcion',
            `estado = 'transcrita', transcripcion = EXCLUDED.transcripcion, error = NULL`),
     [c.slug, callId, 'transcrita', texto]);
@@ -169,7 +169,7 @@ export interface AnalysisFields {
  * ya corregida (verificada contra el motor: "Whatsapp" da 0, no 35).
  */
 export async function markAnalizada(c: Cuenta, callId: string, a: AnalysisFields): Promise<void> {
-  await callsDb().query(
+  await (await poolDe(c)).query(
     upsert(esquemaDe(c),
       'estado, tipo_contacto, presentacion, precalif, exploracion, agenda, analisis',
       `estado = 'analizada', tipo_contacto = EXCLUDED.tipo_contacto,
@@ -182,7 +182,7 @@ export async function markAnalizada(c: Cuenta, callId: string, a: AnalysisFields
 
 /** Buzón de voz: termina sin pasar por el análisis, que no tendría nada que leer. */
 export async function markBuzon(c: Cuenta, callId: string, texto: string): Promise<void> {
-  await callsDb().query(
+  await (await poolDe(c)).query(
     upsert(esquemaDe(c), 'estado, transcripcion, analisis',
       `estado = 'analizada', transcripcion = EXCLUDED.transcripcion,
        analisis = 'Buzón de voz', error = NULL, procesado_at = now()`),
@@ -199,7 +199,7 @@ export async function markBuzon(c: Cuenta, callId: string, texto: string): Promi
 export async function markFallida(c: Cuenta, callId: string, err: unknown): Promise<void> {
   const raw = err instanceof Error ? err.message : String(err);
   const suma = esTransitorio(raw) ? 0 : 1;
-  await callsDb().query(
+  await (await poolDe(c)).query(
     upsert(esquemaDe(c), 'estado, error, intentos',
       `estado = 'fallida', error = EXCLUDED.error,
        intentos = ${esquemaDe(c)}.analisis.intentos + ${suma}`),
@@ -221,7 +221,7 @@ export async function markFallida(c: Cuenta, callId: string, err: unknown): Prom
  */
 export async function reactivarFallidas(c: Cuenta, desde?: string): Promise<number> {
   const esq = esquemaDe(c);
-  const { rowCount } = await callsDb().query(
+  const { rowCount } = await (await poolDe(c)).query(
     `UPDATE ${esq}.analisis a
         SET estado = 'pendiente', intentos = 0, error = NULL
        FROM ${esq}.llamadas l
@@ -243,7 +243,7 @@ export async function reactivarFallidas(c: Cuenta, desde?: string): Promise<numb
 export async function asesoresDelPeriodo(
   c: Cuenta, desde?: string, minDuracion = 100,
 ): Promise<Array<{ asesor: string; n: number }>> {
-  const { rows } = await callsDb().query(
+  const { rows } = await (await poolDe(c)).query(
     `SELECT btrim(l.asesor) AS asesor, count(*)::int AS n
        FROM ${esquemaDe(c)}.llamadas l
       WHERE l.asesor IS NOT NULL AND btrim(l.asesor) <> ''
@@ -259,7 +259,7 @@ export async function countByEstado(
   c: Cuenta, desde?: string, minDuracion = 100,
 ): Promise<Record<string, number>> {
   const esq = esquemaDe(c);
-  const { rows } = await callsDb().query(
+  const { rows } = await (await poolDe(c)).query(
     `SELECT COALESCE(a.estado,
               CASE WHEN l.duracion_seg >= $2 THEN 'sin_procesar' ELSE 'corta' END) AS estado,
             count(*)::int AS n

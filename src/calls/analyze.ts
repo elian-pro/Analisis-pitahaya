@@ -37,12 +37,17 @@ export type Analysis = z.infer<typeof AnalysisSchema>;
  */
 export const aplanar = (s: string): string => s.replace(/\r?\n+/g, ' ').replace(/\s+/g, ' ').trim();
 
+export type AnalysisWithUsage = Analysis & {
+  /** Tokens reportados por OpenAI. Ausente si la respuesta no los trae. */
+  usage?: { input: number; output: number };
+};
+
 export async function analyzeTranscript(
   transcripcion: string,
   systemPrompt:  string,
   apiKey:        string,
   fetchFn:       FetchLike = globalThis.fetch,
-): Promise<Analysis> {
+): Promise<AnalysisWithUsage> {
   const res = await fetchFn('https://api.openai.com/v1/chat/completions', {
     method:  'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
@@ -60,7 +65,10 @@ export async function analyzeTranscript(
     throw new Error(`OpenAI respondió ${res.status}: ${(await res.text()).slice(0, 300)}`);
   }
 
-  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const data = await res.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?:   { prompt_tokens?: number; completion_tokens?: number };
+  };
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error('OpenAI devolvió una respuesta sin contenido');
 
@@ -77,5 +85,9 @@ export async function analyzeTranscript(
     throw new Error(`El análisis no tiene la forma esperada (campos: ${faltan})`);
   }
 
-  return { ...result.data, RESUMEN: aplanar(result.data.RESUMEN) };
+  // Telemetría opcional: sin usage el resultado sigue siendo válido.
+  const usage = data.usage
+    ? { input: data.usage.prompt_tokens ?? 0, output: data.usage.completion_tokens ?? 0 }
+    : undefined;
+  return { ...result.data, RESUMEN: aplanar(result.data.RESUMEN), ...(usage ? { usage } : {}) };
 }

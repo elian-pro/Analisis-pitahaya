@@ -50,6 +50,8 @@ export const JOBS_TABLE = 'jobs';
 export const TOKEN_LOG_TABLE = 'token_log';
 export const REPORT_METRICS_TABLE = 'report_metrics';
 export const ADVISORS_TABLE = 'advisors';
+export const APP_USERS_TABLE = 'app_users';   // usuarios externos (rol client)
+export const TENANT_DB_TABLE = 'tenant_db';   // conexion a la base de cada cliente externo (password cifrada)
 export const CALLS_TABLE = 'calls';
 
 /**
@@ -61,7 +63,7 @@ export const CALLS_TABLE = 'calls';
 export async function ensureSchema(): Promise<void> {
   if (!pool) return;
   // Config + job tables: full object stored per row in a jsonb column.
-  for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE, JOBS_TABLE, ADVISORS_TABLE]) {
+  for (const table of [CLIENTS_TABLE, SCHEDULES_TABLE, JOBS_TABLE, ADVISORS_TABLE, APP_USERS_TABLE, TENANT_DB_TABLE]) {
     await pool.query(
       `CREATE TABLE IF NOT EXISTS ${table} (
          id         TEXT PRIMARY KEY,
@@ -85,6 +87,22 @@ export async function ensureSchema(): Promise<void> {
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS token_log_ts_idx ON ${TOKEN_LOG_TABLE} (ts)`,
+  );
+  // Proveedor/modelo/costo por registro (idempotente). El costo se guarda al
+  // escribir: las tarifas cambian y una fila historica conserva su precio.
+  // Las filas previas a esta columna eran todas de Claude.
+  await pool.query(
+    `ALTER TABLE ${TOKEN_LOG_TABLE}
+       ADD COLUMN IF NOT EXISTS provider TEXT,
+       ADD COLUMN IF NOT EXISTS model    TEXT,
+       ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,6)`,
+  );
+  await pool.query(
+    `UPDATE ${TOKEN_LOG_TABLE} SET provider = 'anthropic' WHERE provider IS NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS token_log_client_provider_idx
+       ON ${TOKEN_LOG_TABLE} (client_id, provider, ts)`,
   );
   // Per-advisor report metrics per period: powers "compare vs previous period"
   // from the database (with Drive sidecars kept as a redundant fallback).
@@ -120,7 +138,7 @@ export async function ensureSchema(): Promise<void> {
   // esa misma instancia. Crear la tabla aqui la dejaba huerfana en la base
   // equivocada, sin poder cruzarse con las llamadas que tiene que leer.
   // El pipeline usa su propio pool; ver calls/.
-  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors)');
+  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors, app_users, tenant_db)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

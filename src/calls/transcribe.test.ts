@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esBuzonDeVoz, downloadAudio, transcribeAudio, MAX_AUDIO_BYTES } from './transcribe';
+import { esBuzonDeVoz, downloadAudio, transcribeAudio, MAX_AUDIO_BYTES, type FetchLike } from './transcribe';
 
 test('el buzón se detecta sin importar mayúsculas ni tilde', () => {
   // Los tres flujos de n8n escriben esta cadena de forma distinta: el prompt de
@@ -113,4 +113,22 @@ test('una respuesta sin texto no se guarda como transcripción vacía', async ()
     init ? { ok: true, status: 200, json: async () => ({ candidates: [] }) } as unknown as Response
          : respuesta(Buffer.from('audio'))) as unknown as typeof globalThis.fetch;
   await assert.rejects(() => transcribeAudio('https://x/a.mp3', 'P', 'k', fn), /sin texto/);
+});
+
+test('captura usageMetadata cuando Gemini lo manda, y sin el sigue valido', async () => {
+  const conUsage: FetchLike = async (url) => String(url).includes('generativelanguage')
+    ? new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'hola' }] } }],
+        usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 45 },
+      }))
+    : new Response(Buffer.from('audio'), { headers: { 'content-type': 'audio/mpeg' } });
+  const r1 = await transcribeAudio('https://x/rec.mp3', 'p', 'k', conUsage);
+  assert.deepEqual(r1.usage, { input: 120, output: 45 });
+
+  const sinUsage: FetchLike = async (url) => String(url).includes('generativelanguage')
+    ? new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'hola' }] } }] }))
+    : new Response(Buffer.from('audio'), { headers: { 'content-type': 'audio/mpeg' } });
+  const r2 = await transcribeAudio('https://x/rec.mp3', 'p', 'k', sinUsage);
+  assert.equal(r2.text, 'hola');
+  assert.equal(r2.usage, undefined);
 });

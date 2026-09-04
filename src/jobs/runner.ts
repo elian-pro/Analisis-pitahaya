@@ -1,5 +1,5 @@
 import { getJob, updateJob, type Job } from './store';
-import { getClient, clientFileLabel } from '../clients/manager';
+import { getClient, clientFileLabel, planDeEntrega } from '../clients/manager';
 
 class CancelledError extends Error {
   constructor() { super('cancelled'); this.name = 'CancelledError'; }
@@ -13,11 +13,13 @@ import {
   uploadReportSidecar,
   ensureSidecarFolder,
 } from '../google/drive';
-import { processAdvisor, buildSidecar, parseSidecarMetrics, type AdvisorResult } from '../claude/individual';
+import { processAdvisor, buildSidecar, parseSidecarMetrics, MODEL as CLAUDE_MODEL, type AdvisorResult } from '../claude/individual';
 import { processGeneralReport } from '../claude/general';
 import { mergePdfs } from '../pdf/merge';
 import { runRadarForClient } from '../radar/dbFlow';
 import { recordTokens } from '../tokens/store';
+import { costoUSD } from '../tokens/pricing';
+import { pdfVault } from './vault';
 import { recordReportMetrics, previousReportTextFromDb } from '../metrics/store';
 
 async function loadClient(clientId: string) {
@@ -59,6 +61,9 @@ export async function runJob(job: Job): Promise<void> {
   try {
     const client = await loadClient(job.client_id);
     console.log(`[runner] Client loaded: ${client.name}`);
+    // Cómo se entrega este reporte: Drive (gestionados) o descarga efímera
+    // (cliente externo). recordReportMetrics corre SIEMPRE: es el comparativo.
+    const plan = planDeEntrega(client);
 
     // Period label for filenames and templates
     const periodLabel = job.period_type === 'weekly' && job.date_from && job.date_to
@@ -129,10 +134,11 @@ export async function runJob(job: Job): Promise<void> {
 
     updateJob(job.id, { progress: { completed: 0, total: advisorsWithData.length } });
 
-    // ── 3. Resolve sidecar folder ────────────────────────────────────────────
-    const sidecarFolderId = client.sidecar_folder_id
-      ?? await ensureSidecarFolder(client.folder_id);
-    console.log(`[runner] Step 3: sidecar folder = ${sidecarFolderId}`);
+    // ── 3. Resolve sidecar folder (solo entregas por Drive) ──────────────────
+    const sidecarFolderId = plan.drive
+      ? (client.sidecar_folder_id ?? await ensureSidecarFolder(client.folder_id))
+      : null;
+    console.log(`[runner] Step 3: sidecar folder = ${sidecarFolderId ?? '(sin Drive)'}`);
     if (isCancelled()) throw new CancelledError();
 
     // ── 4. Analyze advisors — generate PDFs in memory ────────────────────────
@@ -148,7 +154,9 @@ export async function runJob(job: Job): Promise<void> {
       // Drive sidecar when the DB has nothing (e.g. periods predating this table).
       const prevText   =
         (await previousReportTextFromDb(job.client_id, advisorName, job.month, job.period_type, job.date_from))
-        ?? (await findPreviousReport(sidecarFolderId, advisorName, job.month, job.period_type, job.date_from));
+        ?? (sidecarFolderId
+              ? await findPreviousReport(sidecarFolderId, advisorName, job.month, job.period_type, job.date_from)
+              : null);
       const prevMetrics = prevText ? parseSidecarMetrics(prevText) : null;
       const result      = await processAdvisor(
         advisorName, calls, client, job.month, prevText, prevMetrics, periodLabel,
@@ -209,17 +217,26 @@ export async function runJob(job: Job): Promise<void> {
     const mergedBuffer = await mergePdfs(pdfBuffers);
     console.log(`[runner] Step 6 done: merged PDF size=${mergedBuffer.length}`);
 
-    // ── 7. Upload combined PDF to client folder ──────────────────────────────
-    console.log(`[runner] Step 7: uploading combined PDF to Drive folder ${client.folder_id}...`);
-    const combinedUrl = await uploadPdf(
-      client.folder_id,
-      clientFileLabel(client),
-      job.month,
-      mergedBuffer,
-      job.period_type === 'weekly' ? job.date_from : undefined,
-      job.period_type === 'weekly' ? job.date_to   : undefined,
-    );
-    console.log(`[runner] Step 7 done: combined PDF = ${combinedUrl}`);
+    // ── 7. Entrega: Drive (gestionados) o guarda efímera (cliente externo) ───
+    let combinedUrl: string | undefined;
+    let downloadFilename: string | undefined;
+    if (plan.vault) {
+      downloadFilename = `${clientFileLabel(client)} | Analisis de Llamadas | ` +
+        (job.period_type === 'weekly' && job.date_from ? `Semana ${job.date_from}` : job.month) + '.pdf';
+      pdfVault.put(job.id, mergedBuffer, downloadFilename);
+      console.log(`[runner] Step 7: PDF en guarda efimera (${downloadFilename}, 30 min)`);
+    } else {
+      console.log(`[runner] Step 7: uploading combined PDF to Drive folder ${client.folder_id}...`);
+      combinedUrl = await uploadPdf(
+        client.folder_id,
+        clientFileLabel(client),
+        job.month,
+        mergedBuffer,
+        job.period_type === 'weekly' ? job.date_from : undefined,
+        job.period_type === 'weekly' ? job.date_to   : undefined,
+      );
+      console.log(`[runner] Step 7 done: combined PDF = ${combinedUrl}`);
+    }
 
     // ── 8. Upload sidecars to _Sidecars folder ───────────────────────────────
     // These power next-period comparisons, so a silent failure here means every
@@ -229,7 +246,8 @@ export async function runJob(job: Job): Promise<void> {
     // redundant) and Postgres (primary source for next-period comparison).
     const sidecars = individualResults.map(r => ({ r, text: buildSidecar(r.reportData, periodKey) }));
     const sidecarSettled = await Promise.allSettled(
-      sidecars.map(({ r, text }) => uploadReportSidecar(sidecarFolderId, r.asesor, periodKey, text)),
+      sidecars.map(({ r, text }) =>
+        sidecarFolderId ? uploadReportSidecar(sidecarFolderId, r.asesor, periodKey, text) : Promise.resolve()),
     );
     const sidecarFailures = sidecarSettled
       .map((s, i) => (s.status === 'rejected'
@@ -264,7 +282,7 @@ export async function runJob(job: Job): Promise<void> {
     let radarResult: Awaited<ReturnType<typeof runRadarForClient>> | undefined;
     let radarInput = 0, radarOutput = 0;
     const radarErrors: string[] = [];
-    if (job.include_radar && job.period_type === 'monthly') {
+    if (plan.radar && job.include_radar && job.period_type === 'monthly') {
       if (isCancelled()) throw new CancelledError();
       try {
         console.log(`[runner] Step 8.5: generating Radar de Objeciones for ${client.name}...`);
@@ -285,22 +303,26 @@ export async function runJob(job: Job): Promise<void> {
       input:    totalInput,
       output:   totalOutput,
       total:    totalInput + totalOutput,
-      cost_usd: (totalInput / 1e6) * 3.0 + (totalOutput / 1e6) * 15.0,
+      cost_usd: costoUSD(CLAUDE_MODEL, totalInput, totalOutput),
     };
     console.log(`[runner] Tokens: input=${totalInput} output=${totalOutput} cost=$${tokenSummary.cost_usd.toFixed(4)}`);
 
-    await recordTokens(job.id, job.client_id, totalInput, totalOutput, individualResults.length);
+    await recordTokens({
+      job_id: job.id, client_id: job.client_id, model: CLAUDE_MODEL,
+      input: totalInput, output: totalOutput, advisors: individualResults.length,
+    });
 
     const finalResults = {
       individual: [],
       combined: {
-        driveUrl: combinedUrl,
+        ...(combinedUrl ? { driveUrl: combinedUrl } : {}),
+        ...(downloadFilename ? { download: true as const, filename: downloadFilename } : {}),
         advisors: individualResults.map(r => r.asesor),
       },
       ...(radarResult && { radar: { driveUrl: radarResult.driveUrl } }),
       tokens: tokenSummary,
     };
-    console.log(`[runner] Step 9: finalising job, combined.driveUrl=${combinedUrl}`);
+    console.log(`[runner] Step 9: finalising job, combined=${combinedUrl ?? downloadFilename}`);
     const partialErrors = [
       ...failures,
       ...sidecarFailures.map(f => `sidecar ${f} (sin comparación el próximo periodo)`),

@@ -29,6 +29,8 @@ export interface TranscribeResult {
   text:    string;
   /** true si el modelo lo clasificó como buzón/contestadora. */
   esBuzon: boolean;
+  /** Tokens reportados por Gemini. Ausente si la respuesta no los trae. */
+  usage?:  { input: number; output: number };
 }
 
 /**
@@ -92,9 +94,16 @@ export async function transcribeAudio(
 
   const data = await res.json() as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
   };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   if (!text) throw new Error('Gemini devolvió una respuesta sin texto');
 
-  return { text, esBuzon: esBuzonDeVoz(text) };
+  // La telemetría es opcional: sin usageMetadata el resultado sigue siendo válido.
+  const u = data.usageMetadata;
+  const usage = u && (u.promptTokenCount ?? u.candidatesTokenCount) !== undefined
+    ? { input: u.promptTokenCount ?? 0, output: u.candidatesTokenCount ?? 0 }
+    : undefined;
+
+  return { text, esBuzon: esBuzonDeVoz(text), usage };
 }

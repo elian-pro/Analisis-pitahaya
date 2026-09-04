@@ -54,7 +54,7 @@ export interface ClientConfig {
   //
   // Vacío = 'sheets', para que los clientes existentes no cambien de conducta
   // por el mero hecho de desplegar esto.
-  calls_source?:           'sheets' | 'postgres';
+  calls_source?:           'sheets' | 'postgres' | 'cliente_pg';
   // Schema de la base de Callpicker (p. ej. 'Midstorage_callpicker'). VARIOS
   // clientes pueden apuntar al mismo: Midstorage y Grupo Tactical comparten
   // cuenta y lo que los separa es su roster de asesores.
@@ -121,6 +121,19 @@ export function reportsFolderName(clientName: string): string {
 }
 export function radarFolderName(clientName: string): string {
   return `${clientName} | Radar de Objeciones IA`;
+}
+
+// ── Plan de entrega de un reporte ────────────────────────────────────────────
+// Un cliente gestionado entrega por Drive (con sidecars redundantes y Radar);
+// un cliente externo (cliente_pg) entrega por descarga efímera y NADA toca
+// Drive ni Chat. recordReportMetrics no aparece aquí a propósito: corre
+// siempre, es lo que sostiene el comparativo periodo-a-periodo sin Drive.
+export interface DeliveryPlan { drive: boolean; sidecarsDrive: boolean; radar: boolean; vault: boolean }
+
+export function planDeEntrega(c: Pick<ClientConfig, 'calls_source'>): DeliveryPlan {
+  return c.calls_source === 'cliente_pg'
+    ? { drive: false, sidecarsDrive: false, radar: false, vault: true }
+    : { drive: true,  sidecarsDrive: true,  radar: true,  vault: false };
 }
 
 // Qué carpetas crear en la ubicación elegida. Ambas por defecto; el formulario

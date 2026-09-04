@@ -4,6 +4,8 @@ import { loadClients } from '../clients/manager';
 import { listAdvisors } from '../advisors/store';
 import { normalizeAdvisorName } from '../advisors/match';
 import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registry';
+import { tenantCuenta } from '../calls/tenant';
+import type { AuthedRequest } from '../auth/middleware';
 import {
   listCalls, getCall, countByEstado, asesoresDelPeriodo, reactivarFallidas,
   type CallEstadoUI,
@@ -148,6 +150,21 @@ router.post('/activar', async (req: Request, res: Response): Promise<void> => {
  */
 router.get('/cuentas', async (_req: Request, res: Response): Promise<void> => {
   try {
+    // Cliente externo: su única cuenta es su propia base. Nada del registro de
+    // Callpicker (ni sus slugs, ni sus contadores) sale hacia un tenant.
+    const user = (_req as AuthedRequest).user;
+    if (user?.role === 'client') {
+      const cuenta = await tenantCuenta(user.client_id!);
+      if (!cuenta) { res.json({ desde: null, cuentas: [] }); return; }
+      let counts: Record<string, number> | null = null;
+      try { counts = await countByEstado(cuenta, undefined, minDuracion(undefined)); }
+      catch (e) { console.warn(`[calls] contadores de ${cuenta.slug}:`, (e as Error).message); }
+      res.json({ desde: null, cuentas: [{
+        ...cuenta, tiene_cliente: true, auto: true, configurado: true,
+        desde: null, contexto_propio: false, clientes: [], counts,
+      }] });
+      return;
+    }
     const [cuentas, clients, configs] = await Promise.all([
       listCuentas(), loadClients(), listConfigs(),
     ]);
@@ -195,7 +212,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
     return;
   }
-  const { cuenta: slug, estado, desde, hasta, limit } = parsed.data;
+  let { cuenta: slug } = parsed.data;
+  const { estado, desde, hasta, limit } = parsed.data;
+  const user = (req as AuthedRequest).user;
+  // El tenant queda clavado a su propia cuenta pida lo que pida.
+  if (user?.role === 'client') slug = user.client_id!;
   try {
     // Sin cuenta explícita se usa la primera habilitada; hoy solo hay una.
     const cuenta = slug ? await getCuenta(slug) : (await listCuentasHabilitadas())[0];
@@ -433,6 +454,13 @@ router.post('/origenes/:esquema/config', async (req: Request, res: Response): Pr
 
 router.get('/:slug/:call_id', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Un tenant solo puede abrir llamadas de su propia cuenta. 404 y no 403:
+    // no se confirma que el slug ajeno exista.
+    const user = (req as AuthedRequest).user;
+    if (user?.role === 'client' && req.params.slug !== user.client_id) {
+      res.status(404).json({ error: 'Cuenta no encontrada' });
+      return;
+    }
     const cuenta = await getCuenta(req.params.slug);
     if (!cuenta) { res.status(404).json({ error: 'Cuenta no encontrada' }); return; }
     const call = await getCall(cuenta, req.params.call_id);

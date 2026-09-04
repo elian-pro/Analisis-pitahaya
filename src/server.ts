@@ -21,8 +21,12 @@ import driveRouter from './routes/drive';
 import oauthSetupRouter from './routes/oauthSetup';
 import callsRouter from './routes/calls';
 import zcisRouter from './routes/zcis';
+import usersRouter from './routes/users';
+import tenantDbRouter from './routes/tenantDb';
 import authRouter from './auth/router';
-import { requireApiAuth, requirePage } from './auth/middleware';
+import { requireApiAuth, requirePage, enforcePolicy } from './auth/middleware';
+import { authConfig } from './auth/config';
+import { anyUserExists } from './auth/users';
 import { startScheduler } from './schedules/runner';
 import { startCallsSweeper } from './calls/sweeper';
 
@@ -31,7 +35,9 @@ const app = express();
 // Behind EasyPanel's reverse proxy: trust X-Forwarded-Proto so secure cookies work.
 app.set('trust proxy', 1);
 
-app.use(cors());
+// CORS restringido: sin origen configurado no se emite Allow-Origin '*'.
+// La SPA se sirve desde este mismo servicio, así que same-origin basta.
+app.use(cors({ origin: process.env.APP_BASE_URL || false }));
 app.use(express.json({ limit: '10mb' }));
 
 const staticDir = path.join(__dirname, '..');
@@ -43,6 +49,7 @@ app.get('/login', (_req, res) => res.sendFile(path.join(staticDir, 'login.html')
 
 // ── Protected API (401 JSON when unauthenticated; no-op when auth disabled) ────
 app.use('/api', requireApiAuth);
+app.use('/api', enforcePolicy);            // política por rol/tenant (auth/policy.ts)
 app.use('/api/advisors', advisorsRouter);
 app.use('/api/report', reportRouter);
 app.use('/api/stats', statsRouter);
@@ -55,6 +62,8 @@ app.use('/api/drive', driveRouter);            // selector de carpetas de Drive
 app.use('/api/oauth', oauthSetupRouter);       // setup OAuth cuenta central (Sheets/Drive)
 app.use('/api/calls', callsRouter);            // monitoreo del pipeline de llamadas
 app.use('/api/zcis', zcisRouter);              // oferta del cliente desde el panel ZCIS
+app.use('/api/users', usersRouter);            // usuarios externos (admin)
+app.use('/api/tenant/db', tenantDbRouter);     // conexion a la base del cliente externo
 
 // ── Protected frontend (redirect to /login when unauthenticated) ──────────────
 app.use(requirePage);
@@ -74,6 +83,20 @@ async function bootstrap(): Promise<void> {
     await seedTokenLogFromFileIfEmpty();
   } else {
     console.log('📄 No DATABASE_URL — using JSON files (data will NOT survive redeploys)');
+  }
+
+  // Sin secreto fijo, cada deploy invalida todas las sesiones (el secreto se
+  // regenera por arranque). Tolerable en dev; no en producción con base.
+  if (dbEnabled && authConfig.enabled && !(process.env.AUTH_SESSION_SECRET ?? '').trim()) {
+    throw new Error('AUTH_SESSION_SECRET es obligatorio cuando hay DATABASE_URL: sin él, cada deploy cierra todas las sesiones.');
+  }
+  // Con usuarios externos dados de alta, correr sin autenticación sería dejar
+  // la data de los tenants abierta a internet. Mejor no arrancar.
+  if (!authConfig.enabled && (await anyUserExists())) {
+    throw new Error(
+      'Hay usuarios externos en la base pero GOOGLE_OAUTH_CLIENT_ID no está definido: ' +
+      'la app correría abierta. Configura la autenticación antes de arrancar.',
+    );
   }
 
   // Load existing jobs into the in-memory cache (from Postgres or the JSON file)

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
 import { authConfig } from './config';
+import { emailAllowed } from './google';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sesión sin estado: un token HMAC-SHA256 firmado, guardado en una cookie
@@ -9,24 +10,42 @@ import { authConfig } from './config';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const COOKIE_NAME = 'zr_session';
-const MAX_AGE_MS  = 12 * 60 * 60 * 1000; // 12 horas
+const MAX_AGE_MS        = 12 * 60 * 60 * 1000; // admin: 12 horas
+const CLIENT_MAX_AGE_MS =  2 * 60 * 60 * 1000; // cliente externo: ventana de revocación menor
 
 export interface SessionUser {
   email: string;
   name?: string;
+  /** admin = correo del dominio de la agencia; client = usuario externo con contraseña. */
+  role: 'admin' | 'client';
+  /** Tenant al que pertenece un rol client. Un admin no lo lleva. */
+  client_id?: string;
+  /** Versión de sesión del usuario externo: cambiarla en la base revoca sus cookies. */
+  v?: number;
+}
+
+function maxAgeMs(role: SessionUser['role']): number {
+  return role === 'client' ? CLIENT_MAX_AGE_MS : MAX_AGE_MS;
 }
 
 function sign(data: string): string {
   return crypto.createHmac('sha256', authConfig.sessionSecret).update(data).digest('base64url');
 }
 
-function createToken(user: SessionUser): string {
-  const payload = { sub: user.email, name: user.name ?? '', exp: Date.now() + MAX_AGE_MS };
+export function createToken(user: SessionUser): string {
+  const payload = {
+    sub:  user.email,
+    name: user.name ?? '',
+    exp:  Date.now() + maxAgeMs(user.role),
+    role: user.role,
+    ...(user.client_id ? { cid: user.client_id } : {}),
+    ...(user.v !== undefined ? { v: user.v } : {}),
+  };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${body}.${sign(body)}`;
 }
 
-function verifyToken(token: string): SessionUser | null {
+export function verifyToken(token: string): SessionUser | null {
   const dot = token.indexOf('.');
   if (dot < 0) return null;
 
@@ -42,7 +61,22 @@ function verifyToken(token: string): SessionUser | null {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (typeof payload.sub !== 'string') return null;
     if (typeof payload.exp !== 'number' || Date.now() > payload.exp) return null;
-    return { email: payload.sub, name: payload.name || undefined };
+    // Compatibilidad con cookies emitidas antes de los roles: un payload sin
+    // `role` solo puede ser de la agencia (era el único login), así que se
+    // acepta como admin si el dominio sigue permitido; cualquier otro muere.
+    const role: SessionUser['role'] | null =
+      payload.role === 'admin' || payload.role === 'client'
+        ? payload.role
+        : (emailAllowed(payload.sub) ? 'admin' : null);
+    if (!role) return null;
+    if (role === 'client' && typeof payload.cid !== 'string') return null;
+    return {
+      email: payload.sub,
+      name:  payload.name || undefined,
+      role,
+      client_id: role === 'client' ? payload.cid : undefined,
+      v: typeof payload.v === 'number' ? payload.v : undefined,
+    };
   } catch {
     return null;
   }
@@ -71,7 +105,7 @@ export function setSessionCookie(res: Response, user: SessionUser): void {
     httpOnly: true,
     secure:   authConfig.cookieSecure,
     sameSite: 'lax',
-    maxAge:   MAX_AGE_MS,
+    maxAge:   maxAgeMs(user.role),
     path:     '/',
   });
 }

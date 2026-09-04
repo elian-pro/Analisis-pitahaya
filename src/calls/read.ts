@@ -4,7 +4,9 @@ import {
   getAdvisors, getAdvisorsForMonth,
   type CallRow, type SheetColumns,
 } from '../google/sheets';
+import type { Pool } from 'pg';
 import { getCallDataFromDb, getAdvisorCallCountsFromDb, getAdvisorNamesFromDb } from './source';
+import { getTenantDbConfig, tenantPool, TENANT_SCHEMA_DEFAULT } from './tenant';
 import { normalizeAdvisorName } from '../advisors/match';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,8 +18,11 @@ import { normalizeAdvisorName } from '../advisors/match';
 // que dentro de un mes haya tres sitios distintos preguntando lo mismo.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 'cliente_pg' (la base propia de un cliente externo) lleva el MISMO esquema
+// que el pipeline de Callpicker, así que comparte la rama postgres entera: lo
+// único que cambia es el pool y de dónde sale el nombre del schema (dbTarget).
 export const fuenteDe = (c: ClientConfig): 'sheets' | 'postgres' =>
-  c.calls_source === 'postgres' ? 'postgres' : 'sheets';
+  c.calls_source === 'postgres' || c.calls_source === 'cliente_pg' ? 'postgres' : 'sheets';
 
 export interface ReadOpts {
   month:        string;
@@ -29,19 +34,26 @@ export interface ReadOpts {
   roster?:      string[];
 }
 
-function requireEsquema(client: ClientConfig): string {
+async function dbTarget(client: ClientConfig): Promise<{ esquema: string; pool?: Pool }> {
+  if (client.calls_source === 'cliente_pg') {
+    const cfg = await getTenantDbConfig(client.id);
+    if (!cfg) {
+      throw new Error(`El cliente '${client.name}' no tiene su base de datos configurada todavía.`);
+    }
+    return { esquema: cfg.schema || TENANT_SCHEMA_DEFAULT, pool: await tenantPool(client.id, cfg) };
+  }
   if (!client.calls_schema) {
     throw new Error(
       `El cliente '${client.name}' está configurado con fuente Postgres pero no tiene schema de llamadas.`,
     );
   }
-  return client.calls_schema;
+  return { esquema: client.calls_schema };
 }
 
 export async function readCalls(client: ClientConfig, o: ReadOpts): Promise<CallRow[]> {
   if (fuenteDe(client) === 'postgres') {
     return getCallDataFromDb({
-      esquema:     requireEsquema(client),
+      ...(await dbTarget(client)),
       roster:      o.roster,
       month:       o.month,
       dateFrom:    o.dateFrom,
@@ -90,7 +102,7 @@ export async function readAdvisorCallCounts(
 ): Promise<Map<string, number>> {
   const crudo = fuenteDe(client) === 'postgres'
     ? await getAdvisorCallCountsFromDb({
-        esquema:     requireEsquema(client),
+        ...(await dbTarget(client)),
         month:       o.month,
         dateFrom:    o.dateFrom,
         dateTo:      o.dateTo,
@@ -121,7 +133,7 @@ export async function readAdvisorCallCounts(
  */
 export async function readRosterNames(client: ClientConfig, month: string): Promise<string[]> {
   if (fuenteDe(client) === 'postgres') {
-    return [...await getAdvisorNamesFromDb({ esquema: requireEsquema(client), month })];
+    return [...await getAdvisorNamesFromDb({ ...(await dbTarget(client)), month })];
   }
   const rows = client.advisors_sheet_name
     ? await getAdvisors(client.spreadsheet_id, client.advisors_sheet_name, client.col_asesor)
@@ -138,7 +150,7 @@ export async function readAdvisorNamesWithCalls(
 ): Promise<Set<string>> {
   const crudo = fuenteDe(client) === 'postgres'
     ? await getAdvisorNamesFromDb({
-        esquema:     requireEsquema(client),
+        ...(await dbTarget(client)),
         month:       o.month,
         dateFrom:    o.dateFrom,
         dateTo:      o.dateTo,

@@ -76,3 +76,20 @@ test('un error de la API conserva el motivo', async () => {
   const { fn } = openaiFake('', { ok: false, status: 429 });
   await assert.rejects(() => analyzeTranscript('t', 's', 'k', fn), /429.*insufficient_quota/s);
 });
+
+test('captura usage cuando OpenAI lo manda, y sin el sigue valido', async () => {
+  const conUsage = (async () => ({
+    ok: true, status: 200,
+    json: async () => ({
+      choices: [{ message: { content: JSON.stringify(COMPLETO) } }],
+      usage: { prompt_tokens: 900, completion_tokens: 60 },
+    }),
+  })) as unknown as typeof globalThis.fetch;
+  const r1 = await analyzeTranscript('t', 'p', 'k', conUsage);
+  assert.deepEqual(r1.usage, { input: 900, output: 60 });
+
+  const { fn } = openaiFake(JSON.stringify(COMPLETO));
+  const r2 = await analyzeTranscript('t', 'p', 'k', fn);
+  assert.equal(r2.usage, undefined);              // telemetria ausente ≠ error
+  assert.equal(r2.TIPO_CONTACTO, COMPLETO.TIPO_CONTACTO);
+});

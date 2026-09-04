@@ -2,6 +2,8 @@ import { loadClients } from '../clients/manager';
 import { listCuentasHabilitadas, logCuentas } from './registry';
 import { listPendientes } from './store';
 import { getConfig, ensureConfigTable, debeBarrer } from './config';
+import { cuentasTenant, configDeTenant } from './tenant';
+import { callsDbEnabled } from './db';
 import { processCall, matchClient, minDuracion } from './pipeline';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +49,12 @@ export async function sweepOnce(lote = LOTE): Promise<SweepResult> {
   if (_corriendo) return NADA();
   _corriendo = true;
   try {
-    const cuentas = await listCuentasHabilitadas();
+    // Dos poblaciones: las cuentas de Callpicker (si esa base está configurada)
+    // y las bases propias de clientes externos. El pipeline es el mismo.
+    const cuentas = [
+      ...(callsDbEnabled() ? await listCuentasHabilitadas() : []),
+      ...await cuentasTenant(),
+    ];
     if (cuentas.length === 0) return NADA();
 
     const clients = await loadClients();
@@ -56,25 +63,30 @@ export async function sweepOnce(lote = LOTE): Promise<SweepResult> {
 
     for (const cuenta of cuentas) {
       if (procesadas >= lote) break;
-      const cfg = await getConfig(cuenta.esquema);
-      // El interruptor de Ajustes. Va aquí y no en listCuentasHabilitadas para
-      // que "Reprocesar pendientes" —que llama a este mismo sweepOnce— lo
-      // respete gratis. Procesar UNA llamada a mano desde su fila no pasa por
-      // aquí, y así debe ser: es un acto humano explícito.
-      if (!debeBarrer(cfg)) { pausados.push(cuenta.slug); continue; }
-      const pendientes = await listPendientes(cuenta, {
-        minDuracion: minDuracion(matchClient(cuenta, clients)),
-        desde:       cfg?.desde ?? DESDE,
-        maxIntentos: MAX_INTENTOS,
-        limit:       lote - procesadas,
-      });
+      // Una base tenant caída no puede frenar el barrido de las demás cuentas.
+      try {
+        const cfg = cuenta.tenant ? await configDeTenant(cuenta) : await getConfig(cuenta.esquema);
+        // El interruptor de Ajustes. Va aquí y no en listCuentasHabilitadas para
+        // que "Reprocesar pendientes" —que llama a este mismo sweepOnce— lo
+        // respete gratis. Procesar UNA llamada a mano desde su fila no pasa por
+        // aquí, y así debe ser: es un acto humano explícito.
+        if (!debeBarrer(cfg)) { pausados.push(cuenta.slug); continue; }
+        const pendientes = await listPendientes(cuenta, {
+          minDuracion: minDuracion(matchClient(cuenta, clients)),
+          desde:       cfg?.desde ?? DESDE,
+          maxIntentos: MAX_INTENTOS,
+          limit:       lote - procesadas,
+        });
 
-      // En serie a propósito: son reintentos de algo que suele haber fallado
-      // porque el proveedor estaba saturado, y golpearlo en paralelo lo empeora.
-      for (const call of pendientes) {
-        const r = await processCall(cuenta.slug, call.call_id);
-        procesadas++;
-        if (!r.ok) fallidas++;
+        // En serie a propósito: son reintentos de algo que suele haber fallado
+        // porque el proveedor estaba saturado, y golpearlo en paralelo lo empeora.
+        for (const call of pendientes) {
+          const r = await processCall(cuenta.slug, call.call_id);
+          procesadas++;
+          if (!r.ok) fallidas++;
+        }
+      } catch (e) {
+        console.warn(`[calls/sweep] ${cuenta.slug}: ${(e as Error).message}`);
       }
     }
 
@@ -111,9 +123,9 @@ export function startCallsSweeper(): void {
   // no esperaba, y ahora sí importa: sin la columna `auto`, getConfig no puede
   // leer el interruptor y el arranque se saltaría todos los orígenes hasta el
   // segundo tick.
-  void ensureConfigTable()
+  void (callsDbEnabled() ? ensureConfigTable() : Promise.resolve())
     .catch(e => console.warn('[calls] config:', e.message))
-    .then(() => { void logCuentas(); return sweepOnce(); });
+    .then(() => { if (callsDbEnabled()) void logCuentas(); return sweepOnce(); });
   console.log(`[calls/sweep] barrido activo (cada 60 s, desde ${DESDE})`);
 }
 

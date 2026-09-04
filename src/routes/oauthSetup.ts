@@ -153,16 +153,20 @@ router.get('/google/callback', async (req: Request, res: Response): Promise<void
       return;
     }
 
+    // El token NO se manda al navegador: es la llave del Drive y las hojas de
+    // toda la agencia, y una página con él queda en el historial, capturas y
+    // cachés. Se escribe en el log del servidor, que solo ve quien opera.
+    console.log('[oauth-setup] GOOGLE_OAUTH_REFRESH_TOKEN obtenido. Cópialo del log a EasyPanel:');
+    console.log(`[oauth-setup] ${tokens.refresh_token}`);
     res.type('html').send(page('Refresh token obtenido',
       `<h1 class="ok">Refresh token obtenido ✓</h1>
-       <p>Copia este valor y ponlo como variable de entorno <code>GOOGLE_OAUTH_REFRESH_TOKEN</code> en EasyPanel:</p>
-       <textarea readonly onclick="this.select()">${esc(tokens.refresh_token)}</textarea>
+       <p>Por seguridad el token no se muestra aquí: quedó impreso en el <strong>log del servidor</strong>
+       (EasyPanel → Service → Logs, búscalo como <code>[oauth-setup]</code>).</p>
        <ol>
+         <li>Copia el token desde el log.</li>
          <li>Pégalo en <code>GOOGLE_OAUTH_REFRESH_TOKEN</code> (Service → Environment).</li>
          <li>Redespliega el servicio para que tome la variable.</li>
-         <li>Listo: la app leerá Sheets y subirá los PDFs con la cuenta central.</li>
-       </ol>
-       <p style="color:#c0271a"><strong>No compartas este token:</strong> da acceso a las hojas y al Drive de la cuenta central.</p>`));
+       </ol>`));
   } catch (e) {
     res.status(500).type('html').send(page('Error al obtener el token',
       `<h1 class="err">No se pudo intercambiar el código</h1><p>${esc((e as Error).message)}</p>

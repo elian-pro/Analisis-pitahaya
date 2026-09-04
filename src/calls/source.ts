@@ -1,3 +1,4 @@
+import type { Pool } from 'pg';
 import { callsDb, quoteIdent } from './db';
 import type { CallRow as SheetCallRow } from '../google/sheets';
 
@@ -20,6 +21,8 @@ export type { SheetCallRow as CallRow };
 export interface DbCallQuery {
   /** Schema donde viven `llamadas` y `analisis`. */
   esquema:      string;
+  /** Pool a usar. Default: la base de Callpicker. Un cliente externo pasa el suyo. */
+  pool?:        Pool;
   /** Solo estos asesores. Es lo que separa a dos clientes que comparten cuenta. */
   roster?:      string[];
   month?:       string;   // YYYY-MM
@@ -62,7 +65,7 @@ export async function getCallDataFromDb(q: DbCallQuery): Promise<SheetCallRow[]>
     add(`lower(btrim(l.asesor)) = ANY(?)`, q.roster.map(n => n.trim().toLowerCase()));
   }
 
-  const { rows } = await callsDb().query(
+  const { rows } = await (q.pool ?? callsDb()).query(
     `SELECT to_char(${TZ}, 'YYYY-MM-DD') AS fecha,
             COALESCE(l.asesor, '')            AS asesor,
             COALESCE(a.calif_global::text,'') AS calif,

@@ -4,6 +4,7 @@ import multer from 'multer';
 import { getClient, clientFileLabel } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
+import { pdfVault } from '../jobs/vault';
 import { findSidecarFolder, findPreviousPeriodKey, findRadarSidecar, monthLabel, previousMonth, uploadPdfNamed, radarFilename } from '../google/drive';
 import { listAdvisors } from '../advisors/store';
 import { previousPeriodKeyFromDb } from '../metrics/store';
@@ -299,7 +300,7 @@ router.get('/previous', async (req: Request, res: Response): Promise<void> => {
     // Fallback to Drive sidecars when the DB has nothing (e.g. periods generated
     // before report_metrics existed). Read-only: never create a _Sidecars folder
     // from a GET — a missing folder just means "first period".
-    if (!prevKey) {
+    if (!prevKey && client.folder_id) { // un cliente externo no tiene Drive: su comparativo vive solo en la base
       const sidecarFolderId = client.sidecar_folder_id
         ?? await findSidecarFolder(client.folder_id);
       if (sidecarFolderId) {
@@ -384,6 +385,27 @@ router.get('/radar-preflight', async (req: Request, res: Response): Promise<void
     advisor_count: advisorCount,
     ...previous,
   });
+});
+
+// GET /api/report/:jobId/download — descarga efímera del cliente externo.
+// De UN solo uso: entregar borra el buffer (jobs/vault.ts). La política ya
+// validó que el job sea del tenant que lo pide.
+router.get('/:jobId/download', (req: Request, res: Response): void => {
+  const job = getJob(req.params.jobId);
+  if (!job) {
+    res.status(404).json({ error: `Job '${req.params.jobId}' not found` });
+    return;
+  }
+  const hit = pdfVault.take(req.params.jobId);
+  if (!hit) {
+    // 410 y no 404: el job existe, el archivo ya no. La UI usa el texto tal cual.
+    res.status(410).json({ error: 'El archivo expiró o el servidor se reinició. Genera el reporte de nuevo.' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${hit.filename.replace(/"/g, '')}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(hit.buf);
 });
 
 // GET /api/report/:jobId — poll job status

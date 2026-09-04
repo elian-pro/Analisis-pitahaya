@@ -22,7 +22,7 @@ interface ClientForAnalysis {
 }
 
 const MAX_RETRIES = 3;
-const MODEL       = 'claude-sonnet-4-6';
+export const MODEL = 'claude-sonnet-4-6';
 
 
 let _claude: Anthropic | null = null;

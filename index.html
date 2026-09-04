@@ -38,12 +38,13 @@
       --sb-bg:#0A0A0A;--sb-fg:#F5F5F5;--sb-muted:#8A8A8A;--sb-faint:#5A5A5A;--sb-border:#262626;
       --sb-hover:#1C1C1C;--sb-active-bg:#FFFFFF;--sb-active-fg:#0A0A0A;
     }
-    .sb-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 16px 16px;}
-    .sb-brand{display:flex;align-items:center;gap:11px;min-width:0;}
-    .sb-brand-text{min-width:0;}
-    .logo-box{width:36px;height:36px;background:#0A0A0A;border:0.5px solid rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;}
-    .brand-name{font-size:12px;font-weight:600;letter-spacing:0.18em;color:var(--sb-fg);}
-    .brand-sub{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;color:var(--sb-muted);letter-spacing:0.16em;text-transform:uppercase;margin-top:3px;}
+    .sb-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:22px 18px 14px;}
+    .sb-brand{min-width:0;}
+    /* ZR-11: fijar UNA sola dimension, la otra auto. ZR-12: el wordmark es currentColor,
+       asi que sigue a --sb-fg (negro sobre barra clara, blanco sobre barra negra). */
+    .sb-word{display:block;width:116px;height:auto;color:var(--sb-fg);}
+    .logo-box{display:none;width:36px;height:36px;background:#0A0A0A;border:0.5px solid rgba(255,255,255,0.12);border-radius:10px;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;}
+    .brand-sub{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;color:var(--sb-muted);letter-spacing:0.16em;text-transform:uppercase;margin-top:7px;}
     .sb-collapse{width:30px;height:30px;flex-shrink:0;border-radius:50%;border:0.5px dashed var(--sb-border);background:transparent;color:var(--sb-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:color .15s,border-color .15s;}
     .sb-collapse:hover{color:var(--sb-fg);border-color:var(--sb-muted);}
     .sb-collapse i{transition:transform .2s cubic-bezier(.16,1,.3,1);}
@@ -53,15 +54,18 @@
     .theme-btn i{font-size:15px;color:var(--sb-muted);flex-shrink:0;}
     .theme-pill{margin-left:auto;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:0.1em;background:var(--sb-active-bg);color:var(--sb-active-fg);border-radius:999px;padding:3px 8px;}
     .app-body{flex:1;min-width:0;display:flex;flex-direction:column;}
-    .topbar{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:0.5px solid var(--border);padding:22px 48px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
-    .topbar-title{font-size:20px;font-weight:600;letter-spacing:-0.01em;color:var(--fg);}
-    .topbar-sep{color:var(--border2);}
-    .topbar-sub{font-size:12px;color:var(--muted);}
+    .topbar{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:0.5px solid var(--border);padding:20px 48px;}
+    .topbar-title{display:block;font-size:19px;font-weight:600;letter-spacing:-0.01em;color:var(--fg);}
+    .topbar-sub{display:block;font-size:12px;color:var(--muted);margin-top:4px;}
+    /* Icono lucide/tabler pegado a un texto. Hereda tamaño del contenedor (ZR-03, ZR-19). */
+    .ti-lead{margin-right:.5em;vertical-align:-.1em;}
     .main{max-width:1060px;width:100%;margin:0 auto;padding:40px 48px;position:relative;z-index:1;}
     /* Colapsada: solo iconos. Los rotulos se ocultan, nada cambia de grosor (ZR-14). */
     body.nav-collapsed .sidebar{width:68px;}
-    body.nav-collapsed .sb-head{flex-direction:column;gap:12px;padding:18px 0;}
-    body.nav-collapsed .sb-brand-text,
+    body.nav-collapsed .sb-head{flex-direction:column;align-items:center;gap:12px;padding:18px 0;}
+    body.nav-collapsed .logo-box{display:flex;}
+    body.nav-collapsed .sb-word,
+    body.nav-collapsed .brand-sub,
     body.nav-collapsed .app-tab span,
     body.nav-collapsed .sb-lbl,
     body.nav-collapsed .theme-pill,
@@ -565,10 +569,8 @@
   <div class="sb-head">
     <div class="sb-brand">
       <div class="logo-box"><img src="Logo%20Zebra%20Blanco.png" alt="Zebra" style="width:26px;height:26px;object-fit:contain;"></div>
-      <div class="sb-brand-text">
-        <div class="brand-name">ZEBRA</div>
-        <div class="brand-sub">Reports AI</div>
-      </div>
+      <svg class="sb-word" viewBox="0 0 244 39" role="img" aria-label="Zebra" fill="none" xmlns="http://www.w3.org/2000/svg"> <path fill-rule="evenodd" clip-rule="evenodd" d="M131.868 25.8267C131.001 22.2349 128.485 20.097 124.971 18.8142C125.449 18.5149 125.839 18.2583 126.186 18.0445C130.394 15.3079 131.478 10.305 128.702 6.11461C126.533 2.86489 123.323 1.28279 119.462 1.15451C114.517 1.02623 109.616 1.11175 104.671 1.11175C104.454 1.11175 104.193 1.15451 103.933 1.15451V38.0987C104.193 38.0987 104.367 38.1415 104.584 38.1415C109.919 38.1415 115.255 38.1842 120.59 38.0987C121.978 38.0987 123.41 37.7994 124.711 37.3718C130.003 35.7042 133.04 30.7013 131.868 25.8267ZM127.791 28.1358C127.661 31.4282 124.841 34.2076 121.198 34.2931C116.946 34.4214 112.695 34.3359 108.314 34.3359V4.9601C112.218 4.9601 116.079 4.83182 119.94 5.00286C123.28 5.1739 125.839 7.86775 125.882 10.9037C125.926 13.4692 124.494 15.7783 122.195 16.7617C121.935 16.89 121.675 16.9755 121.545 17.0183C121.501 17.0183 121.501 17.0183 121.458 17.061C120.59 17.3604 119.94 18.2156 119.94 19.199C119.94 20.3535 120.807 21.2942 121.935 21.4225C125.622 21.8501 127.921 24.715 127.791 28.1358Z" fill="currentColor"/> <path fill-rule="evenodd" clip-rule="evenodd" d="M54.1788 38.0987V1.19727H79.0343V4.91734H58.56V17.3176H70.1852V21.166H58.6034V34.3359H79.7717V38.0987" fill="currentColor"/> <path fill-rule="evenodd" clip-rule="evenodd" d="M24.4217 4.91734H1.21458V1.19727H32.0996C23.9445 12.272 15.8763 23.2184 7.67787 34.3786H31.4923V38.0987H0C8.15502 27.024 16.2233 16.0776 24.4217 4.91734Z" fill="currentColor"/> <path fill-rule="evenodd" clip-rule="evenodd" d="M224.697 0L205.307 38.1842H209.948C209.948 38.1842 212.898 32.54 214.026 30.1455H235.281C236.452 32.54 239.359 38.1842 239.359 38.1842H244L224.697 0ZM216.021 26.2116L224.697 8.68018L233.416 26.2543H216.021V26.2116Z" fill="currentColor"/> <path d="M185.961 35.02C185.7 35.02 185.483 35.0628 185.266 35.0628C184.009 35.1056 182.967 34.678 182.143 33.7373C181.84 33.3952 181.579 33.0531 181.232 32.54C179.28 29.6751 177.372 26.853 175.246 23.6888C180.538 22.577 184.529 17.959 184.529 12.443C184.529 6.07185 179.237 0.940709 172.73 0.940709H156.637V38.3553H160.585V24.0308H170.952L171.299 24.544C171.993 25.5702 172.687 26.5964 173.338 27.6226C175.029 30.1882 176.808 32.8821 178.586 35.4904C179.931 37.4146 182.057 38.5263 184.442 38.5263C185.093 38.5263 185.7 38.4408 186.351 38.2698L186.524 38.227V35.02M172.73 20.3963H160.585V4.57527H172.73C177.198 4.57527 180.842 8.12431 180.842 12.4858C180.842 16.8472 177.198 20.3963 172.73 20.3963Z" fill="currentColor"/> </svg>
+      <div class="brand-sub">Reports AI</div>
     </div>
     <button class="sb-collapse" onclick="toggleNav()" id="nav-collapse-btn" aria-label="Contraer menú" title="Contraer menú">
       <i class="ti ti-chevron-left" aria-hidden="true"></i>
@@ -595,8 +597,7 @@
 </aside>
 <div class="app-body">
 <header class="topbar">
-  <span class="topbar-title" id="topbar-title">Reportes y Auditorías</span>
-  <span class="topbar-sep" aria-hidden="true">|</span>
+  <span class="topbar-title" id="topbar-title">Reportes</span>
   <span class="topbar-sub" id="topbar-sub">Generación inteligente y análisis directivo de asesores comerciales</span>
 </header>
 <main class="main">
@@ -634,7 +635,7 @@
   <div id="drive-link-wrap" style="display:none;margin-bottom:16px;">
     <a id="drive-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-block">
       <div class="drive-block-left">
-        <div class="drive-block-icon">📁</div>
+        <div class="drive-block-icon"><i class="ti ti-folder"></i></div>
         <div>
           <div class="drive-block-title">Carpeta de Google Drive</div>
           <div class="drive-block-sub" id="drive-block-client"></div>
@@ -646,7 +647,7 @@
   <div class="section-label">Asesores y generación de reporte</div>
   <div class="grid-2">
     <div class="card">
-      <div class="card-title">👥 Seleccionar asesores</div>
+      <div class="card-title"><i class="ti ti-users ti-lead"></i>Seleccionar asesores</div>
       <div class="card-desc">El sistema genera un reporte individual por cada asesor seleccionado y luego sintetiza un reporte general del equipo en un único Google Doc.</div>
       <div class="check-actions">
         <button class="link-btn" onclick="toggleAll(true)">Todos</button>
@@ -683,10 +684,10 @@
       <div class="selected-summary"><span id="selected-count">0</span> asesor(es) seleccionado(s) → <span id="selected-count2">0</span> reporte(s) individual(es) + 1 reporte general</div>
     </div>
     <div class="card">
-      <div class="card-title">📊 Generar reporte</div>
+      <div class="card-title"><i class="ti ti-chart-bar ti-lead"></i>Generar reporte</div>
       <div class="card-desc">El sistema analiza cada asesor individualmente y genera un reporte directivo del equipo. El documento final incluye el reporte general en la primera página, seguido de cada reporte individual.</div>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <button class="btn-primary" onclick="generateReport('selected')" id="btn-selected">✶ Generar Reporte de Seleccionados</button>
+        <button class="btn-primary" onclick="generateReport('selected')" id="btn-selected"><i class="ti ti-sparkles ti-lead"></i>Generar Reporte de Seleccionados</button>
         <button class="btn-secondary" onclick="generateReport('general')" id="btn-general">Generar Reporte Completo (todos)</button>
       </div>
       <div style="margin-top:18px;padding-top:16px;border-top:0.5px solid var(--border);">
@@ -1073,7 +1074,7 @@
       <input type="hidden" id="cf-id">
       <!-- Draft restore banner (shown when a draft exists for a new client) -->
       <div id="draft-banner" class="draft-banner" style="display:none;">
-        <span style="font-size:18px;">📝</span>
+        <span style="font-size:18px;"><i class="ti ti-file-description"></i></span>
         <div class="draft-banner-text">Tienes un borrador guardado.<br>¿Quieres restaurarlo?</div>
         <div class="draft-banner-actions">
           <button class="draft-banner-btn" onclick="discardDraft()">Descartar</button>
@@ -1122,7 +1123,7 @@
           </div>
           <input type="hidden" id="cf-parent-folder-id">
           <div style="margin-top:6px;">
-            <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;" id="cf-pick-location">📁&nbsp; Elegir ubicación</button>
+            <button type="button" class="btn-sm btn-sm-cancel" onclick="openDrivePicker()" style="white-space:nowrap;" id="cf-pick-location"><i class="ti ti-folder ti-lead"></i>Elegir ubicación</button>
           </div>
           <div class="form-hint" id="cf-folder-location-hint">Elige dónde crearlas en la Unidad Compartida. También puedes pegar el link de las que ya existan.</div>
         </div>
@@ -1543,7 +1544,7 @@
           <div class="form-group" style="margin-top:8px;">
             <label class="form-label">Mensaje</label>
             <textarea class="form-textarea" id="sf-chat-message" rows="4"
-              placeholder="📊 *{{tipo}}* · {{periodicidad}}&#10;{{nombre_cliente}} · {{periodo}}&#10;🔗 {{link}}"></textarea>
+              placeholder="*{{tipo}}* · {{periodicidad}}&#10;{{nombre_cliente}} · {{periodo}}&#10;{{link}}"></textarea>
             <div class="form-hint">Variables disponibles: <code>{{nombre_cliente}}</code>, <code>{{periodo}}</code>, <code>{{link}}</code>, <code>{{nombre}}</code>, <code>{{tipo}}</code>, <code>{{periodicidad}}</code>. Deja vacío para usar el mensaje predeterminado, que ya distingue Análisis de Radar.</div>
           </div>
         </div>
@@ -1591,13 +1592,13 @@
 <!-- Draft / validation modal -->
 <div class="draft-modal-backdrop" id="draft-modal-backdrop">
   <div class="draft-modal">
-    <div class="draft-modal-icon">⚠️</div>
+    <div class="draft-modal-icon"><i class="ti ti-alert-triangle"></i></div>
     <div class="draft-modal-title">Campos incompletos</div>
     <div class="draft-modal-sub">Los siguientes campos son obligatorios. Puedes guardar un borrador para completarlo después.</div>
     <div class="draft-missing-list" id="draft-missing-list"></div>
     <div class="draft-modal-actions">
       <button class="confirm-cancel" style="flex:1;" onclick="closeDraftModal()">Seguir editando</button>
-      <button class="confirm-ok" style="flex:1.5;" onclick="saveDraftAndClose()">💾&nbsp; Guardar borrador</button>
+      <button class="confirm-ok" style="flex:1.5;" onclick="saveDraftAndClose()"><i class="ti ti-device-floppy ti-lead"></i>Guardar borrador</button>
     </div>
   </div>
 </div>
@@ -1634,7 +1635,7 @@
       <div class="confirm-advisors" id="conf-advisors"></div>
     </div>
     <div class="confirm-prev-badge" id="conf-prev-badge" style="display:none;">
-      <span class="conf-prev-icon">📊</span>
+      <span class="conf-prev-icon"><i class="ti ti-chart-bar"></i></span>
       <span class="conf-prev-text" id="conf-prev-text"></span>
     </div>
     <div class="confirm-row" id="conf-general-row" style="display:none;">
@@ -1645,7 +1646,7 @@
       </div>
     </div>
     <div class="confirm-warning">
-      <span>⚠️</span>
+      <span><i class="ti ti-alert-triangle"></i></span>
       <span>Una vez iniciado, el proceso no puede cancelarse. Se generará un nuevo documento en Google Drive y puede tardar hasta 15 minutos.</span>
     </div>
     <div class="confirm-actions">
@@ -1686,15 +1687,15 @@
       <div class="confirm-value" id="rconf-advisors"></div>
     </div>
     <div class="confirm-prev-badge" id="rconf-prev-badge" style="display:none;">
-      <span class="conf-prev-icon">📊</span>
+      <span class="conf-prev-icon"><i class="ti ti-chart-bar"></i></span>
       <span class="conf-prev-text" id="rconf-prev-text"></span>
     </div>
     <div class="confirm-prev-badge" id="rconf-folder-badge" style="display:none;">
-      <span class="conf-prev-icon">📁</span>
+      <span class="conf-prev-icon"><i class="ti ti-folder"></i></span>
       <span class="conf-prev-text" id="rconf-folder-text"></span>
     </div>
     <div class="confirm-warning">
-      <span>⚠️</span>
+      <span><i class="ti ti-alert-triangle"></i></span>
       <span>El Radar solo analiza las llamadas de los asesores registrados de este cliente. Puede tardar ~1 minuto.</span>
     </div>
     <div class="confirm-actions">
@@ -2415,7 +2416,7 @@
     document.getElementById('modal-subtitle').textContent='Reporte listo';
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
     const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
-    mr.innerHTML=`<a href="${url}" target="_blank" class="result-link" style="margin-top:0;"><span>📄 &nbsp;${docName}</span><span class="result-arrow">→</span></a>`;
+    mr.innerHTML=`<a href="${url}" target="_blank" class="result-link" style="margin-top:0;"><span><i class="ti ti-file-text ti-lead"></i>${docName}</span><span class="result-arrow">→</span></a>`;
   }
 
   function errorModal(msg){
@@ -2426,7 +2427,7 @@
     const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
     const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
     const safeMsg=typeof msg==='string'&&msg?msg:typeof msg==='object'?JSON.stringify(msg):'Error desconocido';
-    mr.innerHTML=`<div class="error-box" style="margin-top:0;">⚠️ ${safeMsg}</div>`;
+    mr.innerHTML=`<div class="error-box" style="margin-top:0;"><i class="ti ti-alert-triangle ti-lead"></i>${safeMsg}</div>`;
   }
 
   function closeModal(){
@@ -2460,10 +2461,10 @@
     }else{
       document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
       individual.forEach(r=>{
-        html+=`<a href="${r.driveUrl}" target="_blank" class="result-link" style="margin-top:4px;"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
+        html+=`<a href="${r.driveUrl}" target="_blank" class="result-link" style="margin-top:4px;"><span><i class="ti ti-file-text ti-lead"></i>Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
       });
       if(general){
-        html+=`<a href="${general.driveUrl}" target="_blank" class="result-link" style="margin-top:8px;border-color:rgba(212,175,55,0.4);"><span>📊 &nbsp;Reporte General del Equipo</span><span class="result-arrow">→</span></a>`;
+        html+=`<a href="${general.driveUrl}" target="_blank" class="result-link" style="margin-top:8px;border-color:rgba(212,175,55,0.4);"><span><i class="ti ti-chart-bar ti-lead"></i>Reporte General del Equipo</span><span class="result-arrow">→</span></a>`;
       }
     }
     mr.innerHTML=html;
@@ -2575,7 +2576,7 @@
     const badge=document.getElementById('conf-prev-badge');
     badge.classList.remove('is-yes','is-no');
     if(state==='hidden'){badge.style.display='none';return;}
-    badge.querySelector('.conf-prev-icon').textContent=iconText;
+    badge.querySelector('.conf-prev-icon').innerHTML=iconText; // iconos fijos del DS, sin input
     document.getElementById('conf-prev-text').innerHTML=html;
     if(state==='yes') badge.classList.add('is-yes');
     else if(state==='no') badge.classList.add('is-no');
@@ -2600,21 +2601,21 @@
       if(seq!==_prevReqSeq)return;
       if(!res.ok||!data){
         console.warn('[periodo anterior] respuesta no válida',res.status,data);
-        setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+        setPrevBadge('neutral','<i class="ti ti-info-circle"></i>','No se pudo verificar el periodo anterior.');
       }else if(data.unknown){
         // Lookup reached the server but Drive failed — show neutral, log the reason
         console.warn('[periodo anterior] verificación falló:',data.reason||'(sin detalle)');
-        setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+        setPrevBadge('neutral','<i class="ti ti-info-circle"></i>','No se pudo verificar el periodo anterior.');
       }else if(data.has_previous){
         const period=data.period_label?` (${data.period_label})`:'';
-        setPrevBadge('yes','✅',`<strong>Reporte del periodo anterior detectado${period}.</strong> El análisis incluirá la comparativa contra ese periodo.`);
+        setPrevBadge('yes','<i class="ti ti-circle-check"></i>',`<strong>Reporte del periodo anterior detectado${period}.</strong> El análisis incluirá la comparativa contra ese periodo.`);
       }else{
-        setPrevBadge('no','⚠️','<strong>No se detectó reporte del periodo anterior.</strong> Este será el primer periodo, sin análisis comparativo.');
+        setPrevBadge('no','<i class="ti ti-alert-triangle"></i>','<strong>No se detectó reporte del periodo anterior.</strong> Este será el primer periodo, sin análisis comparativo.');
       }
     }catch(e){
       if(seq!==_prevReqSeq)return;
       console.warn('[periodo anterior] error de red',e);
-      setPrevBadge('neutral','ℹ️','No se pudo verificar el periodo anterior.');
+      setPrevBadge('neutral','<i class="ti ti-info-circle"></i>','No se pudo verificar el periodo anterior.');
     }
   }
   function closeConfirm(){
@@ -2701,16 +2702,16 @@
         rhtml+=`<a href="${combined.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>Reporte Completo — ${displayPeriod}</span><span class="result-arrow">→</span></a>`;
       }else{
         indiv.forEach(r=>{
-          rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span>📄 &nbsp;Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
+          rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span><i class="ti ti-file-text ti-lead"></i>Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
         });
         if(results.general){
           rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>Reporte General — ${displayPeriod}</span><span class="result-arrow">→</span></a>`;
         }
       }
       document.getElementById('result-section').classList.add('show');
-      document.getElementById('result-content').innerHTML=rhtml||'<div class="error-box">⚠️ Sin resultados.</div>';
+      document.getElementById('result-content').innerHTML=rhtml||'<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>Sin resultados.</div>';
       if(job.error){
-        document.getElementById('result-content').innerHTML+=`<div class="error-box" style="margin-top:8px;">⚠️ ${job.error}</div>`;
+        document.getElementById('result-content').innerHTML+=`<div class="error-box" style="margin-top:8px;"><i class="ti ti-alert-triangle ti-lead"></i>${job.error}</div>`;
       }
     }catch(e){
       if(e.name==='cancelled'){
@@ -2725,7 +2726,7 @@
       }else{
         errorModal(e.message);
         document.getElementById('result-section').classList.add('show');
-        document.getElementById('result-content').innerHTML=`<div class="error-box">⚠️ ${e.message}</div>`;
+        document.getElementById('result-content').innerHTML=`<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>${e.message}</div>`;
       }
     }
     busy=false;lock(false);currentJobId=null;
@@ -3137,7 +3138,7 @@
       renderDashboard();
     } catch (e) {
       dashData = null;
-      body.innerHTML = `<div class="error-box">⚠️ ${_esc(e.message)}</div>`;
+      body.innerHTML = `<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>${_esc(e.message)}</div>`;
     }
   }
 
@@ -3430,12 +3431,12 @@
 
   // Titulo y bajada del topbar por pestaña. Unica fuente: los paneles ya no repiten su titulo.
   const _TAB_META = {
-    reports:    ['Reportes y Auditorías', 'Generación inteligente y análisis directivo de asesores comerciales'],
-    radar:      ['Radar de Objeciones',   'Detecta qué preguntan los prospectos y cómo responde el equipo · reporte mensual en PDF'],
-    dashboard:  ['Dashboard',             'Métricas de desempeño comercial por cliente y periodo'],
-    automation: ['Automatizaciones',      'Programa la generación automática de reportes'],
-    calls:      ['Llamadas',              'Pipeline propio: Callpicker → transcripción → análisis'],
-    settings:   ['Ajustes',               'Clientes, fuentes de datos y carpetas de Drive'],
+    reports:    ['Reportes',            'Generación inteligente y análisis directivo de asesores comerciales'],
+    radar:      ['Radar de Objeciones', 'Detecta qué preguntan los prospectos y cómo responde el equipo · reporte mensual en PDF'],
+    dashboard:  ['Dashboard',           'Métricas de desempeño comercial por cliente y periodo'],
+    automation: ['Automatizaciones',    'Programa la generación automática de reportes'],
+    calls:      ['Llamadas',            'Todas las llamadas del equipo, transcritas y analizadas automáticamente'],
+    settings:   ['Ajustes',             'Clientes, fuentes de datos y carpetas de Drive'],
   };
 
   function setTab(tab) {
@@ -3567,7 +3568,7 @@
     const badge = document.getElementById(id);
     badge.classList.remove('is-yes', 'is-no');
     if (state === 'hidden') { badge.style.display = 'none'; return; }
-    badge.querySelector('.conf-prev-icon').textContent = iconText;
+    badge.querySelector('.conf-prev-icon').innerHTML = iconText; // iconos fijos del DS, sin input
     badge.querySelector('.conf-prev-text').innerHTML = html;
     if (state === 'yes') badge.classList.add('is-yes');
     else if (state === 'no') badge.classList.add('is-no');
@@ -3607,24 +3608,24 @@
       const n = data.advisor_count || 0;
       document.getElementById('rconf-advisors').textContent = n === 0 ? 'Ninguno' : `${n} asesor(es)`;
       if (n === 0) {
-        setRadarBadge('rconf-prev-badge', 'no', '⚠️',
+        setRadarBadge('rconf-prev-badge', 'no', '<i class=\"ti ti-alert-triangle\"></i>',
           '<strong>Este cliente no tiene asesores registrados.</strong> El Radar los necesita para saber qué llamadas de la hoja le pertenecen. Da de alta su equipo en Ajustes.');
       } else if (data.unknown) {
-        setRadarBadge('rconf-prev-badge', 'neutral', 'ℹ️', 'No se pudo verificar el periodo anterior.');
+        setRadarBadge('rconf-prev-badge', 'neutral', '<i class=\"ti ti-info-circle\"></i>', 'No se pudo verificar el periodo anterior.');
       } else if (data.has_previous) {
         const period = data.period_label ? ` (${data.period_label})` : '';
-        setRadarBadge('rconf-prev-badge', 'yes', '✅',
+        setRadarBadge('rconf-prev-badge', 'yes', '<i class=\"ti ti-circle-check\"></i>',
           `<strong>Radar del periodo anterior detectado${period}.</strong> El reporte incluirá la comparativa contra ese periodo.`);
       } else {
-        setRadarBadge('rconf-prev-badge', 'no', '⚠️',
+        setRadarBadge('rconf-prev-badge', 'no', '<i class=\"ti ti-alert-triangle\"></i>',
           '<strong>No se detectó Radar del periodo anterior.</strong> Este será el primero, sin comparativa.');
       }
 
       if (data.has_folder) {
-        setRadarBadge('rconf-folder-badge', 'yes', '📁',
+        setRadarBadge('rconf-folder-badge', 'yes', '<i class=\"ti ti-folder\"></i>',
           `<strong>Carpeta de Radar configurada.</strong> <a href="${data.folder_url}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>`);
       } else {
-        setRadarBadge('rconf-folder-badge', 'no', '📁',
+        setRadarBadge('rconf-folder-badge', 'no', '<i class=\"ti ti-folder\"></i>',
           '<strong>Falta la carpeta de Drive del Radar.</strong> Agrégala en Ajustes → Carpeta Drive de Radar; sin ella el reporte no se puede entregar.');
       }
 
@@ -3633,7 +3634,7 @@
       if (seq !== _radarPreflightSeq) return;
       console.warn('[radar preflight]', e);
       document.getElementById('rconf-advisors').textContent = '—';
-      setRadarBadge('rconf-prev-badge', 'neutral', 'ℹ️', 'No se pudo verificar la configuración del cliente.');
+      setRadarBadge('rconf-prev-badge', 'neutral', '<i class=\"ti ti-info-circle\"></i>', 'No se pudo verificar la configuración del cliente.');
       okBtn.disabled = false;   // el pre-vuelo es informativo: no bloquea por fallo de red
     }
   }
@@ -4787,11 +4788,11 @@
     const bloques = [];
     if (existentes.length) {
       bloques.push(`Se usará${existentes.length > 1 ? 'n' : ''} ${existentes.length > 1 ? 'las carpetas existentes' : 'la carpeta existente'}:`
-        + existentes.map(c => `<br>📁 ${c}`).join(''));
+        + existentes.map(c => `<br><i class="ti ti-folder ti-lead"></i>${c}`).join(''));
     }
     if (nuevas.length) {
       bloques.push(`Se creará${nuevas.length > 1 ? 'n' : ''} en ${_esc(path || 'la ubicación elegida')}:`
-        + nuevas.map(c => `<br>📁 ${c}`).join(''));
+        + nuevas.map(c => `<br><i class="ti ti-folder ti-lead"></i>${c}`).join(''));
     }
     const carpetas = bloques.length ? bloques.join('<br><br>') : miss('Sin ubicación elegida');
 
@@ -4998,7 +4999,7 @@
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       _dpItems = d.items || [];
       list.innerHTML = _dpItems.length
-        ? _dpItems.map((f, i) => `<div class="dp-item" onclick="_dpEnter(${i})"><span>📁</span><span>${_esc(f.name)}</span></div>`).join('')
+        ? _dpItems.map((f, i) => `<div class="dp-item" onclick="_dpEnter(${i})"><span><i class="ti ti-folder"></i></span><span>${_esc(f.name)}</span></div>`).join('')
         : '<div class="dp-empty">Sin subcarpetas aquí.</div>';
     } catch (e) {
       list.innerHTML = `<div class="dp-empty">${_esc(e.message)}</div>`;
@@ -5283,7 +5284,7 @@
   function saveDraftAndClose() {
     _autoSaveDraft();
     closeDraftModal();
-    _showToast('💾 Borrador guardado');
+    _showToast('Borrador guardado');
   }
 
   function _showToast(msg) {

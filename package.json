@@ -1,7 +1,7 @@
 {
   "name": "zebra-reports",
   "version": "1.0.0",
-  "description": "Zebra High Performance — Sales Call Report Generator",
+  "description": "ZEBRA · Reports AI — generador de reportes de llamadas comerciales",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

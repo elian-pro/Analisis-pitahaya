@@ -7402,7 +7402,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         calls.map(c => {
           const est = c.estado || 'sin_procesar';
           return `
-          <div class="calls-row item" data-cid="${_esc(c.call_id)}" onclick="selectCall('${_esc(slug)}','${_esc(c.call_id)}')">
+          <div class="calls-row item" data-cid="${_esc(c.call_id)}" onclick="toggleCall('${_esc(slug)}','${_esc(c.call_id)}')">
             <div>${_esc(_fechaHora(c.fecha))}</div>
             <div>${_esc(c.asesor || '—')}</div>
             <div class="col-prospecto">${_esc([c.contraparte_numero, c.ciudad].filter(Boolean).join(' · ') || '—')}</div>
@@ -7428,6 +7428,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   // Se pinta con lo que ya tenemos del listado y NO espera a la red. Lo único
   // que falta es la transcripción, que el listado no manda; llega después,
   // dentro de su propia caja.
+  // El clic de la fila ALTERNA; selectCall no, porque renderCalls la llama para
+  // restaurar la selección tras un repintado y ahí colapsar sería un bug.
+  function toggleCall(slug, callId) {
+    if (_callSel?.call_id === callId) { _callSel = null; _panelVacio(); return; }
+    selectCall(slug, callId);
+  }
+
   function selectCall(slug, callId) {
     const c = _callsPorId.get(callId);
     if (!c) return;

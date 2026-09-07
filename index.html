@@ -298,6 +298,16 @@
     /* Vista por rol: lo marcado data-admin desaparece para el cliente externo.
        Esto es ergonomía, NO seguridad: la política real vive en el servidor. */
     body[data-role="client"] [data-admin]{display:none!important;}
+    /* Vista remota: el admin mirando el dashboard de un cliente. Se avisa
+       siempre, porque desde dentro la vista es indistinguible de la real. */
+    #preview-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+      padding:9px 48px;background:var(--surface2);border-bottom:0.5px solid var(--border2);
+      font-size:12px;color:var(--muted);position:sticky;top:0;z-index:110;}
+    #preview-bar strong{color:var(--fg);font-weight:600;}
+    #preview-bar button{background:var(--accent);color:var(--on-accent);border:none;
+      border-radius:100px;padding:5px 13px;font-family:'Inter',sans-serif;font-size:11px;
+      font-weight:500;cursor:pointer;flex-shrink:0;}
+    body.preview .topbar{top:37px;}
     .tab-panel{display:none;}
     .tab-panel.active{display:block;}
     /* ── Client / schedule rows ── */
@@ -598,6 +608,10 @@
   </div>
 </aside>
 <div class="app-body">
+<div id="preview-bar" style="display:none;">
+  <span><i class="ti ti-eye ti-lead"></i>Estás viendo el dashboard como <strong id="preview-name"></strong></span>
+  <button type="button" onclick="exitClientPreview()">Salir de la vista</button>
+</div>
 <header class="topbar">
   <span class="topbar-title" id="topbar-title">Reportes</span>
   <span class="topbar-sub" id="topbar-sub">Generación inteligente y análisis directivo de asesores comerciales</span>
@@ -895,7 +909,7 @@
         </div>
         <div class="form-hint" style="margin-top:10px;">Usa un usuario con permiso de lectura y escritura: guardamos ahí el análisis de cada llamada.</div>
       </div>
-      <div class="card">
+      <div class="card" id="tenant-account-card">
         <div class="card-title"><i class="ti ti-user ti-lead"></i>Tu cuenta</div>
         <div id="tenant-account-email" style="font-size:13px;color:var(--muted);margin:10px 0 14px;"></div>
         <button class="btn-sm" onclick="openChangePassword()">Cambiar contraseña</button>
@@ -2196,12 +2210,15 @@
       const sel=document.getElementById('client-select');
       if (esCliente()) {
         // Un tenant es su propio y único cliente: sin selector (menos ruido) y
-        // sin pedir /api/clients completo.
-        allClients=[{ id: ME.client_id, name: ME.client_name || ME.client_id }];
+        // sin pedir /api/clients completo. En vista remota, ese cliente es el
+        // que el admin eligió.
+        const cid  = _clientId();
+        const name = _preview?.name || ME.client_name || cid;
+        allClients=[{ id: cid, name }];
         const o=document.createElement('option');
-        o.value=ME.client_id; o.textContent=allClients[0].name;
+        o.value=cid; o.textContent=name;
         sel.appendChild(o);
-        sel.value=ME.client_id;
+        sel.value=cid;
         sel.closest('.field').style.display='none';
         onClientChange();
         return;
@@ -2456,11 +2473,52 @@
   // a los endpoints de admin (le darían 403) y la CSS de data-admin depende del
   // atributo del body. Esto solo acomoda la UI; el permiso real es del servidor.
   let ME = null;
-  const esCliente = () => ME?.role === 'client';
+
+  // ── Vista remota ────────────────────────────────────────────────────────────
+  // El admin configura el dashboard de un cliente ANTES de que ese cliente
+  // tenga acceso, así que necesita verlo desde dentro. Es solo la SPA
+  // dibujándose como cliente: la sesión sigue siendo de admin y las llamadas
+  // salen con su client_id explícito. No se emiten sesiones de cliente, que
+  // sería una vía de escalada nueva y algo que después habría que revocar.
+  //
+  // OJO: es una vista, no una simulación de permisos. Si algo de la vista del
+  // cliente llamara a un endpoint de admin, aquí funcionaría igual; quien lo
+  // impide de verdad es auth/policy.ts, y eso solo se prueba con un acceso real.
+  let _preview = null;
+  try { _preview = JSON.parse(sessionStorage.getItem('zr-preview') || 'null'); } catch (_) {}
+
+  const esCliente   = () => ME?.role === 'client' || !!_preview;
+  const _clientId   = () => _preview?.id ?? ME?.client_id;
+  // Un tenant real va identificado por su cookie; el admin en vista remota tiene
+  // que decir a qué cliente se refiere.
+  const _tenantQS   = () => (_preview ? `client_id=${encodeURIComponent(_preview.id)}` : '');
+  const _tenantBody = (o = {}) => (_preview ? { ...o, client_id: _preview.id } : o);
+
+  function enterClientPreview(id) {
+    const c = allClients.find(x => x.id === id);
+    sessionStorage.setItem('zr-preview', JSON.stringify({ id, name: c?.name || id }));
+    // Recarga completa a propósito: media SPA guarda estado de módulo (rosters,
+    // selectores, cachés) y reconstruirlo a mano sería una fuente de bugs sutiles.
+    location.hash = '';
+    location.reload();
+  }
+  function exitClientPreview() {
+    sessionStorage.removeItem('zr-preview');
+    location.hash = '';
+    location.reload();
+  }
+
   const sessionReady = fetch('/auth/me')
     .then(r => (r.ok ? r.json() : null))
     .then(me => {
       ME = me;
+      // Solo un admin puede mirar como otro; un cliente real nunca entra aquí.
+      if (me?.role !== 'admin') _preview = null;
+      if (_preview) {
+        document.body.classList.add('preview');
+        document.getElementById('preview-name').textContent = _preview.name;
+        document.getElementById('preview-bar').style.display = 'flex';
+      }
       if (esCliente()) {
         document.body.dataset.role = 'client';
         _APP_TABS = ['reports', 'calls', 'settings'];
@@ -4025,10 +4083,13 @@
 
   async function renderClientSettings() {
     document.getElementById('settings-client').style.display = '';
+    // En vista remota la tarjeta de cuenta sobra: la sesión es del admin, y su
+    // contraseña no se cambia desde aquí (ni el endpoint lo permitiría).
+    document.getElementById('tenant-account-card').style.display = _preview ? 'none' : '';
     document.getElementById('tenant-account-email').textContent = ME?.email || '';
     const el = document.getElementById('tenant-db-status');
     try {
-      const r = await fetch('/api/tenant/db');
+      const r = await fetch(`/api/tenant/db?${_tenantQS()}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       if (!d.configured) {
@@ -4098,7 +4159,7 @@
     btn.disabled = true; btn.textContent = 'Probando…'; _tdbSay('', 'var(--muted)');
     try {
       const r = await fetch('/api/tenant/db/test', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody(p)),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -4118,12 +4179,14 @@
     btn.disabled = true; btn.textContent = 'Guardando…'; _tdbSay('', 'var(--muted)');
     try {
       const r = await fetch('/api/tenant/db', {
-        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p),
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody(p)),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       btn.textContent = 'Preparando…';
-      const pr = await fetch('/api/tenant/db/provision', { method: 'POST' });
+      const pr = await fetch('/api/tenant/db/provision', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody()),
+      });
       const pd = await pr.json().catch(() => ({}));
       if (!pr.ok) throw new Error(pd.error || `HTTP ${pr.status}`);
       document.getElementById('tdb-password').value = '';
@@ -4200,6 +4263,7 @@
               ${users.length} acceso${users.length === 1 ? '' : 's'}
             </div>
           </div>
+          <button class="link-btn" onclick="enterClientPreview('${_esc(c.id)}')" title="Abrir su dashboard como lo verá él">Ver su vista</button>
           <button class="link-btn" onclick="openExternalClientForm('${_esc(c.id)}')">Editar</button>
           <button class="btn-sm btn-sm-green" onclick="openUserForm('${_esc(c.id)}')">
             <i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Agregar acceso
@@ -6859,7 +6923,10 @@
     try {
       const r = await fetch(`${CALLS_API}/cuentas`);
       if (!r.ok) return;   // renderCalls muestra el motivo con el mensaje del servidor
-      const { cuentas } = await r.json();
+      let { cuentas } = await r.json();
+      // En vista remota /api/calls/cuentas responde como admin (todas las de
+      // Callpicker). El cliente solo tiene la suya.
+      if (_preview) cuentas = cuentas.filter(c => c.slug === _preview.id);
       // Las habilitadas primero, y una de ellas seleccionada: arrancar en una
       // cuenta sin activar mostraba un error nada mas abrir la pestaña.
       const orden = [...cuentas].sort((a, b) => Number(b.habilitada) - Number(a.habilitada));

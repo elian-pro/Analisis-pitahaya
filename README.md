@@ -120,6 +120,14 @@ hojas u orígenes de Callpicker) y **Admin** es todo lo externo (alta de cliente
 externos y sus accesos). Un cliente externo no aparece en Ajustes ni se
 configura desde ahí.
 
+**Vista remota.** Desde Admin → *Ver su vista*, un admin abre el dashboard tal
+como lo verá ese cliente, **antes de que exista su acceso**, para dejárselo
+configurado. Es solo la SPA dibujándose como cliente: la sesión sigue siendo de
+admin y las llamadas van con el `client_id` explícito, así que no se emiten
+sesiones de cliente ni hay nada que revocar. Por lo mismo **no prueba permisos**:
+un endpoint de admin respondería igual desde ahí; quien los aplica es
+`src/auth/policy.ts`, y eso solo se comprueba entrando con un acceso real.
+
 Un **cliente externo** usa la fuente `calls_source: 'cliente_pg'`: su base
 Postgres (en su servidor, conexión cifrada con `TENANT_DB_SECRET`) con el
 esquema estándar del pipeline. **La conecta él mismo** desde sus Ajustes, con

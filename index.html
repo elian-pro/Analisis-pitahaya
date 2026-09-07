@@ -104,8 +104,8 @@
     .field select:focus{outline:none;border-color:var(--accent);}
     .field select:disabled{opacity:0.45;cursor:not-allowed;}
     .field select option{background:var(--surface);}
-    .advisors-loading{display:flex;align-items:center;gap:8px;padding:12px 0;font-size:var(--t-sec);color:var(--faint);}
-    .advisors-empty{padding:12px 0;font-size:var(--t-sec);color:var(--faint);text-align:center;}
+    .advisors-loading{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:8px;padding:24px 0;font-size:var(--t-sec);color:var(--faint);}
+    .advisors-empty{grid-column:1/-1;padding:24px 0;font-size:var(--t-sec);color:var(--faint);text-align:center;}
     .spin-xs{width:12px;height:12px;border:1.5px solid var(--border2);border-top-color:var(--fg);border-radius:50%;animation:spin 0.75s linear infinite;flex-shrink:0;}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
     /* Radar: la columna del archivo .md pide más ancho que la del cliente. */
@@ -1226,7 +1226,8 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
     <div class="card" style="margin-bottom:14px;">
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
-        <div class="field" style="min-width:170px;margin:0;">
+        <!-- Un cliente externo tiene UNA cuenta, la suya: elegir no significa nada. -->
+        <div class="field" id="calls-cuenta-field" data-admin style="min-width:170px;margin:0;">
           <label class="field-label">Cuenta</label>
           <select id="calls-cuenta" onchange="renderCalls()"></select>
         </div>
@@ -7371,6 +7372,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       const v = document.getElementById(id)?.value;
       if (v) q.set(k, v);
     }
+    // En vista remota la sesión es de admin, así que el servidor no puede saber
+    // a qué cliente se refiere: hay que decírselo. Sin esto la petición llegaba
+    // sin cuenta y la ruta respondía con la primera del sistema, que es de otro.
+    if (_preview) q.set('cuenta', _preview.id);
 
     try {
       const r = await fetch(`${CALLS_API}?${q}`);

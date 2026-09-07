@@ -199,6 +199,12 @@ export async function cuentasTenant(): Promise<Cuenta[]> {
   return out;
 }
 
+/** Si ese id es de un cliente externo, TENGA O NO su base conectada ya. */
+export async function esClienteExterno(slug: string): Promise<boolean> {
+  if (!dbEnabled) return false;
+  return (await getClient(slug))?.calls_source === 'cliente_pg';
+}
+
 export async function tenantCuenta(slug: string): Promise<Cuenta | undefined> {
   if (!dbEnabled) return undefined;
   const client = await getClient(slug);

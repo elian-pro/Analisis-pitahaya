@@ -5,6 +5,7 @@ import { listAdvisors } from '../advisors/store';
 import { normalizeAdvisorName } from '../advisors/match';
 import { listCuentas, listCuentasHabilitadas, getCuenta } from '../calls/registry';
 import { tenantCuenta } from '../calls/tenant';
+import { resolverSlug } from '../calls/aislamiento';
 import type { AuthedRequest } from '../auth/middleware';
 import {
   listCalls, getCall, countByEstado, asesoresDelPeriodo, reactivarFallidas,
@@ -212,14 +213,16 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });
     return;
   }
-  let { cuenta: slug } = parsed.data;
   const { estado, desde, hasta, limit } = parsed.data;
-  const user = (req as AuthedRequest).user;
-  // El tenant queda clavado a su propia cuenta pida lo que pida.
-  if (user?.role === 'client') slug = user.client_id!;
+  // Quién puede ver qué cuenta: calls/aislamiento.ts. Un tenant queda clavado a
+  // la suya y NUNCA cae a "la primera habilitada", que es la de otro cliente.
+  const { slug, permitirPrimera } = resolverSlug(
+    (req as AuthedRequest).user, parsed.data.cuenta,
+  );
   try {
-    // Sin cuenta explícita se usa la primera habilitada; hoy solo hay una.
-    const cuenta = slug ? await getCuenta(slug) : (await listCuentasHabilitadas())[0];
+    const cuenta = slug
+      ? await getCuenta(slug)
+      : (permitirPrimera ? (await listCuentasHabilitadas())[0] : undefined);
     if (!cuenta) { res.json({ cuenta: null, counts: {}, calls: [] }); return; }
     // Una cuenta sin tabla `analisis` no se puede consultar: el LEFT JOIN falla
     // con un error de Postgres que al usuario no le dice nada.

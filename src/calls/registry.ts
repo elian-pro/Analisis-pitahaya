@@ -1,5 +1,6 @@
 import { callsDb, callsDbEnabled, quoteIdent } from './db';
-import { tenantCuenta } from './tenant';
+import { tenantCuenta, esClienteExterno } from './tenant';
+import { puedeCaerAlRegistro } from './aislamiento';
 import { listConfigs, debeBarrer } from './config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,8 +50,12 @@ export async function listCuentasHabilitadas(): Promise<Cuenta[]> {
 export async function getCuenta(slug: string): Promise<Cuenta | undefined> {
   // Un cliente externo no vive en callpicker_registro: su cuenta se sintetiza
   // desde su configuración (y no requiere la base de Callpicker).
-  const t = await tenantCuenta(slug);
-  if (t) return t;
+  //
+  // Y si todavía no la conectó, la respuesta es "no hay cuenta". NO se sigue
+  // buscando en el registro: un slug coincidente le entregaría las llamadas de
+  // otro cliente, que es exactamente el fallo que esto cierra.
+  if (await esClienteExterno(slug)) return tenantCuenta(slug);
+  if (!puedeCaerAlRegistro(false)) return undefined;
   if (!callsDbEnabled()) return undefined;
   return (await listCuentas()).find(c => c.slug === slug);
 }

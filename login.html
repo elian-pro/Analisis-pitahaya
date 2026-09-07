@@ -12,7 +12,6 @@
     --bg: #0A0A0A; --surface: #161616; --text: #FFFFFF; --muted: rgba(255,255,255,.6);
     --border: rgba(255,255,255,.12); --danger: #F1928C;
     --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -28,7 +27,7 @@
   }
   .logo { height: 26px; margin: 0 auto 22px; display: block; }
   .eyebrow {
-    font-family: var(--mono); font-size: 10px; font-weight: 500; text-transform: uppercase;
+    font-family: var(--sans); font-size: 10px; font-weight: 500; text-transform: uppercase;
     letter-spacing: .22em; color: var(--muted); margin: 0 0 8px;
   }
   h1 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 6px; }
@@ -36,7 +35,7 @@
   .gbtn { display: flex; justify-content: center; min-height: 44px; }
   .hint {
     margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted);
+    font-family: var(--sans); font-size: 10.5px; letter-spacing: .04em; color: var(--muted);
   }
   .hint b { color: var(--text); font-weight: 600; }
   .error {
@@ -49,7 +48,7 @@
   details.pw { margin-top: 20px; text-align: left; }
   details.pw summary {
     cursor: pointer; list-style: none; text-align: center;
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em;
+    font-family: var(--sans); font-size: 10.5px; letter-spacing: .06em;
     text-transform: uppercase; color: var(--muted);
   }
   details.pw summary:hover { color: var(--text); }

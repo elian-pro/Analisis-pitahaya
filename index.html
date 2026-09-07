@@ -618,9 +618,14 @@
 .calls-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .calls-chip{font-size:var(--t-ui);letter-spacing:var(--tk-label);text-transform:uppercase;padding:4px 10px;
   border-radius:999px;border:1px solid var(--line,#2a2a2a);background:rgba(255,255,255,.03)}
-.calls-row{display:grid;grid-template-columns:150px 1fr 70px 120px 60px 90px;gap:12px;
+/* Columnas más ajustadas que antes: con el panel de detalle al lado, la lista
+   vive en media pantalla y las fijas se comían el nombre del asesor. */
+.calls-row{display:grid;grid-template-columns:128px minmax(0,1fr) 56px 92px 48px auto;gap:14px;
   align-items:center;padding:11px 8px;border-bottom:1px solid var(--line,#2a2a2a);font-size:var(--t-body)}
+.calls-row>div{min-width:0}
+.calls-row.item>div:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .calls-row.head{font-size:var(--t-ui);letter-spacing:var(--tk-label);text-transform:uppercase;opacity:.6;font-weight:600}
+.calls-row.head>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .calls-row.item{cursor:pointer}
 .calls-row.item:hover{background:rgba(255,255,255,.03)}
 .calls-est{font-size:var(--t-ui);padding:3px 9px;border-radius:999px;white-space:nowrap;justify-self:start}
@@ -630,19 +635,79 @@
 .est-pendiente,.est-transcrita{background:rgba(234,179,8,.15);color:#facc15}
 .est-sin_procesar{background:rgba(234,179,8,.15);color:#facc15}
 .est-corta{background:rgba(148,163,184,.10);color:#94a3b8}
-.calls-detail{padding:4px 8px 18px;border-bottom:1px solid var(--line,#2a2a2a);
-  font-size:var(--t-sec);line-height:1.7}
-/* …solo el valor lo preserva. En el contenedor, los saltos y la indentación del
-   template literal se renderizaban como un hueco enorme sobre el primer campo. */
+/* El pre-wrap va solo en el VALOR: en el contenedor, los saltos y la
+   indentación del template literal se renderizaban como un hueco enorme. */
 .calls-val{white-space:pre-wrap;word-break:break-word}
-.calls-detail a{color:var(--accent,#4ade80);text-decoration:none;border-bottom:1px solid currentColor}
-.calls-detail a:hover{opacity:.75}
-.calls-detail .lbl{font-size:var(--t-ui);letter-spacing:var(--tk-label);text-transform:uppercase;opacity:.55;
-  display:block;margin:12px 0 4px}
+.calls-detail-body a{color:var(--accent,#4ade80);text-decoration:none;border-bottom:1px solid currentColor}
+.calls-detail-body a:hover{opacity:.75}
+.calls-detail-body .lbl{font-size:var(--t-ui);letter-spacing:var(--tk-label);text-transform:uppercase;opacity:.55;
+  display:block;margin:14px 0 4px}
+.calls-detail-body>:first-child{margin-top:0}
 .calls-empty{padding:28px 8px;text-align:center;opacity:.55;font-size:var(--t-body)}
 .calls-err{color:#f87171;font-size:var(--t-sec);padding:6px 8px}
-@media(max-width:900px){.calls-row{grid-template-columns:110px 1fr 90px;font-size:var(--t-sec)}
-  .calls-row>:nth-child(n+4){display:none}}
+.calls-row.item.sel{background:var(--surface2);box-shadow:inset 2px 0 0 var(--accent)}
+
+/* ── Lista + detalle en dos columnas ─────────────────────────────────────────
+   Mismo reparto que la pestaña Reportes (.report-cols): a la izquierda lo que
+   se recorre, a la derecha lo que se lee. La lista pesa más porque tiene seis
+   columnas que defender. */
+.calls-cols{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:16px;align-items:start}
+.calls-list-card{min-width:0}
+.calls-detail-card{padding:0;overflow:hidden;display:flex;flex-direction:column;
+  position:sticky;top:88px;max-height:calc(100vh - 120px);min-width:0}
+.calls-detail-bar{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;
+  border-bottom:0.5px solid var(--border);background:var(--surface2);flex-shrink:0}
+.calls-detail-head{flex:1;min-width:0}
+.calls-detail-title{font-size:var(--t-head);font-weight:600;letter-spacing:var(--tk-head);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calls-detail-meta{font-size:var(--t-sec);color:var(--muted);margin-top:3px;
+  display:flex;flex-wrap:wrap;gap:4px 10px}
+.calls-detail-score{flex-shrink:0;text-align:right}
+.calls-detail-score b{display:block;font-size:var(--t-stat);font-weight:700;line-height:1.1}
+.calls-detail-score span{font-size:var(--t-label);font-weight:500;letter-spacing:var(--tk-label);
+  text-transform:uppercase;color:var(--faint)}
+.calls-detail-body{flex:1;overflow:auto;padding:16px;font-size:var(--t-sec);line-height:1.7}
+
+/* Estado vacío, del mismo molde que el visor de Reportes */
+.calls-ph{margin:auto;text-align:center;max-width:280px;padding:48px 20px}
+.calls-ph-icon{width:44px;height:44px;margin:0 auto 14px;border-radius:12px;border:0.5px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--muted)}
+.calls-ph-title{font-size:var(--t-head);font-weight:600;color:var(--fg);margin-bottom:6px}
+.calls-ph-text{font-size:var(--t-sec);color:var(--muted);line-height:1.6}
+
+/* Los cuatro criterios, cada uno con su etiqueta. Antes iban aplastados en una
+   línea con puntos medios y había que contar posiciones para saber cuál era cuál. */
+.calls-crit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:4px}
+.calls-crit div{border:0.5px solid var(--border);border-radius:8px;padding:7px 10px}
+.calls-crit .k{display:block;font-size:var(--t-label);font-weight:500;letter-spacing:var(--tk-label);
+  text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+
+/* ── El recuadro contenido ───────────────────────────────────────────────────
+   Análisis y transcripción son los dos únicos campos que crecen sin límite.
+   Alto en em (no px) para que siga al tamaño de letra; se desplaza dentro de sí
+   mismo, y expandir es quitarle el techo. */
+.calls-box{border:0.5px solid var(--border2);border-radius:9px;background:var(--bg);overflow:hidden;margin-top:4px}
+.calls-box-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 11px;border-bottom:0.5px solid var(--border);background:var(--surface2)}
+.calls-box-head .lbl{margin:0}
+.calls-box-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;
+  font-size:var(--t-label);font-weight:500;letter-spacing:var(--tk-label);text-transform:uppercase;
+  padding:2px 4px;flex-shrink:0}
+.calls-box-btn:hover{color:var(--fg)}
+.calls-box-body{max-height:9.5em;overflow:auto;padding:10px 12px;white-space:pre-wrap;word-break:break-word}
+.calls-box.abierto .calls-box-body{max-height:none;overflow:visible}
+.calls-box-load{display:flex;align-items:center;gap:8px;color:var(--faint)}
+
+body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
+@media(max-width:1100px){
+  .calls-cols{grid-template-columns:1fr}
+  .calls-detail-card{position:static;max-height:none}
+}
+/* La ocultación de columnas depende del ANCHO DE LA LISTA, no del viewport: con
+   el panel al lado, la lista mide ~55% de la pantalla y el media query por
+   viewport describía un ancho que ya no tiene. */
+.calls-row.compacta{grid-template-columns:110px 1fr 90px;font-size:var(--t-sec)}
+.calls-row.compacta>:nth-child(n+4){display:none}
   </style>
 </head>
 <body data-theme="dark">
@@ -1209,8 +1274,30 @@
       <div id="calls-counts" class="calls-counts"></div>
     </div>
 
-    <div class="card">
-      <div id="calls-list"><div class="calls-empty">Cargando…</div></div>
+    <div class="calls-cols">
+      <div class="card calls-list-card">
+        <div id="calls-list"><div class="calls-empty">Cargando…</div></div>
+      </div>
+
+      <!-- Detalle de la llamada seleccionada. Vive aquí y no dentro del listado:
+           el acordeón de antes empujaba las filas y una transcripción larga se
+           comía varias pantallas. -->
+      <div class="card calls-detail-card" id="calls-detail-card">
+        <div class="calls-detail-bar">
+          <div class="calls-detail-head" id="calls-detail-head">
+            <div class="calls-detail-title" id="cd-title">Ninguna llamada seleccionada</div>
+            <div class="calls-detail-meta" id="cd-meta"></div>
+          </div>
+          <div class="calls-detail-score" id="cd-score" hidden></div>
+        </div>
+        <div class="calls-detail-body" id="calls-detail-body">
+          <div class="calls-ph">
+            <div class="calls-ph-icon"><i class="ti ti-phone"></i></div>
+            <div class="calls-ph-title">Elige una llamada</div>
+            <div class="calls-ph-text">Su análisis y su transcripción aparecerán aquí, sin mover la lista.</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </main>
@@ -7203,7 +7290,8 @@
   // llamada en <schema>.llamadas, y su analisis al lado en <schema>.analisis.
   // Por eso el selector es de CUENTA (callpicker_registro) y no de cliente.
   const CALLS_API = '/api/calls';
-  let _callsAbierta = null;   // { slug, call_id } de la fila desplegada
+  let _callSel = null;        // { slug, call_id } de la fila seleccionada
+  const _callsPorId = new Map();  // lo que el listado ya trajo, por call_id
 
   const _CALL_EST = {
     analizada:'Analizada', fallida:'Fallida', descartada:'Descartada',
@@ -7287,13 +7375,20 @@
         return;
       }
 
+      // El listado ya trae TODO el registro menos la transcripción (ver
+      // routes/calls.ts:247). Se guarda por call_id para que el panel se pinte
+      // sin ir a la red: la única espera es la transcripción.
+      _callsPorId.clear();
+      _transCache.clear();   // procesar una llamada le da transcripción NUEVA
+      calls.forEach(c => _callsPorId.set(c.call_id, c));
+
       box.innerHTML =
         `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div>Duración</div>
          <div>Estado</div><div>Calif.</div><div></div></div>` +
         calls.map(c => {
           const est = c.estado || 'sin_procesar';
           return `
-          <div class="calls-row item" onclick="toggleCallDetail('${_esc(slug)}','${_esc(c.call_id)}')">
+          <div class="calls-row item" data-cid="${_esc(c.call_id)}" onclick="selectCall('${_esc(slug)}','${_esc(c.call_id)}')">
             <div>${_esc(_fechaHora(c.fecha))}</div>
             <div>${_esc(c.asesor || '—')}</div>
             <div>${_dur(c.duracion_seg)}</div>
@@ -7302,44 +7397,141 @@
             <div>${est === 'fallida' || est === 'sin_procesar'
               ? `<button class="btn-sm" data-admin onclick="event.stopPropagation();processOne('${_esc(slug)}','${_esc(c.call_id)}',this)">${est === 'fallida' ? 'Reintentar' : 'Procesar'}</button>`
               : ''}</div>
-          </div>
-          <div id="cd-${_esc(c.call_id)}"></div>`;
+          </div>`;
         }).join('');
 
-      if (_callsAbierta) { const a = _callsAbierta; _callsAbierta = null; toggleCallDetail(a.slug, a.call_id); }
+      _ajustarColumnas();
+      // La selección sobrevive al repintado (processOne siempre llama aquí).
+      if (_callSel && _callsPorId.has(_callSel.call_id)) selectCall(_callSel.slug, _callSel.call_id);
+      else if (_callSel) { _callSel = null; _panelVacio(); }
     } catch (e) {
       box.innerHTML = `<div class="calls-err">No se pudieron cargar las llamadas: ${_esc(e.message)}</div>`;
     }
   }
 
-  async function toggleCallDetail(slug, callId) {
-    const slot = document.getElementById('cd-' + callId);
-    if (!slot) return;
-    if (slot.innerHTML) { slot.innerHTML = ''; _callsAbierta = null; return; }
+  // ── Detalle en el panel de la derecha ───────────────────────────────────────
+  // Se pinta con lo que ya tenemos del listado y NO espera a la red. Lo único
+  // que falta es la transcripción, que el listado no manda; llega después,
+  // dentro de su propia caja.
+  function selectCall(slug, callId) {
+    const c = _callsPorId.get(callId);
+    if (!c) return;
+    _callSel = { slug, call_id: callId };
 
-    _callsAbierta = { slug, call_id: callId };
-    slot.innerHTML = '<div class="calls-detail">Cargando…</div>';
+    document.querySelectorAll('#calls-list .calls-row.item').forEach(r =>
+      r.classList.toggle('sel', r.dataset.cid === callId));
+
+    const est = c.estado || 'sin_procesar';
+    document.getElementById('cd-title').textContent = c.asesor || 'Sin asesor';
+    document.getElementById('cd-meta').innerHTML = [
+      _esc(_fechaHora(c.fecha)),
+      _dur(c.duracion_seg),
+      `<span class="calls-est est-${_esc(est)}">${_esc(_CALL_EST[est] || est)}</span>`,
+    ].map(x => `<span>${x}</span>`).join('');
+
+    const score = document.getElementById('cd-score');
+    score.hidden = c.calif_global === null || c.calif_global === undefined;
+    if (!score.hidden) score.innerHTML = `<b>${c.calif_global}</b><span>Calif.</span>`;
+
+    document.getElementById('calls-detail-body').innerHTML = _callBodyHtml(c);
+    document.getElementById('calls-detail-body').scrollTop = 0;
+    if (c.tiene_transcripcion || c.transcripcion) void _cargarTranscripcion(slug, callId);
+  }
+
+  // El cuerpo del panel, como FUNCIÓN PURA de la llamada: es la única lógica
+  // aquí que no es DOM, y por eso es la única que se prueba (calls/detalle.test.ts
+  // la extrae de este archivo y la ejecuta, como hace nextRun.test.ts).
+  // Los helpers entran por parámetro para poder inyectar fakes.
+  function _callBodyHtml(c, esc = _esc, fechaHora = _fechaHora, caja = _cajaHtml) {
+    // `v ?` descartaría un 0 legítimo; aquí solo hay strings, pero la regla se
+    // escribe una vez y no hay que acordarse de ella en el siguiente campo.
+    const campo = (l, v) => (v === null || v === undefined || v === '')
+      ? '' : `<span class="lbl">${l}</span><div class="calls-val">${esc(String(v))}</div>`;
+    const crit = [['Presentación', c.presentacion], ['Precalificación', c.precalif],
+                  ['Exploración', c.exploracion], ['Agenda', c.agenda]];
+    return `
+      ${c.error ? `<div class="calls-err">${esc(c.error)}${c.intentos ? ` · ${c.intentos} intento(s)` : ''}</div>` : ''}
+      ${campo('Prospecto', [c.contraparte_numero, c.ciudad].filter(Boolean).join(' · '))}
+      ${campo('Estatus de la llamada', c.estatus)}
+      ${campo('Tipo de contacto', c.tipo_contacto)}
+      ${crit.some(([, v]) => v) ? `<span class="lbl">Criterios</span>
+        <div class="calls-crit">${crit.map(([k, v]) =>
+          `<div><span class="k">${k}</span>${esc(v || '—')}</div>`).join('')}</div>` : ''}
+      ${caja('Análisis', c.analisis ? esc(c.analisis) : '<span style="color:var(--faint)">Sin análisis.</span>')}
+      ${c.tiene_transcripcion || c.transcripcion
+        ? caja('Transcripción', '<span class="calls-box-load"><span class="spin-xs"></span>Cargando…</span>', 'cd-trans')
+        : ''}
+      ${c.record ? `<span class="lbl">Grabación</span><a href="${esc(c.record)}" target="_blank" rel="noopener">Escuchar audio</a>` : ''}
+      ${c.procesado_at ? `<span class="lbl">Procesada</span><div class="calls-val">${esc(fechaHora(c.procesado_at))}</div>` : ''}`;
+  }
+
+  function _panelVacio() {
+    document.querySelectorAll('#calls-list .calls-row.item').forEach(r => r.classList.remove('sel'));
+    document.getElementById('cd-title').textContent = 'Ninguna llamada seleccionada';
+    document.getElementById('cd-meta').innerHTML = '';
+    document.getElementById('cd-score').hidden = true;
+    document.getElementById('calls-detail-body').innerHTML = `
+      <div class="calls-ph">
+        <div class="calls-ph-icon"><i class="ti ti-phone"></i></div>
+        <div class="calls-ph-title">Elige una llamada</div>
+        <div class="calls-ph-text">Su análisis y su transcripción aparecerán aquí, sin mover la lista.</div>
+      </div>`;
+  }
+
+  function _cajaHtml(label, inner, id) {
+    return `<div class="calls-box">
+      <div class="calls-box-head">
+        <span class="lbl">${label}</span>
+        <button type="button" class="calls-box-btn" onclick="toggleCallsBox(this)">Ver completo</button>
+      </div>
+      <div class="calls-box-body"${id ? ` id="${id}"` : ''}>${inner}</div>
+    </div>`;
+  }
+
+  function toggleCallsBox(btn) {
+    const caja = btn.closest('.calls-box');
+    const abierta = caja.classList.toggle('abierto');
+    btn.textContent = abierta ? 'Contraer' : 'Ver completo';
+  }
+
+  // Cache por call_id: volver a una llamada ya vista no repite la petición.
+  const _transCache = new Map();
+
+  async function _cargarTranscripcion(slug, callId) {
+    const pinta = (html) => {
+      // Si el usuario ya saltó a otra llamada, esta respuesta llegó tarde.
+      if (_callSel?.call_id !== callId) return;
+      const el = document.getElementById('cd-trans');
+      if (el) el.innerHTML = html;
+    };
+    if (_transCache.has(callId)) return pinta(_transCache.get(callId));
     try {
       const r = await fetch(`${CALLS_API}/${encodeURIComponent(slug)}/${encodeURIComponent(callId)}`);
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      const c = await r.json();
-      const campo = (l, v) => v ? `<span class="lbl">${l}</span><div class="calls-val">${_esc(String(v))}</div>` : '';
-      const califs = [c.presentacion, c.precalif, c.exploracion, c.agenda].some(Boolean)
-        ? `${c.presentacion || '—'} · ${c.precalif || '—'} · ${c.exploracion || '—'} · ${c.agenda || '—'}` : '';
-      slot.innerHTML = `<div class="calls-detail">
-        ${c.error ? `<div class="calls-err">${_esc(c.error)}${c.intentos ? ` · ${c.intentos} intento(s)` : ''}</div>` : ''}
-        ${campo('Prospecto', [c.contraparte_numero, c.ciudad].filter(Boolean).join(' · '))}
-        ${campo('Estatus de la llamada', c.estatus)}
-        ${campo('Tipo de contacto', c.tipo_contacto)}
-        ${campo('Presentación / Precalif. / Exploración / Agenda', califs)}
-        ${campo('Análisis', c.analisis)}
-        ${campo('Transcripción', c.transcripcion)}
-        ${c.record ? `<span class="lbl">Grabación</span><a href="${_esc(c.record)}" target="_blank" rel="noopener">Escuchar audio</a>` : ''}
-      </div>`;
+      const d = await r.json();
+      const html = d.transcripcion
+        ? _esc(d.transcripcion)
+        : '<span style="color:var(--faint)">Sin transcripción.</span>';
+      _transCache.set(callId, html);
+      pinta(html);
     } catch (e) {
-      slot.innerHTML = `<div class="calls-err">No se pudo cargar el detalle: ${_esc(e.message)}</div>`;
+      pinta(`<span class="calls-err" style="padding:0">No se pudo cargar: ${_esc(e.message)}</span>`);
     }
   }
+
+  // Las columnas se ocultan por el ancho REAL de la lista, no por el del
+  // viewport: con el panel al lado, la lista mide poco más de la mitad.
+  function _ajustarColumnas() {
+    const box = document.getElementById('calls-list');
+    if (!box) return;
+    const compacta = box.clientWidth > 0 && box.clientWidth < 520;
+    box.querySelectorAll('.calls-row').forEach(r => r.classList.toggle('compacta', compacta));
+  }
+  let _colsT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_colsT);
+    _colsT = setTimeout(_ajustarColumnas, 150);
+  });
 
   // La petición no vuelve hasta que Gemini transcribió el audio y OpenAI lo
   // analizó: 20 s en una llamada corta y más de un minuto en una de 15 minutos.

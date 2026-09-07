@@ -134,7 +134,9 @@ esquema estándar del pipeline. **La conecta él mismo** desde sus Ajustes, con
 "Guardar y preparar", que crea las tablas del pipeline en su base; el guard
 anti-SSRF de `src/calls/tenant.ts` rechaza hosts que resuelvan a direcciones
 internas. El sweeper transcribe y analiza sus llamadas igual que las de Callpicker. Su PDF **no toca
-Drive ni disco**: vive 30 minutos en memoria y se borra al descargarlo — por eso
+Drive ni disco**: vive 30 minutos en memoria y expira solo por tiempo, así que
+el visualizador de la pestaña Reportes y el botón de descarga leen el mismo
+buffer sin consumirlo. Por eso
 no tiene Automatización, y por eso el servicio debe correr en **una sola
 instancia**.
 

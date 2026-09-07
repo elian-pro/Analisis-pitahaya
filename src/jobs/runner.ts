@@ -217,15 +217,19 @@ export async function runJob(job: Job): Promise<void> {
     const mergedBuffer = await mergePdfs(pdfBuffers);
     console.log(`[runner] Step 6 done: merged PDF size=${mergedBuffer.length}`);
 
-    // ── 7. Entrega: Drive (gestionados) o guarda efímera (cliente externo) ───
+    // ── 7. Entrega ───────────────────────────────────────────────────────────
+    // La guarda efímera se llena SIEMPRE, no solo para clientes externos: es de
+    // donde el visualizador de la pestaña Reportes saca los bytes. Como solo
+    // enseña lo generado en la sesión, su ventana de 30 min basta y evita tener
+    // que persistir el fileId del PDF y bajarlo de Drive para poder mostrarlo.
+    // Un gestionado ADEMÁS sube a Drive, que sigue siendo su entrega de verdad.
+    const filename = `${clientFileLabel(client)} | Analisis de Llamadas | ` +
+      (job.period_type === 'weekly' && job.date_from ? `Semana ${job.date_from}` : job.month) + '.pdf';
+    pdfVault.put(job.id, mergedBuffer, filename);
+    console.log(`[runner] Step 7: PDF en guarda efimera (${filename}, 30 min)`);
+
     let combinedUrl: string | undefined;
-    let downloadFilename: string | undefined;
-    if (plan.vault) {
-      downloadFilename = `${clientFileLabel(client)} | Analisis de Llamadas | ` +
-        (job.period_type === 'weekly' && job.date_from ? `Semana ${job.date_from}` : job.month) + '.pdf';
-      pdfVault.put(job.id, mergedBuffer, downloadFilename);
-      console.log(`[runner] Step 7: PDF en guarda efimera (${downloadFilename}, 30 min)`);
-    } else {
+    if (plan.drive) {
       console.log(`[runner] Step 7: uploading combined PDF to Drive folder ${client.folder_id}...`);
       combinedUrl = await uploadPdf(
         client.folder_id,
@@ -316,13 +320,18 @@ export async function runJob(job: Job): Promise<void> {
       individual: [],
       combined: {
         ...(combinedUrl ? { driveUrl: combinedUrl } : {}),
-        ...(downloadFilename ? { download: true as const, filename: downloadFilename } : {}),
+        // `download` sigue significando "esta es su única entrega" (cliente
+        // externo, sin Drive); `viewable` es lo que habilita el visualizador y
+        // lo tienen todos.
+        ...(plan.vault ? { download: true as const } : {}),
+        viewable: true as const,
+        filename,
         advisors: individualResults.map(r => r.asesor),
       },
       ...(radarResult && { radar: { driveUrl: radarResult.driveUrl } }),
       tokens: tokenSummary,
     };
-    console.log(`[runner] Step 9: finalising job, combined=${combinedUrl ?? downloadFilename}`);
+    console.log(`[runner] Step 9: finalising job, combined=${combinedUrl ?? filename}`);
     const partialErrors = [
       ...failures,
       ...sidecarFailures.map(f => `sidecar ${f} (sin comparación el próximo periodo)`),

@@ -57,7 +57,7 @@
     .topbar-sub{display:block;font-size:12px;color:var(--muted);margin-top:4px;}
     /* Icono lucide/tabler pegado a un texto. Hereda tamaño del contenedor (ZR-03, ZR-19). */
     .ti-lead{margin-right:.5em;vertical-align:-.1em;}
-    .main{max-width:1060px;width:100%;margin:0 auto;padding:40px 48px;position:relative;z-index:1;}
+    .main{max-width:1400px;width:100%;margin:0 auto;padding:40px 48px;position:relative;z-index:1;}
     /* Colapsada: solo iconos. Los rotulos se ocultan, nada cambia de grosor (ZR-14). */
     body.nav-collapsed .sidebar{width:68px;}
     body.nav-collapsed .sb-head{flex-direction:column;align-items:center;gap:12px;padding:18px 0;}
@@ -105,20 +105,65 @@
     .check-actions{display:flex;gap:8px;margin-bottom:10px;align-items:center;}
     .link-btn{font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;font-family:inherit;}
     .link-btn:hover{color:var(--fg);}
-    .advisor-grid{display:flex;flex-direction:column;gap:5px;}
-    .advisor-check{display:flex;align-items:center;gap:10px;padding:8px 11px;border:0.5px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;user-select:none;}
+    /* ── Panel de Reportes: control a la izquierda, documento a la derecha ── */
+    .report-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:16px;margin-bottom:16px;align-items:start;}
+    .report-controls{display:flex;flex-direction:column;gap:16px;min-width:0;}
+    .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+    .card-kicker{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg);display:flex;align-items:center;}
+    .card-kicker i{color:var(--muted);}
+    .filter-pill{background:none;border:0.5px solid transparent;color:var(--muted);font-family:'Inter',sans-serif;font-size:11.5px;padding:4px 10px;border-radius:100px;cursor:pointer;transition:all .15s;}
+    .filter-pill:hover{color:var(--fg);}
+    .filter-pill.active{background:var(--surface2);border-color:var(--border2);color:var(--fg);}
+    .filter-pill .n{color:var(--faint);}
+    /* Sin llamadas en el periodo: la fila se apaga. Dice lo mismo que el aviso
+       rojo que había antes, con menos ruido en una rejilla de 8 tarjetas. */
+    .advisor-check.sin-llamadas{opacity:.45;}
+    .advisor-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    @media(max-width:900px){.advisor-grid{grid-template-columns:1fr;}}
+
+    /* ── Visualizador ────────────────────────────────────────────────────── */
+    .viewer-card{padding:0;overflow:hidden;display:flex;flex-direction:column;position:sticky;top:88px;max-height:calc(100vh - 120px);}
+    .viewer-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:11px 14px;border-bottom:0.5px solid var(--border);background:var(--surface2);flex-shrink:0;}
+    .viewer-file-icon{font-size:15px;color:var(--muted);flex-shrink:0;}
+    .viewer-name{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:90px;}
+    .viewer-badge{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border:0.5px solid var(--border2);border-radius:100px;padding:3px 8px;flex-shrink:0;}
+    .viewer-badge.is-error{color:var(--danger);border-color:var(--danger);}
+    .viewer-tools{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+    /* El atributo hidden lo pisa cualquier display de clase: sin esto, las
+       herramientas de página y zoom se ven en el estado vacío. */
+    .viewer-tools[hidden],.viewer-drive[hidden]{display:none;}
+    .viewer-dl:disabled{opacity:.4;cursor:default;}
+    .viewer-tool{display:inline-flex;align-items:center;gap:6px;border:0.5px solid var(--border2);border-radius:8px;padding:3px 6px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:10px;color:var(--muted);}
+    .viewer-tool b{color:var(--fg);font-weight:500;}
+    .viewer-tool button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 3px;}
+    .viewer-tool button:hover{color:var(--fg);}
+    .viewer-tool button:disabled{opacity:.3;cursor:default;}
+    /* Un <a> con .btn-sm hereda el color de enlace del navegador si no se le dice
+       lo contrario: sin esto "Abrir en Drive" sale azul dentro de la barra. */
+    .viewer-drive{flex-shrink:0;color:var(--fg);text-decoration:none;}
+    .viewer-dl{flex-shrink:0;}
+    .viewer-body{flex:1;overflow:auto;padding:18px;display:flex;justify-content:center;align-items:flex-start;min-height:420px;background:var(--bg);}
+    .viewer-body canvas{max-width:100%;height:auto;border-radius:6px;box-shadow:0 8px 32px rgba(0,0,0,.35);}
+    .viewer-placeholder{margin:auto;text-align:center;max-width:340px;border:1px dashed var(--border2);border-radius:14px;padding:40px 28px;}
+    .viewer-ph-icon{width:44px;height:44px;margin:0 auto 16px;border-radius:12px;border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--muted);}
+    .viewer-ph-kicker{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;}
+    .viewer-ph-title{font-size:15px;font-weight:600;color:var(--fg);margin-bottom:8px;}
+    .viewer-ph-text{font-size:12px;color:var(--muted);line-height:1.65;}
+    @media(max-width:1100px){.report-cols{grid-template-columns:1fr;}.viewer-card{position:static;max-height:none;}}
+
+    .advisor-check{display:flex;align-items:center;gap:9px;padding:8px 10px;border:0.5px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;user-select:none;min-width:0;}
     .advisor-check:hover{border-color:var(--border2);}
     .advisor-check.checked{border-color:var(--border2);background:var(--surface2);}
     .advisor-check input{display:none;}
     .check-box{width:16px;height:16px;border-radius:4px;border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;transition:all 0.15s;}
     .advisor-check.checked .check-box{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
     .avatar{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
-    .advisor-name{font-size:13px;font-weight:400;flex:1;}
+    .advisor-name{font-size:13px;font-weight:400;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .advisor-name-col{display:flex;flex-direction:column;flex:1;min-width:0;gap:1px;}
     .advisor-warn{font-size:10px;color:var(--danger);font-weight:500;}
     /* Va antes del botón de quitar, que aparece al pasar el mouse; el margen
        izquierdo automático lo mantiene pegado a la derecha en ambos estados. */
-    .advisor-calls{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap;}
+    .advisor-calls{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:9.5px;color:var(--faint);white-space:nowrap;}
     .inactive-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;color:var(--muted);}
     .inactive-row .link-btn{margin-left:auto;}
     .remove-btn{font-size:16px;color:var(--faint);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;}
@@ -153,8 +198,6 @@
     .drive-block-title{font-size:13px;font-weight:500;color:var(--fg);margin-bottom:2px;}
     .drive-block-sub{font-size:11px;color:var(--muted);}
     .drive-block-arrow{font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;}
-    .result-section{display:none;margin-top:4px;}
-    .result-section.show{display:block;}
     .result-card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:22px;}
     .result-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:9px;text-decoration:none;color:var(--fg);font-size:13px;font-weight:400;transition:all 0.2s;letter-spacing:0.02em;}
     .result-link:hover{border-color:var(--accent);background:var(--surface);}
@@ -669,18 +712,18 @@
     </a>
   </div>
   <div class="section-label">Asesores y generación de reporte</div>
-  <div class="grid-2">
+  <div class="report-cols">
+    <div class="report-controls">
     <div class="card">
-      <div class="card-title"><i class="ti ti-users ti-lead"></i>Seleccionar asesores</div>
-      <div class="card-desc">El sistema genera un reporte individual por cada asesor seleccionado y luego sintetiza un reporte general del equipo en un único Google Doc.</div>
+      <div class="card-head">
+        <div class="card-kicker"><i class="ti ti-users ti-lead"></i>Selección de asesores</div>
+        <button class="btn-sm" onclick="toggleAddForm()"><i class="ti ti-plus" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Agregar asesor</button>
+      </div>
       <div class="check-actions">
-        <button class="link-btn" onclick="toggleAll(true)">Todos</button>
-        <span style="color:var(--faint)">·</span>
-        <button class="link-btn" onclick="toggleAll(false)">Ninguno</button>
-        <span style="color:var(--faint)">·</span>
-        <button class="link-btn" id="inactive-toggle-btn" onclick="toggleInactivePanel()">Inactivos</button>
-        <span style="flex:1"></span>
-        <button class="link-btn" style="color:var(--accent)" onclick="toggleAddForm()">+ Agregar asesor</button>
+        <button class="filter-pill" id="adv-f-todos"    onclick="setAdvisorFilter('todos')">Todos</button>
+        <button class="filter-pill" id="adv-f-ninguno"  onclick="toggleAll(false)">Ninguno</button>
+        <button class="filter-pill" id="adv-f-conllam"  onclick="setAdvisorFilter('conllam')">Con llamadas</button>
+        <button class="filter-pill" id="inactive-toggle-btn" onclick="toggleInactivePanel()">Inactivos</button>
       </div>
       <div class="add-advisor-form" id="add-form">
         <div class="form-row" style="margin-bottom:10px;">
@@ -708,28 +751,47 @@
       <div class="selected-summary"><span id="selected-count">0</span> asesor(es) seleccionado(s) → <span id="selected-count2">0</span> reporte(s) individual(es) + 1 reporte general</div>
     </div>
     <div class="card">
-      <div class="card-title"><i class="ti ti-chart-bar ti-lead"></i>Generar reporte</div>
-      <div class="card-desc">El sistema analiza cada asesor individualmente y genera un reporte directivo del equipo. El documento final incluye el reporte general en la primera página, seguido de cada reporte individual.</div>
+      <div class="card-kicker" style="margin-bottom:14px;"><i class="ti ti-sparkles ti-lead"></i>Generar reporte</div>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button class="btn-primary" onclick="generateReport('selected')" id="btn-selected"><i class="ti ti-sparkles ti-lead"></i>Generar Reporte de Seleccionados</button>
         <button class="btn-secondary" onclick="generateReport('general')" id="btn-general">Generar Reporte Completo (todos)</button>
       </div>
-      <div style="margin-top:18px;padding-top:16px;border-top:0.5px solid var(--border);">
-        <div style="font-size:10px;color:var(--faint);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.15em;font-weight:500;">Qué incluye el documento</div>
-        <div style="font-size:12px;color:var(--muted);line-height:1.85;">
-          ✓ Pág. 1 — Reporte general del equipo<br>
-          ✓ Pág. por asesor — Análisis individual completo<br>
-          ✓ Fortalezas · Áreas de oportunidad · Patrones<br>
-          ✓ Casos de estudio · Plan de entrenamiento<br>
-          ✓ Coaching 1 a 1 · KPIs 30 y 90 días
-        </div>
-      </div>
     </div>
-  </div>
-  <div class="result-section" id="result-section">
-    <div class="section-label">Reporte generado</div>
-    <div class="result-card">
-      <div id="result-content"></div>
+    </div>
+
+    <!-- Visualizador del documento. Los bytes salen de la guarda efímera del
+         job (30 min), la misma ruta que usa el botón de descarga. -->
+    <div class="card viewer-card">
+      <div class="viewer-bar">
+        <i class="ti ti-file-typography viewer-file-icon"></i>
+        <span class="viewer-name" id="viewer-name">Sin reporte generado</span>
+        <span class="viewer-badge" id="viewer-badge">En espera</span>
+        <span class="viewer-tools" id="viewer-tools" hidden>
+          <span class="viewer-tool">
+            <button type="button" onclick="viewerPage(-1)" aria-label="Página anterior">‹</button>
+            <span>Pág <b id="viewer-page">1</b> / <span id="viewer-pages">1</span></span>
+            <button type="button" onclick="viewerPage(1)" aria-label="Página siguiente">›</button>
+          </span>
+          <span class="viewer-tool">
+            <button type="button" onclick="viewerZoom(-1)" aria-label="Alejar">−</button>
+            <span id="viewer-zoom">100%</span>
+            <button type="button" onclick="viewerZoom(1)" aria-label="Acercar">+</button>
+          </span>
+        </span>
+        <a class="btn-sm viewer-drive" id="viewer-drive" href="#" target="_blank" rel="noopener" hidden>Abrir en Drive ↗</a>
+        <button class="btn-sm btn-sm-green viewer-dl" id="viewer-download" onclick="downloadReport()" disabled>
+          <i class="ti ti-download" style="font-size:12px;vertical-align:middle;"></i>&nbsp;Descargar PDF
+        </button>
+      </div>
+      <div class="viewer-body" id="viewer-body">
+        <div class="viewer-placeholder" id="viewer-placeholder">
+          <div class="viewer-ph-icon"><i class="ti ti-clipboard-text"></i></div>
+          <div class="viewer-ph-kicker">Vista previa del documento</div>
+          <div class="viewer-ph-title">Aún no se ha generado ningún reporte</div>
+          <div class="viewer-ph-text">Elige el cliente y el periodo, marca a los asesores y pulsa <strong>Generar Reporte de Seleccionados</strong>.</div>
+        </div>
+        <canvas id="viewer-canvas" hidden></canvas>
+      </div>
     </div>
   </div>
 
@@ -2331,27 +2393,256 @@
     g.innerHTML='';
     if(!currentClient){
       g.innerHTML='<div class="advisors-empty">Selecciona un cliente para ver sus asesores.</div>';
-      uc(); return;
+      uc(); refreshAdvisorFilters(); return;
     }
     const list=ga();
     if(!list.length){
-      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente. Agrega el primero con "+ Agregar asesor".</div>';
-      uc(); return;
+      g.innerHTML='<div class="advisors-empty">No hay asesores para este cliente. Agrega el primero con "Agregar asesor".</div>';
+      uc(); refreshAdvisorFilters(); return;
     }
     list.forEach(a=>{
       const r=document.createElement('label');
-      r.className='advisor-check checked';
+      r.className='advisor-check checked'+(sinLlamadas(a)?' sin-llamadas':'');
       r.dataset.name=a.name;
-      const warn=a.has_calls===false?'<div class="advisor-warn">Sin llamadas en este periodo</div>':'';
       // call_count es null cuando no se pudo leer el Sheet: ahí no se dice nada,
       // porque "0 llamadas" y "no pude contar" no son lo mismo.
-      const calls=a.call_count>0?`<span class="advisor-calls">${a.call_count} ${a.call_count===1?'llamada':'llamadas'}</span>`:'';
-      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><div class="advisor-name-col"><span class="advisor-name">${_esc(a.name)}</span>${warn}</div>${calls}<button class="remove-btn" onclick="rm('${a.id}',event)">×</button>`;
+      const calls=a.call_count===null||a.call_count===undefined
+        ? ''
+        : `<span class="advisor-calls">${a.call_count} ${a.call_count===1?'llamada':'llamadas'}</span>`;
+      r.innerHTML=`<input type="checkbox" checked><div class="check-box">✓</div><div class="avatar" style="background:${a.bg};color:${a.color};">${a.initials}</div><div class="advisor-name-col"><span class="advisor-name">${_esc(a.name)}</span>${calls}</div><button class="remove-btn" onclick="rm('${a.id}',event)">×</button>`;
       r.addEventListener('click',e=>{if(e.target.closest('.remove-btn'))return;e.preventDefault();ta(r);});
       g.appendChild(r);
     });
     uc();
+    refreshAdvisorFilters();
   }
+
+  // ── Filtros del roster ──────────────────────────────────────────────────────
+  // Función pura y exportable para poder probarla: distingue "cero llamadas" de
+  // "no se pudo contar" (call_count null), que es la trampa de este dato.
+  function sinLlamadas(a){
+    if(a.has_calls===false) return true;
+    return a.call_count===0;
+  }
+  function contarRoster(list){
+    return {
+      total:     list.length,
+      conLlamadas: list.filter(a=>!sinLlamadas(a)).length,
+    };
+  }
+
+  let _advFilter='todos';
+  function setAdvisorFilter(f){
+    _advFilter=f;
+    // 'todos' marca a todos; 'conllam' solo a los que tuvieron llamadas, que es
+    // lo que evita pagar un análisis de un asesor sin material.
+    document.querySelectorAll('#advisor-grid .advisor-check').forEach(r=>{
+      const on = f==='todos' ? true : !r.classList.contains('sin-llamadas');
+      const cb = r.querySelector('input');
+      cb.checked = on;
+      r.classList.toggle('checked', on);
+      r.querySelector('.check-box').textContent = on ? '✓' : '';
+    });
+    uc();
+    refreshAdvisorFilters();
+  }
+
+  function refreshAdvisorFilters(){
+    const c = contarRoster(ga());
+    const set=(id,txt,active)=>{
+      const el=document.getElementById(id);
+      if(!el) return;
+      el.innerHTML=txt;
+      el.classList.toggle('active',!!active);
+    };
+    set('adv-f-todos',   `Todos <span class="n">(${c.total})</span>`,           _advFilter==='todos');
+    set('adv-f-ninguno', 'Ninguno', false);
+    set('adv-f-conllam', `Con llamadas <span class="n">(${c.conLlamadas})</span>`, _advFilter==='conllam');
+    const inact=document.getElementById('inactive-toggle-btn');
+    if(inact&&!inact.dataset.n) inact.textContent='Inactivos';
+  }
+
+  // ── Visualizador del documento ──────────────────────────────────────────────
+  // Los bytes salen de la guarda efímera del job (30 min) por la MISMA ruta que
+  // el botón de descarga: `Content-Disposition: attachment` no afecta al fetch
+  // que hace PDF.js, así que no hace falta un endpoint aparte.
+  //
+  // PDF.js se carga en diferido, la primera vez que hay algo que mostrar: la
+  // pestaña no debe pagar ~350 KB si nunca generas un reporte. Y si el CDN no
+  // responde, se cae al estado de error CON el botón de descarga vivo: bajar el
+  // PDF no puede depender de la librería que lo dibuja.
+  const PDFJS_VER = '3.11.174';
+  const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}`;
+  const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+  let _viewerJob = null;      // jobId del documento en pantalla
+  let _viewerDoc = null;      // PDFDocumentProxy
+  let _viewerPage = 1;
+  let _viewerZoom = null;     // null = ajustar al ancho
+  let _pdfjsPromise = null;
+  let _renderToken = 0;       // invalida renders en vuelo al cambiar de página
+  let _viewerUrl = null;      // objectURL del PDF, para descargar sin repetir el fetch
+  let _viewerFile = 'reporte.pdf';
+
+  function _loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (_pdfjsPromise) return _pdfjsPromise;
+    _pdfjsPromise = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = `${PDFJS_CDN}/pdf.min.js`;
+      sc.onload = () => {
+        if (!window.pdfjsLib) return rej(new Error('PDF.js cargó pero no expuso pdfjsLib.'));
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.js`;
+        res(window.pdfjsLib);
+      };
+      sc.onerror = () => rej(new Error('No se pudo cargar el visor (CDN). Descarga el PDF para verlo.'));
+      document.head.appendChild(sc);
+    });
+    return _pdfjsPromise;
+  }
+
+  function setViewerState(estado, datos = {}) {
+    const $ = id => document.getElementById(id);
+    const ph = $('viewer-placeholder'), cv = $('viewer-canvas');
+    const badge = $('viewer-badge'), tools = $('viewer-tools');
+    const dl = $('viewer-download'), drive = $('viewer-drive');
+    badge.classList.remove('is-error');
+    tools.hidden = estado !== 'listo';
+    dl.disabled  = estado !== 'listo';
+    drive.hidden = !(estado === 'listo' && datos.driveUrl);
+    if (datos.driveUrl) drive.href = datos.driveUrl;
+    cv.hidden = estado !== 'listo';
+    ph.style.display = estado === 'listo' ? 'none' : '';
+
+    if (estado === 'vacio') {
+      $('viewer-name').textContent = 'Sin reporte generado';
+      badge.textContent = 'En espera';
+      ph.innerHTML = `
+        <div class="viewer-ph-icon"><i class="ti ti-clipboard-text"></i></div>
+        <div class="viewer-ph-kicker">Vista previa del documento</div>
+        <div class="viewer-ph-title">Aún no se ha generado ningún reporte</div>
+        <div class="viewer-ph-text">Elige el cliente y el periodo, marca a los asesores y pulsa <strong>Generar Reporte de Seleccionados</strong>.</div>`;
+    } else if (estado === 'generando') {
+      $('viewer-name').textContent = 'Generando…';
+      badge.textContent = 'Generando';
+      ph.innerHTML = `
+        <div class="viewer-ph-icon"><div class="spin-xs"></div></div>
+        <div class="viewer-ph-kicker">Vista previa del documento</div>
+        <div class="viewer-ph-title">Analizando las llamadas</div>
+        <div class="viewer-ph-text">El documento aparecerá aquí en cuanto esté listo. Puedes seguir el avance en la ventana de progreso.</div>`;
+    } else if (estado === 'error') {
+      badge.textContent = 'Error';
+      badge.classList.add('is-error');
+      ph.innerHTML = `
+        <div class="viewer-ph-icon"><i class="ti ti-alert-triangle"></i></div>
+        <div class="viewer-ph-kicker">Vista previa del documento</div>
+        <div class="viewer-ph-title">No se pudo mostrar el documento</div>
+        <div class="viewer-ph-text">${_esc(datos.mensaje || 'Error desconocido.')}</div>`;
+      // Solo si YA tenemos los bytes (CDN caído, PDF.js reventó). Con un 410 no
+      // hay nada que bajar, y un botón que solo puede fallar es peor que ninguno.
+      if (_viewerUrl) dl.disabled = false;
+    }
+  }
+
+  async function openInViewer(jobId, combined, periodo) {
+    if (_viewerUrl) { URL.revokeObjectURL(_viewerUrl); _viewerUrl = null; }
+    _viewerDoc = null;
+    _viewerJob = jobId;
+    _viewerPage = 1;
+    _viewerZoom = null;
+    const nombre = (combined.filename || `reporte-${periodo}.pdf`);
+    document.getElementById('viewer-name').textContent = nombre.toUpperCase();
+    document.getElementById('viewer-badge').textContent = 'Listo';
+    setViewerState('listo', { driveUrl: combined.driveUrl });
+    try {
+      const r = await fetch(`${REPORT_API}/${encodeURIComponent(jobId)}/download`);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${r.status}`);
+      }
+      const buf = await r.arrayBuffer();
+      // El Blob se crea ANTES de entregar los bytes: PDF.js pasa el ArrayBuffer
+      // al worker y lo DETACHA. Hacerlo después descarga un archivo vacío, sin
+      // ningún error visible. Además así la descarga sobrevive a que expire el
+      // TTL con la pestaña abierta.
+      if (_viewerUrl) URL.revokeObjectURL(_viewerUrl);
+      _viewerUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+      _viewerFile = nombre;
+      // La librería se carga DESPUÉS de tener los bytes: si el CDN no responde,
+      // el visor falla pero el botón de descarga ya funciona.
+      const pdfjs = await _loadPdfJs();
+      _viewerDoc = await pdfjs.getDocument({ data: buf }).promise;
+      document.getElementById('viewer-pages').textContent = _viewerDoc.numPages;
+      await _renderViewerPage();
+    } catch (e) {
+      setViewerState('error', { mensaje: e.message, driveUrl: combined.driveUrl });
+    }
+  }
+
+  async function _renderViewerPage() {
+    if (!_viewerDoc) return;
+    const token = ++_renderToken;
+    const cv = document.getElementById('viewer-canvas');
+    const page = await _viewerDoc.getPage(_viewerPage);
+    if (token !== _renderToken) return;   // llegó tarde: hay otro render en curso
+
+    // Con la pestaña oculta (.tab-panel{display:none}) clientWidth es 0: sin
+    // esta guarda el canvas se rehace a escala 0 y vuelves a una hoja en blanco.
+    const ancho = document.getElementById('viewer-body').clientWidth - 36;
+    if (ancho < 60) return;
+    const base  = page.getViewport({ scale: 1 });
+    const escala = _viewerZoom ?? (ancho / base.width);
+    const vp = page.getViewport({ scale: escala });
+
+    // devicePixelRatio o el texto se ve borroso en retina.
+    const dpr = window.devicePixelRatio || 1;
+    cv.width  = Math.floor(vp.width  * dpr);
+    cv.height = Math.floor(vp.height * dpr);
+    cv.style.width  = Math.floor(vp.width) + 'px';
+    cv.style.height = Math.floor(vp.height) + 'px';
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+    document.getElementById('viewer-page').textContent = _viewerPage;
+    document.getElementById('viewer-zoom').textContent = Math.round(escala * 100) + '%';
+  }
+
+  function viewerPage(delta) {
+    if (!_viewerDoc) return;
+    const n = Math.min(Math.max(1, _viewerPage + delta), _viewerDoc.numPages);
+    if (n === _viewerPage) return;
+    _viewerPage = n;
+    void _renderViewerPage();
+  }
+
+  function viewerZoom(delta) {
+    if (!_viewerDoc) return;
+    const actual = _viewerZoom ?? 1;
+    let i = ZOOMS.findIndex(z => z >= actual - 0.001);
+    if (i < 0) i = ZOOMS.length - 1;
+    _viewerZoom = ZOOMS[Math.min(Math.max(0, i + delta), ZOOMS.length - 1)];
+    void _renderViewerPage();
+  }
+
+  function downloadReport() {
+    if (_viewerUrl) {
+      const a = document.createElement('a');
+      a.href = _viewerUrl; a.download = _viewerFile;
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    // Sin bytes en memoria (el visor falló antes del fetch): al servidor.
+    if (_viewerJob) window.location.href = `${REPORT_API}/${encodeURIComponent(_viewerJob)}/download`;
+  }
+
+  // Re-render solo al TERMINAR el resize, y solo si el zoom es "ajustar al ancho".
+  let _viewerResizeT = null;
+  window.addEventListener('resize', () => {
+    if (!_viewerDoc || _viewerZoom !== null) return;
+    clearTimeout(_viewerResizeT);
+    _viewerResizeT = setTimeout(() => void _renderViewerPage(), 180);
+  });
 
   function ta(r){
     const cb=r.querySelector('input');
@@ -2362,11 +2653,13 @@
   }
 
   function toggleAll(v){
+    if(!v) _advFilter='';   // "Ninguno" no es un filtro con estado, es una acción
     document.querySelectorAll('.advisor-check').forEach(r=>{
       r.querySelector('input').checked=v;
       r.classList.toggle('checked',v);
       r.querySelector('.check-box').textContent=v?'✓':'';
     });
+    refreshAdvisorFilters();
     uc();
   }
 
@@ -2678,12 +2971,12 @@
   }
 
   // El link del reporte terminado: Drive para gestionados; para el cliente
-  // externo, descarga efímera de un solo uso (el backend responde 410 después).
+  // externo, descarga efímera: vive 30 min y luego el backend responde 410.
   function _combinedLinkHtml(combined, labelHtml, style){
     if (combined.download) {
       return `<a href="/api/report/${encodeURIComponent(currentJobId)}/download" class="result-link" style="${style}">`+
              `<span><i class="ti ti-download ti-lead"></i>${labelHtml}</span>`+
-             `<span style="font-size:11px;color:var(--faint);">Disponible 30 min · se borra al descargar</span></a>`;
+             `<span style="font-size:11px;color:var(--faint);">Disponible 30 minutos</span></a>`;
     }
     return `<a href="${combined.driveUrl}" target="_blank" class="result-link" style="${style}"><span>${labelHtml}</span><span class="result-arrow">→</span></a>`;
   }
@@ -2906,8 +3199,7 @@
     const displayPeriod = periodType === 'weekly' ? `${ml} · Semana ${weekLabel}` : ml;
 
     busy=true;lock(true);
-    document.getElementById('result-section').classList.remove('show');
-    document.getElementById('result-content').innerHTML='';
+    setViewerState('generando');
     const n=advisors.length;
     const STEPS=[
       `Leyendo llamadas de ${n===1?advisors[0]:n+' asesores'}`,
@@ -2949,22 +3241,12 @@
       }
       if(results.tokens) _lastJobTokens=results.tokens;
       finishModalMulti(indiv,results.general||null,combined);
-      // Actualizar sección de resultados debajo del modal
-      let rhtml='';
-      if(combined){
-        rhtml+=_combinedLinkHtml(combined, `Reporte Completo — ${displayPeriod}`, 'border-color:rgba(212,175,55,0.4);');
+      // El documento pasa al visualizador. El modal sigue llevando los enlaces:
+      // es transitorio, y el visor es lo que queda en pantalla al cerrarlo.
+      if(combined&&combined.viewable){
+        openInViewer(job_id, combined, displayPeriod);
       }else{
-        indiv.forEach(r=>{
-          rhtml+=`<a href="${r.driveUrl}" target="_blank" class="result-link"><span><i class="ti ti-file-text ti-lead"></i>Reporte ${r.asesor}</span><span class="result-arrow">→</span></a>`;
-        });
-        if(results.general){
-          rhtml+=`<a href="${results.general.driveUrl}" target="_blank" class="result-link" style="border-color:rgba(212,175,55,0.4);"><span>Reporte General — ${displayPeriod}</span><span class="result-arrow">→</span></a>`;
-        }
-      }
-      document.getElementById('result-section').classList.add('show');
-      document.getElementById('result-content').innerHTML=rhtml||'<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>Sin resultados.</div>';
-      if(job.error){
-        document.getElementById('result-content').innerHTML+=`<div class="error-box" style="margin-top:8px;"><i class="ti ti-alert-triangle ti-lead"></i>${job.error}</div>`;
+        setViewerState('error', { mensaje: job.error || 'El reporte terminó sin documento que mostrar.' });
       }
     }catch(e){
       if(e.name==='cancelled'){
@@ -2975,11 +3257,10 @@
         const mc=document.getElementById('modal-close');mc.className='modal-close show';mc.style.display='flex';
         const mr=document.getElementById('modal-result');mr.className='modal-result show';mr.style.display='block';
         mr.innerHTML='<div style="font-size:13px;color:var(--muted);padding:4px 0;">El reporte fue cancelado. No se generó ningún archivo.</div>';
-        document.getElementById('result-section').classList.remove('show');
+        setViewerState('vacio');
       }else{
         errorModal(e.message);
-        document.getElementById('result-section').classList.add('show');
-        document.getElementById('result-content').innerHTML=`<div class="error-box"><i class="ti ti-alert-triangle ti-lead"></i>${e.message}</div>`;
+        setViewerState('error', { mensaje: e.message });
       }
     }
     busy=false;lock(false);currentJobId=null;

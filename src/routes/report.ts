@@ -387,19 +387,20 @@ router.get('/radar-preflight', async (req: Request, res: Response): Promise<void
   });
 });
 
-// GET /api/report/:jobId/download — descarga efímera del cliente externo.
-// De UN solo uso: entregar borra el buffer (jobs/vault.ts). La política ya
-// validó que el job sea del tenant que lo pide.
+// GET /api/report/:jobId/download — los bytes del reporte, durante 30 min.
+// Sirve al visualizador Y al botón de descarga: leer no consume (jobs/vault.ts),
+// y `Content-Disposition` no afecta al fetch que hace PDF.js, así que una sola
+// ruta cubre los dos usos. La política ya validó que el job sea de quien lo pide.
 router.get('/:jobId/download', (req: Request, res: Response): void => {
   const job = getJob(req.params.jobId);
   if (!job) {
     res.status(404).json({ error: `Job '${req.params.jobId}' not found` });
     return;
   }
-  const hit = pdfVault.take(req.params.jobId);
+  const hit = pdfVault.read(req.params.jobId);
   if (!hit) {
     // 410 y no 404: el job existe, el archivo ya no. La UI usa el texto tal cual.
-    res.status(410).json({ error: 'El archivo expiró o el servidor se reinició. Genera el reporte de nuevo.' });
+    res.status(410).json({ error: 'El documento ya no está disponible: pasaron los 30 minutos o el servidor se reinició. Genera el reporte de nuevo.' });
     return;
   }
   res.setHeader('Content-Type', 'application/pdf');

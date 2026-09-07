@@ -16,9 +16,11 @@ export interface TokenSummary {
 export interface JobResult {
   individual: Array<{ asesor: string; driveUrl: string }>;
   general?:   { driveUrl: string };
-  // driveUrl (entrega por Drive) o download+filename (descarga efímera del
-  // cliente externo: GET /api/report/:jobId/download, un solo uso, 30 min).
-  combined?:  { driveUrl?: string; download?: true; filename?: string; advisors: string[] };
+  // driveUrl: entrega por Drive (cliente gestionado).
+  // download: la descarga efímera es su ÚNICA entrega (cliente externo).
+  // viewable: hay bytes en la guarda para el visualizador; lo tienen todos
+  //   durante 30 min, vía GET /api/report/:jobId/download.
+  combined?:  { driveUrl?: string; download?: true; viewable?: true; filename?: string; advisors: string[] };
   radar?:     { driveUrl: string };   // Radar de Objeciones (archivo aparte, no va en el merge)
   tokens?:    TokenSummary;
 }

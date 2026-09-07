@@ -651,7 +651,21 @@
    Mismo reparto que la pestaña Reportes (.report-cols): a la izquierda lo que
    se recorre, a la derecha lo que se lee. La lista pesa más porque tiene seis
    columnas que defender. */
-.calls-cols{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:16px;align-items:start}
+/* La lista ocupa TODO el ancho y solo se contrae al seleccionar una llamada:
+   sin selección no hay nada que enseñar a la derecha, y el hueco vacío no se
+   gana su sitio. La transición evita que las filas salten bajo el cursor. */
+.calls-cols{display:grid;grid-template-columns:minmax(0,1fr) 0fr;gap:16px;align-items:start;
+  transition:grid-template-columns .32s cubic-bezier(.16,1,.3,1)}
+.calls-cols.abierto{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+.calls-detail-card{opacity:0;transform:translateX(8px);pointer-events:none;
+  transition:opacity .22s ease .1s, transform .28s cubic-bezier(.16,1,.3,1) .06s}
+.calls-cols.abierto .calls-detail-card{opacity:1;transform:none;pointer-events:auto}
+.calls-cols:not(.abierto) .calls-detail-card{border:none}
+/* A todo ancho la lista enseña MÁS dato (el prospecto) en vez de dejar la
+   columna del asesor con cientos de píxeles de hueco; al contraerse, se va. */
+.calls-list-card .calls-row{grid-template-columns:150px 190px minmax(0,1fr) 78px 108px 62px auto}
+.calls-cols.abierto .calls-list-card .calls-row{grid-template-columns:128px minmax(0,1fr) 56px 92px 48px auto}
+.calls-cols.abierto .col-prospecto{display:none}
 .calls-list-card{min-width:0}
 .calls-detail-card{padding:0;overflow:hidden;display:flex;flex-direction:column;
   position:sticky;top:88px;max-height:calc(100vh - 120px);min-width:0}
@@ -688,12 +702,12 @@
    mismo, y expandir es quitarle el techo. */
 .calls-box{border:0.5px solid var(--border2);border-radius:9px;background:var(--bg);overflow:hidden;margin-top:4px}
 .calls-box-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:8px 11px;border-bottom:0.5px solid var(--border);background:var(--surface2)}
-.calls-box-head .lbl{margin:0}
-.calls-box-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;
+  padding:8px 11px;border-bottom:0.5px solid var(--fg);background:var(--fg)}
+.calls-box-head .lbl{margin:0;color:var(--bg);opacity:1}
+.calls-box-btn{background:none;border:none;color:var(--bg);opacity:.7;cursor:pointer;font-family:'Inter',sans-serif;
   font-size:var(--t-label);font-weight:500;letter-spacing:var(--tk-label);text-transform:uppercase;
   padding:2px 4px;flex-shrink:0}
-.calls-box-btn:hover{color:var(--fg)}
+.calls-box-btn:hover{opacity:1}
 .calls-box-body{max-height:9.5em;overflow:auto;padding:10px 12px;white-space:pre-wrap;word-break:break-word}
 .calls-box.abierto .calls-box-body{max-height:none;overflow:visible}
 .calls-box-load{display:flex;align-items:center;gap:8px;color:var(--faint)}
@@ -7383,14 +7397,15 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       calls.forEach(c => _callsPorId.set(c.call_id, c));
 
       box.innerHTML =
-        `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div>Duración</div>
-         <div>Estado</div><div>Calif.</div><div></div></div>` +
+        `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div class="col-prospecto">Prospecto</div>
+         <div>Duración</div><div>Estado</div><div>Calif.</div><div></div></div>` +
         calls.map(c => {
           const est = c.estado || 'sin_procesar';
           return `
           <div class="calls-row item" data-cid="${_esc(c.call_id)}" onclick="selectCall('${_esc(slug)}','${_esc(c.call_id)}')">
             <div>${_esc(_fechaHora(c.fecha))}</div>
             <div>${_esc(c.asesor || '—')}</div>
+            <div class="col-prospecto">${_esc([c.contraparte_numero, c.ciudad].filter(Boolean).join(' · ') || '—')}</div>
             <div>${_dur(c.duracion_seg)}</div>
             <div><span class="calls-est est-${_esc(est)}">${_esc(_CALL_EST[est] || est)}</span></div>
             <div>${c.calif_global ?? '—'}</div>
@@ -7417,6 +7432,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const c = _callsPorId.get(callId);
     if (!c) return;
     _callSel = { slug, call_id: callId };
+    document.querySelector('.calls-cols').classList.add('abierto');
 
     document.querySelectorAll('#calls-list .calls-row.item').forEach(r =>
       r.classList.toggle('sel', r.dataset.cid === callId));
@@ -7466,6 +7482,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   }
 
   function _panelVacio() {
+    document.querySelector('.calls-cols')?.classList.remove('abierto');
     document.querySelectorAll('#calls-list .calls-row.item').forEach(r => r.classList.remove('sel'));
     document.getElementById('cd-title').textContent = 'Ninguna llamada seleccionada';
     document.getElementById('cd-meta').innerHTML = '';

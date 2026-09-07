@@ -11,7 +11,11 @@ export const ClaudeGeneralOutputSchema = z.object({
     label:     z.string(),
     valor:     z.string(),
     variacion: z.string().optional(),
-    tendencia: z.enum(['mejora', 'baja', 'estable', 'sin_dato']),
+    // 'mixto' existe aquí porque un KPI que agrega a todo el equipo puede tener
+    // asesores subiendo y otros bajando, y sin esa palabra el modelo la tomaba
+    // prestada de tendencia_equipo (que sí la tiene, seis líneas más arriba, en
+    // el mismo JSON) y la respuesta entera se caía por validación.
+    tendencia: z.enum(['mejora', 'baja', 'estable', 'mixto', 'sin_dato']),
   })).min(1),
 
   fortalezas_equipo:  z.array(z.string()).min(1),

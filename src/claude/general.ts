@@ -10,6 +10,7 @@ import type { AdvisorResult } from './individual';
 import { renderPdf } from '../pdf/renderer';
 import { NO_DASH_INSTRUCTION, resolveGeneralPrompt } from './prompts';
 import { monthLabel } from '../google/drive';
+import { callWithSchema, type ClaudeReply } from './callWithSchema';
 
 interface ClientForGeneral {
   name:            string;
@@ -125,7 +126,7 @@ const GENERAL_TOOL: Anthropic.Tool = {
             label:     { type: 'string', description: 'Nombre del KPI, ej: "Score equipo", "Nombre del asesor", "% cierres con siguiente paso". Usa solo conceptos presentes en el prompt del cliente o en los datos.' },
             valor:     { type: 'string', description: 'Valor actual, ej: "53/100", "60/100", "0 de 56 llamadas"' },
             variacion: { type: 'string', description: 'Cambio vs periodo anterior, ej: "+14 pts", "-8 pts". Omitir si primer periodo.' },
-            tendencia: { type: 'string', enum: ['mejora', 'baja', 'estable', 'sin_dato'] },
+            tendencia: { type: 'string', enum: ['mejora', 'baja', 'estable', 'mixto', 'sin_dato'] },
           },
         },
       },
@@ -170,44 +171,20 @@ async function callClaudeWithRetry(
   systemPrompt: string,
   userMessage:  string,
 ): Promise<GeneralCallResult> {
-  let lastError: Error = new Error('No attempts made');
-  let totalInput  = 0;
-  let totalOutput = 0;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await getClaude().messages.create({
-        model:      MODEL,
-        max_tokens: 8192,
-        system:     systemPrompt + NO_DASH_INSTRUCTION,
-        messages:   [{ role: 'user', content: userMessage }],
-        tools:      [GENERAL_TOOL],
-        tool_choice: { type: 'tool', name: TOOL_NAME },
-      });
-
-      totalInput  += res.usage.input_tokens;
-      totalOutput += res.usage.output_tokens;
-
-      const toolBlock = res.content.find(b => b.type === 'tool_use');
-      if (!toolBlock || toolBlock.type !== 'tool_use') {
-        throw new Error('Claude response contained no tool_use block');
-      }
-
-      const parsed = ClaudeGeneralOutputSchema.safeParse(toolBlock.input);
-      if (!parsed.success) {
-        throw new Error(`Zod validation failed (attempt ${attempt}): ${parsed.error.message}`);
-      }
-
-      return { data: parsed.data, input_tokens: totalInput, output_tokens: totalOutput };
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < MAX_RETRIES) {
-        console.warn(`[claude/general] Attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message);
-      }
-    }
-  }
-
-  throw lastError;
+  return callWithSchema({
+    schema:      ClaudeGeneralOutputSchema,
+    tag:         'claude/general',
+    userMessage,
+    maxRetries:  MAX_RETRIES,
+    send: (messages) => getClaude().messages.create({
+      model:      MODEL,
+      max_tokens: 8192,
+      system:     systemPrompt + NO_DASH_INSTRUCTION,
+      messages:   messages as Anthropic.MessageParam[],
+      tools:      [GENERAL_TOOL],
+      tool_choice: { type: 'tool', name: TOOL_NAME },
+    }) as unknown as Promise<ClaudeReply>,
+  });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

@@ -179,8 +179,8 @@
 
 <%
 const TEND = { mejora: '↑ Mejora', estable: '→ Estable', mixto: '↕ Mixto', retroceso: '↓ Retroceso', primer_mes: 'Primer periodo' };
-const arrowClass = function(t){ return t === 'mejora' ? 'up' : t === 'baja' ? 'down' : t === 'estable' ? 'flat' : 'na'; };
-const arrowChar  = function(t){ return t === 'mejora' ? '↑' : t === 'baja' ? '↓' : t === 'estable' ? '→' : '·'; };
+const arrowClass = function(t){ return t === 'mejora' ? 'up' : t === 'baja' ? 'down' : (t === 'estable' || t === 'mixto') ? 'flat' : 'na'; };
+const arrowChar  = function(t){ return t === 'mejora' ? '↑' : t === 'baja' ? '↓' : t === 'mixto' ? '↕' : t === 'estable' ? '→' : '·'; };
 const fmtDelta   = function(n){ return (n >= 0 ? '+' : '') + n; };
 %>
 

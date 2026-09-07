@@ -156,7 +156,7 @@ export const DEFAULT_GENERAL_PROMPT = `Genera un reporte ejecutivo del equipo de
 CONTEXTO DEL NEGOCIO
 {contexto}
 
-Para el campo kpi_bullets incluye: (1) score promedio del equipo, (2) score individual de cada asesor con su variacion vs periodo anterior, (3) una o dos metricas transversales del periodo que sean relevantes para este negocio (por ejemplo, porcentaje de llamadas con cierre de microcompromiso con fecha y hora, o precalificacion segun los criterios del contexto). Usa tendencia 'mejora' si subio, 'baja' si bajo, 'estable' si no cambio, 'sin_dato' si es primer periodo o no hay dato comparable.
+Para el campo kpi_bullets incluye: (1) score promedio del equipo, (2) score individual de cada asesor con su variacion vs periodo anterior, (3) una o dos metricas transversales del periodo que sean relevantes para este negocio (por ejemplo, porcentaje de llamadas con cierre de microcompromiso con fecha y hora, o precalificacion segun los criterios del contexto). Usa tendencia 'mejora' si subio, 'baja' si bajo, 'estable' si no cambio, 'mixto' si es un KPI de equipo donde unos suben y otros bajan, 'sin_dato' si es primer periodo o no hay dato comparable. Ojo: 'retroceso' y 'primer_mes' son valores de tendencia_equipo, NO de estos bullets.
 
 IMPORTANTE: El campo resumen_ejecutivo debe ser UN solo parrafo breve de 3 a 4 oraciones como maximo. Sin introducciones, sin conclusiones adicionales.`;
 

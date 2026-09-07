@@ -11,6 +11,7 @@ import { SIDECAR_METRICS_VERSION, type PreviousMetrics } from '../schemas/indivi
 export { parseSidecarMetrics, SIDECAR_METRICS_VERSION, type PreviousMetrics } from '../schemas/individual';
 import type { CallRow } from '../google/sheets';
 import { renderPdf } from '../pdf/renderer';
+import { callWithSchema, type ClaudeReply } from './callWithSchema';
 import { CALIFICACION_INSTRUCTION, NO_DASH_INSTRUCTION, resolveIndividualPrompt } from './prompts';
 import { monthLabel } from '../google/drive';
 
@@ -230,44 +231,20 @@ async function callClaudeWithRetry(
   systemPrompt: string,
   userMessage:  string,
 ): Promise<IndividualCallResult> {
-  let lastError: Error = new Error('No attempts made');
-  let totalInput  = 0;
-  let totalOutput = 0;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await getClaude().messages.create({
-        model:      MODEL,
-        max_tokens: 8192,
-        system:     systemPrompt + CALIFICACION_INSTRUCTION + NO_DASH_INSTRUCTION,
-        messages:   [{ role: 'user', content: userMessage }],
-        tools:      [REPORT_TOOL],
-        tool_choice: { type: 'tool', name: TOOL_NAME },
-      });
-
-      totalInput  += res.usage.input_tokens;
-      totalOutput += res.usage.output_tokens;
-
-      const toolBlock = res.content.find(b => b.type === 'tool_use');
-      if (!toolBlock || toolBlock.type !== 'tool_use') {
-        throw new Error('Claude response contained no tool_use block');
-      }
-
-      const parsed = ClaudeIndividualOutputSchema.safeParse(toolBlock.input);
-      if (!parsed.success) {
-        throw new Error(`Zod validation failed (attempt ${attempt}): ${parsed.error.message}`);
-      }
-
-      return { data: parsed.data, input_tokens: totalInput, output_tokens: totalOutput };
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < MAX_RETRIES) {
-        console.warn(`[claude/individual] Attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message);
-      }
-    }
-  }
-
-  throw lastError;
+  return callWithSchema({
+    schema:      ClaudeIndividualOutputSchema,
+    tag:         'claude/individual',
+    userMessage,
+    maxRetries:  MAX_RETRIES,
+    send: (messages) => getClaude().messages.create({
+      model:      MODEL,
+      max_tokens: 8192,
+      system:     systemPrompt + CALIFICACION_INSTRUCTION + NO_DASH_INSTRUCTION,
+      messages:   messages as Anthropic.MessageParam[],
+      tools:      [REPORT_TOOL],
+      tool_choice: { type: 'tool', name: TOOL_NAME },
+    }) as unknown as Promise<ClaudeReply>,
+  });
 }
 
 // ── Sidecar text for next-period comparison ───────────────────────────────────

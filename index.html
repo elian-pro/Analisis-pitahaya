@@ -17,8 +17,8 @@
        NUNCA sobre cards. Theme-aware via currentColor (--fg): negro en light, blanco en dark.
        Angulo/grosor/espaciado/opacidad en tokens --motif-*. Web usa este gradiente (ZR-24). */
     .zebra-motif{position:fixed;top:0;right:0;bottom:0;width:38%;pointer-events:none;z-index:0;color:var(--fg);opacity:var(--motif-opacity);background-image:repeating-linear-gradient(var(--motif-angle),currentColor 0 var(--motif-line),transparent var(--motif-line) var(--motif-gap));}
-    body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFFFFF;--on-accent:#0A0A0A;--danger:#E24B4A;--success:#46B36B;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.06;}
-    body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;--success:#2E7D32;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.05;}
+    body[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--surface2:#1C1C1C;--border:#262626;--border2:#3A3A3A;--fg:#F5F5F5;--muted:#8A8A8A;--faint:#5A5A5A;--accent:#FFFFFF;--on-accent:#0A0A0A;--danger:#E24B4A;--success:#46B36B;--warn:#D9B75F;--warn-bg:#2A2113;--warn-border:#5C4A1F;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.06;}
+    body[data-theme="light"]{--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;--success:#2E7D32;--warn:#7C6A3E;--warn-bg:#FBF3DE;--warn-border:#D8C79A;--motif-angle:115deg;--motif-line:2px;--motif-gap:26px;--motif-opacity:.05;}
     /* LAYOUT · barra lateral + columna de contenido.
        La barra es la superficie de enfasis invertida (ZR-25b): en dark va clara sobre
        el lienzo #0A0A0A; en light va negra. Sus tokens propios --sb-* hacen ese espejo
@@ -301,13 +301,21 @@
     /* Vista remota: el admin mirando el dashboard de un cliente. Se avisa
        siempre, porque desde dentro la vista es indistinguible de la real. */
     #preview-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
-      padding:9px 48px;background:var(--surface2);border-bottom:0.5px solid var(--border2);
-      font-size:12px;color:var(--muted);position:sticky;top:0;z-index:110;}
-    #preview-bar strong{color:var(--fg);font-weight:600;}
-    #preview-bar button{background:var(--accent);color:var(--on-accent);border:none;
-      border-radius:100px;padding:5px 13px;font-family:'Inter',sans-serif;font-size:11px;
-      font-weight:500;cursor:pointer;flex-shrink:0;}
-    body.preview .topbar{top:37px;}
+      height:44px;padding:0 48px;background:var(--warn-bg);
+      border-bottom:1px solid var(--warn-border);
+      font-size:12.5px;color:var(--warn);position:sticky;top:0;z-index:110;}
+    #preview-bar strong{color:var(--warn);font-weight:600;}
+    #preview-bar i{font-size:16px;}
+    #preview-bar button{background:var(--warn);color:var(--warn-bg);border:none;
+      border-radius:100px;padding:6px 14px;font-family:'Inter',sans-serif;font-size:11px;
+      font-weight:600;cursor:pointer;flex-shrink:0;transition:opacity .15s;}
+    #preview-bar button:hover{opacity:.85;}
+    /* El aviso no puede depender solo de una banda que se pierda al hacer scroll:
+       la vista entera queda enmarcada en ambar mientras dura. */
+    body.preview .app-body{box-shadow:inset 0 0 0 2px var(--warn-border);}
+    body.preview .topbar{top:44px;}
+    body.preview .sidebar{border-right-color:var(--warn-border);}
+    @media(max-width:720px){#preview-bar{padding:0 20px;font-size:11.5px;}}
     .tab-panel{display:none;}
     .tab-panel.active{display:block;}
     /* ── Client / schedule rows ── */

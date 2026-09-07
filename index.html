@@ -654,18 +654,22 @@
 /* La lista ocupa TODO el ancho y solo se contrae al seleccionar una llamada:
    sin selección no hay nada que enseñar a la derecha, y el hueco vacío no se
    gana su sitio. La transición evita que las filas salten bajo el cursor. */
-.calls-cols{display:grid;grid-template-columns:minmax(0,1fr) 0fr;gap:16px;align-items:start;
+.calls-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,0fr);gap:16px;align-items:start;
   transition:grid-template-columns .32s cubic-bezier(.16,1,.3,1)}
 .calls-cols.abierto{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+/* La entrada y la salida NO son simétricas. Al abrir, el panel espera a que la
+   columna le haga sitio (delay); al cerrar se va primero, para no quedarse
+   aplastado mientras la columna se cierra sobre él. */
 .calls-detail-card{opacity:0;transform:translateX(8px);pointer-events:none;
-  transition:opacity .22s ease .1s, transform .28s cubic-bezier(.16,1,.3,1) .06s}
-.calls-cols.abierto .calls-detail-card{opacity:1;transform:none;pointer-events:auto}
-.calls-cols:not(.abierto) .calls-detail-card{border:none}
+  transition:opacity .13s ease, transform .2s cubic-bezier(.16,1,.3,1)}
+.calls-cols.abierto .calls-detail-card{opacity:1;transform:none;pointer-events:auto;
+  transition:opacity .22s ease .12s, transform .28s cubic-bezier(.16,1,.3,1) .08s}
 /* A todo ancho la lista enseña MÁS dato (el prospecto) en vez de dejar la
    columna del asesor con cientos de píxeles de hueco; al contraerse, se va. */
-.calls-list-card .calls-row{grid-template-columns:150px 190px minmax(0,1fr) 78px 108px 62px auto}
-.calls-cols.abierto .calls-list-card .calls-row{grid-template-columns:128px minmax(0,1fr) 56px 92px 48px auto}
-.calls-cols.abierto .col-prospecto{display:none}
+.calls-list-card .calls-row{grid-template-columns:128px minmax(0,1fr) 56px 92px 48px auto}
+.col-prospecto{display:none}
+.calls-cols.ancha .calls-list-card .calls-row{grid-template-columns:150px 190px minmax(0,1fr) 78px 108px 62px auto}
+.calls-cols.ancha .col-prospecto{display:block}
 .calls-list-card{min-width:0}
 .calls-detail-card{padding:0;overflow:hidden;display:flex;flex-direction:column;
   position:sticky;top:88px;max-height:calc(100vh - 120px);min-width:0}
@@ -1288,7 +1292,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       <div id="calls-counts" class="calls-counts"></div>
     </div>
 
-    <div class="calls-cols">
+    <div class="calls-cols ancha">
       <div class="card calls-list-card">
         <div id="calls-list"><div class="calls-empty">Cargando…</div></div>
       </div>
@@ -7439,7 +7443,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const c = _callsPorId.get(callId);
     if (!c) return;
     _callSel = { slug, call_id: callId };
-    document.querySelector('.calls-cols').classList.add('abierto');
+    const cols = document.querySelector('.calls-cols');
+    clearTimeout(_colapsoT);
+    cols.classList.remove('ancha');   // la lista pierde el prospecto mientras encoge
+    cols.classList.add('abierto');
 
     document.querySelectorAll('#calls-list .calls-row.item').forEach(r =>
       r.classList.toggle('sel', r.dataset.cid === callId));
@@ -7488,18 +7495,29 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       ${c.procesado_at ? `<span class="lbl">Procesada</span><div class="calls-val">${esc(fechaHora(c.procesado_at))}</div>` : ''}`;
   }
 
+  let _colapsoT = null;
+
   function _panelVacio() {
-    document.querySelector('.calls-cols')?.classList.remove('abierto');
+    const cols = document.querySelector('.calls-cols');
+    clearTimeout(_colapsoT);
+    cols?.classList.remove('abierto');
     document.querySelectorAll('#calls-list .calls-row.item').forEach(r => r.classList.remove('sel'));
-    document.getElementById('cd-title').textContent = 'Ninguna llamada seleccionada';
-    document.getElementById('cd-meta').innerHTML = '';
-    document.getElementById('cd-score').hidden = true;
-    document.getElementById('calls-detail-body').innerHTML = `
-      <div class="calls-ph">
-        <div class="calls-ph-icon"><i class="ti ti-phone"></i></div>
-        <div class="calls-ph-title">Elige una llamada</div>
-        <div class="calls-ph-text">Su análisis y su transcripción aparecerán aquí, sin mover la lista.</div>
-      </div>`;
+    // El contenido NO se toca ahora: mientras la columna se cierra el panel
+    // sigue a la vista, y cambiarlo al estado vacío en el instante 0 era el
+    // parpadeo que parecía un fallo. Se limpia cuando ya no se ve.
+    _colapsoT = setTimeout(() => {
+      if (_callSel) return;            // se volvió a abrir durante la animación
+      cols?.classList.add('ancha');    // y la lista recupera su columna con sitio ya
+      document.getElementById('cd-title').textContent = 'Ninguna llamada seleccionada';
+      document.getElementById('cd-meta').innerHTML = '';
+      document.getElementById('cd-score').hidden = true;
+      document.getElementById('calls-detail-body').innerHTML = `
+        <div class="calls-ph">
+          <div class="calls-ph-icon"><i class="ti ti-phone"></i></div>
+          <div class="calls-ph-title">Elige una llamada</div>
+          <div class="calls-ph-text">Su análisis y su transcripción aparecerán aquí, sin mover la lista.</div>
+        </div>`;
+    }, 340);
   }
 
   function _cajaHtml(label, inner, id) {

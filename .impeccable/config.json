@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-09-08T22:51:16.403Z",
+        "reason": "Claude: Inter es la tipografia del producto, fijada en index.html y en los PDFs; Carlos ya decidio explicitamente que en este repo solo se usa Inter. Cambiarla seria un rebrand, no un arreglo de login."
+      }
+    ]
+  }
+}

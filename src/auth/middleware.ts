@@ -7,7 +7,9 @@ import { getJob } from '../jobs/store';
 
 // Rutas/recursos públicos que deben servirse sin sesión (los usa la página de
 // login). Todo lo demás queda detrás de la sesión cuando la auth está activa.
-const PUBLIC_ASSET = /^\/(login(\.html)?|favicon\.(ico|svg)|favicon-\d+\.png|Logo Zebra Blanco\.png)$/;
+// El logo del login ya no se pide por HTTP: va como SVG en linea. El PNG sigue
+// en el repo porque el renderer de PDF lo lee del disco, no de esta ruta.
+const PUBLIC_ASSET = /^\/(login(\.html)?|favicon\.(ico|svg)|favicon-\d+\.png)$/;
 
 // Adjunta el usuario a req para que los handlers lo puedan leer.
 export interface AuthedRequest extends Request {

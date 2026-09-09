@@ -770,7 +770,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   <nav class="app-nav">
     <div class="sb-group">Día a día</div>
     <button class="app-tab active" id="tab-btn-reports" onclick="setTab('reports')" title="Reportes"><i class="ti ti-file-analytics"></i><span>Reportes</span></button>
-    <button class="app-tab" id="tab-btn-radar" data-admin onclick="setTab('radar')" title="Radar"><i class="ti ti-radar"></i><span>Radar</span></button>
+    <button class="app-tab" id="tab-btn-radar" onclick="setTab('radar')" title="Radar"><i class="ti ti-radar"></i><span>Radar</span></button>
     <button class="app-tab" id="tab-btn-dashboard" data-admin onclick="setTab('dashboard')" title="Dashboard"><i class="ti ti-layout-dashboard"></i><span>Dashboard</span></button>
     <button class="app-tab" id="tab-btn-automation" data-admin onclick="setTab('automation')" title="Automatización"><i class="ti ti-bolt"></i><span>Automatización</span></button>
     <button class="app-tab" id="tab-btn-calls" onclick="setTab('calls')" title="Llamadas"><i class="ti ti-phone"></i><span>Llamadas</span></button>
@@ -4221,6 +4221,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   // Bajadas distintas para el cliente externo: sin jerga interna.
   const _TAB_META_CLIENT = {
     reports:  ['Reportes', 'Genera y descarga el análisis de tu equipo comercial'],
+    radar:    ['Radar de Objeciones', 'Qué preguntan tus prospectos y cómo responde tu equipo · reporte mensual en PDF'],
     calls:    ['Llamadas', 'Tus llamadas, transcritas y analizadas automáticamente'],
     settings: ['Ajustes',  'Tu base de datos y tu cuenta'],
   };
@@ -4558,7 +4559,9 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     if (!cont || !esCliente()) return;
     try {
       const qs = _tenantQS();
-      const data = await fetch(`${REPORT_API}/history${qs ? '?' + qs : ''}`).then(r => r.json());
+      const r = await fetch(`${REPORT_API}/history${qs ? '?' + qs : ''}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
       const items = (data.items || []).filter(d => d.kind === kind);
       const dias = data.retencion_dias || 90;
       if (!items.length) {
@@ -4578,7 +4581,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         </button>`).join('')
         + `<div class="hist-note">Se conservan ${dias} días. Descarga lo que quieras guardar.</div>`;
     } catch (e) {
-      cont.innerHTML = `<div class="hist-empty" style="color:var(--danger);">No se pudo cargar el historial: ${_esc(e.message)}</div>`;
+      // Un "Unexpected token '<'" no le dice nada al cliente y encima parece
+      // culpa suya. El detalle va a la consola, que es donde sirve.
+      console.warn('[historial]', e);
+      cont.innerHTML = '<div class="hist-empty" style="color:var(--danger);">No se pudo cargar el historial. Vuelve a entrar en un momento.</div>';
     }
   }
 

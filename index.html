@@ -108,13 +108,23 @@
     .advisors-empty{grid-column:1/-1;padding:24px 0;font-size:var(--t-sec);color:var(--faint);text-align:center;}
     .spin-xs{width:12px;height:12px;border:1.5px solid var(--border2);border-top-color:var(--fg);border-radius:50%;animation:spin 0.75s linear infinite;flex-shrink:0;}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
-    /* Radar: la columna del archivo .md pide más ancho que la del cliente. */
-    .radar-cols{display:grid;grid-template-columns:1fr 1.35fr;gap:16px;align-items:start;}
+    /* Radar: mismo reparto que Reportes. A la izquierda lo que se configura
+       (y debajo, plegado, el flujo desde archivo); a la derecha el documento. */
+    .radar-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:16px;align-items:start;}
+    .radar-main{display:flex;flex-direction:column;gap:16px;min-width:0;}
     .radar-status{display:flex;align-items:center;gap:8px;font-size:var(--t-ui);color:var(--faint);letter-spacing:0.04em;line-height:1.5;margin-top:14px;}
     .radar-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--border2);flex-shrink:0;}
     .radar-note{display:flex;gap:10px;font-size:var(--t-sec);color:var(--muted);line-height:1.55;background:var(--surface2);border-left:2px solid var(--border2);border-radius:0 8px 8px 0;padding:12px 14px;margin-top:18px;}
-    /* La columna del cliente es estrecha: el segmentado ocupa el ancho completo. */
     .radar-cols .form-toggle-row{width:100%;}
+    /* Bloque avanzado plegable. .section-label ya es flex, asi que el marcador
+       nativo no se pinta: el chevron lo dibuja el ::before. */
+    .radar-adv > summary{cursor:pointer;margin-bottom:0;list-style:none;}
+    .radar-adv > summary::-webkit-details-marker{display:none;}
+    .radar-adv > summary::before{content:'';width:6px;height:6px;flex-shrink:0;
+      border-right:1px solid currentColor;border-bottom:1px solid currentColor;
+      transform:rotate(-45deg);transition:transform 0.2s cubic-bezier(.16,1,.3,1);}
+    .radar-adv[open] > summary{margin-bottom:16px;}
+    .radar-adv[open] > summary::before{transform:rotate(45deg);}
     .card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:24px;transition:border-color 0.25s;}
     .card:hover{border-color:var(--border2);}
     /* Dos roles distintos y no dos gustos: .card-kicker rotula una SECCIÓN
@@ -169,7 +179,7 @@
     .viewer-ph-kicker{font-size:var(--t-label);font-weight:500;letter-spacing:var(--tk-label);text-transform:uppercase;color:var(--faint);margin-bottom:10px;}
     .viewer-ph-title{font-size:var(--t-head);font-weight:600;color:var(--fg);margin-bottom:8px;letter-spacing:var(--tk-head);}
     .viewer-ph-text{font-size:var(--t-sec);color:var(--muted);line-height:1.65;}
-    @media(max-width:1100px){.report-cols{grid-template-columns:1fr;}.viewer-card{position:static;max-height:none;}}
+    @media(max-width:1100px){.report-cols,.radar-cols{grid-template-columns:1fr;}.viewer-card{position:static;max-height:none;}}
 
     .advisor-check{display:flex;align-items:center;gap:9px;padding:8px 10px;border:0.5px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;user-select:none;min-width:0;}
     .advisor-check:hover{border-color:var(--border2);}
@@ -318,7 +328,7 @@
     .cal-wk-row.cal-sel .cal-cell.out-mo{color:var(--muted);}
     @keyframes fadeSlideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
     @keyframes spin{to{transform:rotate(360deg);}}
-    @media(max-width:720px){.grid-2,.radar-cols{grid-template-columns:1fr;}.main{padding:28px 20px;}.topbar{padding:16px 20px;}.modal{padding:24px 18px;}}
+    @media(max-width:720px){.grid-2{grid-template-columns:1fr;}.main{padding:28px 20px;}.topbar{padding:16px 20px;}.modal{padding:24px 18px;}}
     /* ── Token counter ── */
     .token-card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:22px 24px;}
     .token-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;}
@@ -864,7 +874,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
     <!-- Visualizador del documento. Los bytes salen de la guarda efímera del
          job (30 min), la misma ruta que usa el botón de descarga. -->
-    <div class="card viewer-card">
+    <div class="card viewer-card" id="viewer-card">
       <div class="viewer-bar">
         <i class="ti ti-file-typography viewer-file-icon"></i>
         <span class="viewer-name" id="viewer-name">Sin reporte generado</span>
@@ -1114,10 +1124,11 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       <div></div>
     </div>
 
-    <div class="radar-cols">
+    <div class="radar-cols" id="radar-cols">
+      <div class="radar-main">
       <!-- Flujo A: desde un cliente en la base -->
       <div class="card">
-        <div class="section-label">Generar desde un cliente</div>
+        <div class="section-label" id="radar-flow-label">Generar desde un cliente</div>
         <div class="field" style="margin-bottom:14px;">
           <label class="field-label">Cliente</label>
           <select id="radar-client-select" onchange="onRadarClientChange()"></select>
@@ -1159,13 +1170,15 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         <div id="radar-client-status" class="radar-status">Listo para analizar.</div>
         <div class="radar-note">
           <i class="ti ti-info-circle"></i>
-          <span id="radar-source-note">Analiza las llamadas de la hoja del cliente que superen su duración mínima, y solo las de sus asesores registrados.</span>
+          <span>Para que el análisis sea representativo, se recomienda generar este reporte una vez al mes.</span>
         </div>
       </div>
 
-      <!-- Flujo B: desde archivo .md -->
-      <div class="card">
-        <div class="section-label">Radar desde archivo (.md)</div>
+      <!-- Flujo B: desde archivo .md. Es la salida de emergencia (transcripciones
+           ya compiladas, cliente que no esta en la base), no el camino normal:
+           va plegado y solo lo ve un admin. -->
+      <details class="card radar-adv" data-admin>
+        <summary class="section-label">Radar desde archivo (.md)</summary>
         <p class="card-desc">Sube un Markdown con las transcripciones ya compiladas. Funciona con o sin cliente en la base.</p>
         <div class="form-field" style="margin-bottom:12px;">
           <label>Archivo .md *</label>
@@ -1215,7 +1228,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         </div>
         <button class="btn-primary" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:18px;"><i class="ti ti-file-analytics"></i> Generar desde archivo</button>
         <div id="radar-upload-status" class="radar-status">Sube un archivo markdown para comenzar el análisis.</div>
+      </details>
       </div>
+      <!-- El visor se monta aqui al entrar en la pestaña: hay uno solo en toda
+           la app y viaja entre Reportes y Radar (setTab -> _mountViewer). -->
     </div>
   </div>
   <div id="tab-calls" class="tab-panel">
@@ -2601,7 +2617,21 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}`;
   const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-  let _viewerJob = null;      // jobId del documento en pantalla
+  // Hay UN solo visor en toda la app y viaja entre Reportes y Radar: los dos
+  // paneles nunca se ven a la vez. _viewerCtx dice a quien esta sirviendo, que
+  // es lo unico que cambia en el placeholder.
+  let _viewerCtx = 'reports';
+  const VIEWER_VACIO = {
+    reports: ['Sin reporte generado', 'Aún no se ha generado ningún reporte',
+              'Elige el cliente y el periodo, marca a los asesores y pulsa <strong>Generar Reporte de Seleccionados</strong>.'],
+    radar:   ['Sin Radar generado', 'Aún no se ha generado ningún Radar',
+              'Elige el cliente, el mes y el corte, y pulsa <strong>Generar Radar</strong>.'],
+    // Un tenant no elige cliente: es el suyo.
+    radarCliente: ['Sin Radar generado', 'Aún no se ha generado ningún Radar',
+              'Elige el mes y el corte, y pulsa <strong>Generar Radar</strong>.'],
+  };
+
+  let _viewerJob = null;      // jobId del documento en pantalla (null si los bytes llegaron inline)
   let _viewerDoc = null;      // PDFDocumentProxy
   let _viewerPage = 1;
   let _viewerZoom = null;     // null = ajustar al ancho
@@ -2641,13 +2671,15 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     ph.style.display = estado === 'listo' ? 'none' : '';
 
     if (estado === 'vacio') {
-      $('viewer-name').textContent = 'Sin reporte generado';
+      const clave = (_viewerCtx === 'radar' && esCliente()) ? 'radarCliente' : _viewerCtx;
+      const [nombre, titulo, texto] = VIEWER_VACIO[clave] || VIEWER_VACIO.reports;
+      $('viewer-name').textContent = nombre;
       badge.textContent = 'En espera';
       ph.innerHTML = `
         <div class="viewer-ph-icon"><i class="ti ti-clipboard-text"></i></div>
         <div class="viewer-ph-kicker">Vista previa del documento</div>
-        <div class="viewer-ph-title">Aún no se ha generado ningún reporte</div>
-        <div class="viewer-ph-text">Elige el cliente y el periodo, marca a los asesores y pulsa <strong>Generar Reporte de Seleccionados</strong>.</div>`;
+        <div class="viewer-ph-title">${titulo}</div>
+        <div class="viewer-ph-text">${texto}</div>`;
     } else if (estado === 'generando') {
       $('viewer-name').textContent = 'Generando…';
       badge.textContent = 'Generando';
@@ -2670,39 +2702,74 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     }
   }
 
+  // Reportes entrega un jobId y los bytes se piden a la guarda efímera.
   async function openInViewer(jobId, combined, periodo) {
-    if (_viewerUrl) { URL.revokeObjectURL(_viewerUrl); _viewerUrl = null; }
-    _viewerDoc = null;
     _viewerJob = jobId;
-    _viewerPage = 1;
-    _viewerZoom = null;
     const nombre = (combined.filename || `reporte-${periodo}.pdf`);
-    document.getElementById('viewer-name').textContent = nombre.toUpperCase();
-    document.getElementById('viewer-badge').textContent = 'Listo';
-    setViewerState('listo', { driveUrl: combined.driveUrl });
+    _viewerPrepara(nombre, combined.driveUrl);
     try {
       const r = await fetch(`${REPORT_API}/${encodeURIComponent(jobId)}/download`);
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
         throw new Error(d.error || `HTTP ${r.status}`);
       }
-      const buf = await r.arrayBuffer();
-      // El Blob se crea ANTES de entregar los bytes: PDF.js pasa el ArrayBuffer
-      // al worker y lo DETACHA. Hacerlo después descarga un archivo vacío, sin
-      // ningún error visible. Además así la descarga sobrevive a que expire el
-      // TTL con la pestaña abierta.
-      if (_viewerUrl) URL.revokeObjectURL(_viewerUrl);
-      _viewerUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
-      _viewerFile = nombre;
-      // La librería se carga DESPUÉS de tener los bytes: si el CDN no responde,
-      // el visor falla pero el botón de descarga ya funciona.
-      const pdfjs = await _loadPdfJs();
-      _viewerDoc = await pdfjs.getDocument({ data: buf }).promise;
-      document.getElementById('viewer-pages').textContent = _viewerDoc.numPages;
-      await _renderViewerPage();
+      await _viewerPinta(await r.arrayBuffer(), nombre, combined.driveUrl);
     } catch (e) {
       setViewerState('error', { mensaje: e.message, driveUrl: combined.driveUrl });
     }
+  }
+
+  // Radar devuelve el PDF inline (pdfBase64): no hay job ni ruta que pedir, los
+  // bytes ya están aquí.
+  async function showPdfInViewer(bytes, nombre, driveUrl) {
+    _viewerJob = null;
+    _viewerPrepara(nombre, driveUrl);
+    try {
+      await _viewerPinta(bytes, nombre, driveUrl);
+    } catch (e) {
+      setViewerState('error', { mensaje: e.message, driveUrl });
+    }
+  }
+
+  function _viewerPrepara(nombre, driveUrl) {
+    if (_viewerUrl) { URL.revokeObjectURL(_viewerUrl); _viewerUrl = null; }
+    _viewerDoc = null;
+    _viewerPage = 1;
+    _viewerZoom = null;
+    document.getElementById('viewer-name').textContent = nombre.toUpperCase();
+    document.getElementById('viewer-badge').textContent = 'Listo';
+    setViewerState('listo', { driveUrl });
+  }
+
+  async function _viewerPinta(buf, nombre, driveUrl) {
+    // El Blob se crea ANTES de entregar los bytes: PDF.js pasa el buffer al
+    // worker y lo DETACHA. Hacerlo después descarga un archivo vacío, sin
+    // ningún error visible. Además así la descarga sobrevive a que expire el
+    // TTL con la pestaña abierta.
+    if (_viewerUrl) URL.revokeObjectURL(_viewerUrl);
+    _viewerUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+    _viewerFile = nombre;
+    // La librería se carga DESPUÉS de tener los bytes: si el CDN no responde,
+    // el visor falla pero el botón de descarga ya funciona.
+    const pdfjs = await _loadPdfJs();
+    _viewerDoc = await pdfjs.getDocument({ data: buf }).promise;
+    document.getElementById('viewer-pages').textContent = _viewerDoc.numPages;
+    await _renderViewerPage();
+  }
+
+  // Mueve el visor al panel activo. Cambiar de pestaña lo vacía: enseñar el PDF
+  // de Reportes dentro de Radar seria mentir sobre de donde salio.
+  function _mountViewer(tab) {
+    const destino = tab === 'radar' ? document.getElementById('radar-cols')
+                  : tab === 'reports' ? document.querySelector('.report-cols')
+                  : null;
+    const card = document.getElementById('viewer-card');
+    if (!destino || !card || card.parentElement === destino) return;
+    destino.appendChild(card);
+    _viewerCtx = tab;
+    if (_viewerUrl) { URL.revokeObjectURL(_viewerUrl); _viewerUrl = null; }
+    _viewerDoc = null; _viewerJob = null; _viewerPage = 1; _viewerZoom = null;
+    setViewerState('vacio');
   }
 
   async function _renderViewerPage() {
@@ -4144,6 +4211,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
+    _mountViewer(tab);
     if (tab === 'calls')      renderCalls();
   }
 
@@ -4191,18 +4259,40 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
   let _radarClients = [];
   async function populateRadarSelectors() {
-    let clients = [];
-    try { clients = await fetch(CLIENTS_API).then(r => r.json()); } catch { clients = []; }
-    _radarClients = clients;
-    // Selector de cliente (flujo A) y cliente opcional (flujo B)
     const cSel = document.getElementById('radar-client-select');
-    const uSel = document.getElementById('radar-upload-client');
-    cSel.innerHTML = '';
-    uSel.innerHTML = '<option value="">— Sin cliente —</option>';
-    clients.forEach(c => {
-      cSel.appendChild(new Option(c.name, c.id));
-      uSel.appendChild(new Option(c.name, c.id));
-    });
+    if (esCliente()) {
+      // Un tenant es su propio y unico cliente: sin selector y sin pedir
+      // /api/clients, que le daria 403. Mismo trato que en Reportes.
+      // El <select> se queda (todo el flujo lee su .value); lo que se oculta
+      // es el campo. El flujo B es data-admin: aqui no hay nada que llenar.
+      const cid  = _clientId();
+      const name = _preview?.name || ME?.client_name || cid;
+      _radarClients = [{ id: cid, name }];
+      cSel.innerHTML = '';
+      cSel.appendChild(new Option(name, cid));
+      cSel.value = cid;
+      cSel.closest('.field').style.display = 'none';
+      // Sin selector y sin flujo B, "desde un cliente" no distingue nada: lo
+      // que rotula esa card para un tenant es el periodo que va a pedir.
+      document.getElementById('radar-flow-label').textContent = 'Periodo del reporte';
+    } else {
+      // Deshace lo que hace la rama del tenant: la vista remota se entra y se
+      // sale con recarga, pero una funcion que solo sabe ir en un sentido es
+      // una trampa esperando al primer cambio de rol sin recargar.
+      cSel.closest('.field').style.display = '';
+      document.getElementById('radar-flow-label').textContent = 'Generar desde un cliente';
+      let clients = [];
+      try { clients = await fetch(CLIENTS_API).then(r => r.json()); } catch { clients = []; }
+      _radarClients = clients;
+      // Selector de cliente (flujo A) y cliente opcional (flujo B)
+      const uSel = document.getElementById('radar-upload-client');
+      cSel.innerHTML = '';
+      uSel.innerHTML = '<option value="">— Sin cliente —</option>';
+      clients.forEach(c => {
+        cSel.appendChild(new Option(c.name, c.id));
+        uSel.appendChild(new Option(c.name, c.id));
+      });
+    }
     // Selector de mes (últimos 12), solo si aún no está poblado
     const mSel = document.getElementById('radar-month-select');
     if (mSel.options.length === 0) {
@@ -4225,10 +4315,9 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const missing = document.getElementById('radar-drive-missing');
     const client  = _radarClients.find(c => c.id === document.getElementById('radar-client-select').value);
     document.getElementById('radar-client-status').textContent = RADAR_IDLE;
-    // El umbral de duración es por cliente: se muestra el suyo, no un 200 fijo.
-    const minDur = (client && client.radar_min_duration_seconds) || 200;
-    document.getElementById('radar-source-note').textContent =
-      `Analiza las llamadas de la hoja del cliente de más de ${minDur} s, y solo las de sus asesores registrados.`;
+    // Un cliente externo no tiene Drive: ni el enlace a su carpeta ni el aviso
+    // de que le falta significan nada para el (su entrega es la descarga).
+    if (esCliente()) { wrap.style.display = 'none'; missing.style.display = 'none'; return; }
     if (client && client.radar_folder_id) {
       document.getElementById('radar-drive-link').href = `https://drive.google.com/drive/folders/${client.radar_folder_id}`;
       document.getElementById('radar-drive-client').textContent = client.name;
@@ -4240,11 +4329,15 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   }
 
   // Descarga un archivo desde base64 (para el PDF y el sidecar del Radar).
-  function _downloadBase64(base64, filename, mime) {
+  function _b64ToBytes(base64) {
     const bin = atob(base64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    return bytes;
+  }
+
+  function _downloadBase64(base64, filename, mime) {
+    const url = URL.createObjectURL(new Blob([_b64ToBytes(base64)], { type: mime }));
     const a = document.createElement('a');
     a.href = url; a.download = filename; document.body.appendChild(a); a.click();
     a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -4342,6 +4435,9 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const btn      = document.getElementById('radar-gen-btn');
     btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
     status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Analizando llamadas y generando el reporte… (puede tardar ~1 min)</div>';
+    if (_viewerUrl) { URL.revokeObjectURL(_viewerUrl); _viewerUrl = null; }
+    _viewerDoc = null; _viewerJob = null;
+    setViewerState('generando');
     try {
       const r = await fetch(`${REPORT_API}/radar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4351,11 +4447,16 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       const clientName = document.getElementById('radar-client-select').selectedOptions[0]?.textContent || 'cliente';
       const periodKey  = month + (_radarHalf ? `-${_radarHalf}` : '');
-      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(clientName)}_${periodKey}.pdf`, 'application/pdf');
+      const archivo    = `Radar_${_radarSafeName(clientName)}_${periodKey}.pdf`;
+      if (data.pdfBase64) {
+        _downloadBase64(data.pdfBase64, archivo, 'application/pdf');
+        void showPdfInViewer(_b64ToBytes(data.pdfBase64), archivo, data.driveUrl);
+      }
       status.innerHTML = '<span style="color:var(--success);font-size:var(--t-sec);">✓ Radar generado y descargado.'
         + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : '') + '</span>';
     } catch (e) {
       status.innerHTML = `<span style="color:var(--danger);font-size:var(--t-sec);">${e.message}</span>`;
+      setViewerState('error', { mensaje: e.message });
     } finally {
       btn.disabled = false; btn.textContent = old;
     }
@@ -4379,19 +4480,27 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
     btn.disabled = true; const old = btn.textContent; btn.textContent = 'Generando…';
     status.innerHTML = '<div class="advisors-loading"><div class="spin-xs"></div> Procesando el archivo y generando el reporte…</div>';
+    if (_viewerUrl) { URL.revokeObjectURL(_viewerUrl); _viewerUrl = null; }
+    _viewerDoc = null; _viewerJob = null;
+    setViewerState('generando');
     try {
       const r = await fetch(`${REPORT_API}/radar-upload`, { method: 'POST', body: fd });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       const name = data.reportData?.client_name || 'cliente';
       const key  = data.reportData?.period_key || 'periodo';
-      if (data.pdfBase64) _downloadBase64(data.pdfBase64, `Radar_${_radarSafeName(name)}_${key}.pdf`, 'application/pdf');
+      const archivo = `Radar_${_radarSafeName(name)}_${key}.pdf`;
+      if (data.pdfBase64) {
+        _downloadBase64(data.pdfBase64, archivo, 'application/pdf');
+        void showPdfInViewer(_b64ToBytes(data.pdfBase64), archivo, data.driveUrl);
+      }
       if (data.sidecarBase64) _downloadBase64(data.sidecarBase64, `radar-${key}.json`, 'application/json');
       const warns = (data.warnings || []).length ? `<div style="color:var(--muted);font-size:var(--t-ui);margin-top:4px;">${data.warnings.join(' · ')}</div>` : '';
       status.innerHTML = '<span style="color:var(--success);font-size:var(--t-sec);">✓ Radar generado.'
         + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : ' Descargado (PDF y sidecar).') + '</span>' + warns;
     } catch (e) {
       status.innerHTML = `<span style="color:var(--danger);font-size:var(--t-sec);">${e.message}</span>`;
+      setViewerState('error', { mensaje: e.message });
     } finally {
       btn.disabled = false; btn.textContent = old;
     }

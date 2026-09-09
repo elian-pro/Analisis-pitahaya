@@ -114,13 +114,17 @@ async function notifyChat(
   schedule: Schedule,
   clientName: string,
   periodo: string,
-  reportUrl: string,
+  reportUrl: string | null,
   kind: ReportKind,
   // El Radar adjunto a un reporte de análisis va en su propio mensaje: usar ahí
   // el `chat_message` del usuario lo anunciaría como si fuera el análisis.
   ignoreCustomTemplate = false,
 ): Promise<void> {
   if (!schedule.chat_space_id) return;
+  // Sin enlace no hay mensaje que mandar: la plantilla existe para entregar un
+  // {link} de Drive, y un cliente sin Drive tampoco toca Chat (planDeEntrega).
+  // Avisar con el hueco vacío sería peor que no avisar.
+  if (!reportUrl) return;
 
   const tpl = (ignoreCustomTemplate ? '' : schedule.chat_message?.trim()) || DEFAULT_TPL[kind];
   const text = buildChatMessage(tpl, {

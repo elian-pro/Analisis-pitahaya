@@ -14,8 +14,11 @@
 //
 // ponytail: memoria de proceso. Se pierde al reiniciar y no sobrevive a más de
 // una instancia (con dos réplicas la lectura acertaría la mitad de las veces).
-// Si algún día hay réplicas, esto necesita almacenamiento compartido, que es
-// exactamente lo que se decidió no tener.
+// Para el cliente EXTERNO eso ya no duele: su PDF además se archiva 90 días en
+// la base (jobs/archive.ts) y la ruta de descarga cae ahí cuando esto expira.
+// Para un cliente gestionado esta guarda sigue siendo la única fuente durante
+// los primeros 30 minutos, así que la restricción de una sola instancia sigue
+// en pie hasta que también él tenga respaldo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TTL_MS      = 30 * 60 * 1000;

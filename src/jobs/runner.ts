@@ -21,6 +21,7 @@ import { recordTokens } from '../tokens/store';
 import { costoUSD } from '../tokens/pricing';
 import { pdfVault } from './vault';
 import { recordReportMetrics, previousReportTextFromDb } from '../metrics/store';
+import { archivePdf, RETENCION_DIAS } from './archive';
 
 async function loadClient(clientId: string) {
   const client = await getClient(clientId);
@@ -227,6 +228,17 @@ export async function runJob(job: Job): Promise<void> {
       (job.period_type === 'weekly' && job.date_from ? `Semana ${job.date_from}` : job.month) + '.pdf';
     pdfVault.put(job.id, mergedBuffer, filename);
     console.log(`[runner] Step 7: PDF en guarda efimera (${filename}, 30 min)`);
+
+    // Copia duradera SOLO del cliente externo: el gestionado ya tiene la suya
+    // en Drive. La clave es el id del job a proposito, para que la ruta de
+    // descarga pueda caer aqui cuando expire la guarda. No lanza nunca.
+    if (plan.archivo) {
+      await archivePdf({
+        id: job.id, clientId: job.client_id, kind: 'analisis',
+        periodKey, filename, pdf: mergedBuffer,
+      });
+      console.log(`[runner] Step 7: PDF archivado (${RETENCION_DIAS} dias)`);
+    }
 
     let combinedUrl: string | undefined;
     if (plan.drive) {

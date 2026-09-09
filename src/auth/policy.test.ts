@@ -74,6 +74,20 @@ test('matchPolicy: literal gana sobre parametro y captura params', () => {
   assert.equal(m?.params.jobId, 'abc-123');
 });
 
+// 'history' y ':jobId' son ambos de un segmento, y 'history/:id/download' tiene
+// cinco frente a los cuatro de ':jobId/download'. Si el literal perdiera, el
+// listado del archivo se leeria como un job inexistente y devolveria 404 sin que
+// nada fallara ruidosamente: es el unico riesgo de enrutado silencioso que tiene
+// esta funcion.
+test('matchPolicy: el archivo no se confunde con un jobId', () => {
+  assert.equal(matchPolicy('GET', '/api/report/history')?.entry.own, 'query');
+  const doc = matchPolicy('GET', '/api/report/history/doc-1/download');
+  assert.equal(doc?.entry.own, 'handler');
+  assert.equal(doc?.params.id, 'doc-1');
+  // Y la descarga por job sigue en su sitio.
+  assert.equal(matchPolicy('GET', '/api/report/abc-123/download')?.entry.own, 'job');
+});
+
 test('matchPolicy: ruta desconocida devuelve null (default deny)', () => {
   assert.equal(matchPolicy('GET', '/api/inventada'), null);
   assert.equal(matchPolicy('DELETE', '/api/report/x/download'), null);

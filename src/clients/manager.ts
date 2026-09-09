@@ -128,12 +128,18 @@ export function radarFolderName(clientName: string): string {
 // un cliente externo (cliente_pg) entrega por descarga efímera y NADA toca
 // Drive ni Chat. recordReportMetrics no aparece aquí a propósito: corre
 // siempre, es lo que sostiene el comparativo periodo-a-periodo sin Drive.
-export interface DeliveryPlan { drive: boolean; sidecarsDrive: boolean; radar: boolean; vault: boolean }
+// `archivo` es la unica compuerta de "solo clientes externos" del archivo de 90
+// dias. Vive aqui y no repartida por el codigo porque esta funcion existe justo
+// para que el interruptor externo/gestionado tenga un solo hogar. No se
+// reutiliza `vault` aunque hoy sea el mismo predicado: runRadarCore no tiene
+// vault, leerlo alli seria mentir sobre la intencion, y el dia que diverjan uno
+// seguiria al otro en silencio.
+export interface DeliveryPlan { drive: boolean; sidecarsDrive: boolean; radar: boolean; vault: boolean; archivo: boolean }
 
 export function planDeEntrega(c: Pick<ClientConfig, 'calls_source'>): DeliveryPlan {
   return c.calls_source === 'cliente_pg'
-    ? { drive: false, sidecarsDrive: false, radar: false, vault: true }
-    : { drive: true,  sidecarsDrive: true,  radar: true,  vault: false };
+    ? { drive: false, sidecarsDrive: false, radar: true, vault: true,  archivo: true  }
+    : { drive: true,  sidecarsDrive: true,  radar: true, vault: false, archivo: false };
 }
 
 // Qué carpetas crear en la ubicación elegida. Ambas por defecto; el formulario

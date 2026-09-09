@@ -21,7 +21,7 @@ export interface JobResult {
   // viewable: hay bytes en la guarda para el visualizador; lo tienen todos
   //   durante 30 min, vía GET /api/report/:jobId/download.
   combined?:  { driveUrl?: string; download?: true; viewable?: true; filename?: string; advisors: string[] };
-  radar?:     { driveUrl: string };   // Radar de Objeciones (archivo aparte, no va en el merge)
+  radar?:     { driveUrl: string | null };   // Radar de Objeciones (aparte, no va en el merge). null = sin Drive
   tokens?:    TokenSummary;
 }
 

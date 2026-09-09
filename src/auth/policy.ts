@@ -33,9 +33,15 @@ export const POLITICAS: Record<string, PolicyEntry> = {
   'GET /api/report/:jobId':              { rol: 'tenant', own: 'job' },
   'POST /api/report/:jobId/cancel':      { rol: 'tenant', own: 'job' },
   'GET /api/report/:jobId/download':     { rol: 'tenant', own: 'job' },
-  'POST /api/report/radar':              { rol: 'admin' },
+  'GET /api/report/history':             { rol: 'tenant', own: 'query' },
+  // ':id' es el id de un documento archivado: ni un client_id ('param') ni un
+  // job ('job'). El handler compara con req.user y responde 404, no 403.
+  'GET /api/report/history/:id/download': { rol: 'tenant', own: 'handler' },
+  'POST /api/report/radar':              { rol: 'tenant', own: 'body' },
+  'GET /api/report/radar-preflight':     { rol: 'tenant', own: 'query' },
+  // radar-upload se queda en admin: es la opcion avanzada (subir un .md ya
+  // compilado), puede correr sin cliente y no tiene tenant al que acotarla.
   'POST /api/report/radar-upload':       { rol: 'admin' },
-  'GET /api/report/radar-preflight':     { rol: 'admin' },
 
   // ── Asesores: el roster se lee para generar; se edita solo desde admin ─────
   'GET /api/advisors':                   { rol: 'tenant', own: 'query' },

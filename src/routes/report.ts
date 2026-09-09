@@ -5,6 +5,8 @@ import { getClient, clientFileLabel } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { pdfVault } from '../jobs/vault';
+import { listArchive, readArchive, RETENCION_DIAS } from '../jobs/archive';
+import type { AuthedRequest } from '../auth/middleware';
 import { findSidecarFolder, findPreviousPeriodKey, findRadarSidecar, monthLabel, previousMonth, uploadPdfNamed, radarFilename } from '../google/drive';
 import { listAdvisors } from '../advisors/store';
 import { previousPeriodKeyFromDb } from '../metrics/store';
@@ -85,10 +87,6 @@ router.post('/radar', async (req: Request, res: Response): Promise<void> => {
   try {
     const client = await getClient(client_id);
     if (!client) { res.status(404).json({ error: `Cliente '${client_id}' no encontrado` }); return; }
-    if (!client.radar_folder_id) {
-      res.status(400).json({ error: 'El cliente no tiene carpeta de Drive para el Radar. Agrégala en Ajustes → Clientes → paso 1, Datos.' });
-      return;
-    }
     const result = half
       ? await runRadarForClientFortnight(client, fortnightFor(month, half))
       : await runRadarForClient(client, month);
@@ -269,6 +267,54 @@ const PreviousQuerySchema = z.object({
   ),
 });
 
+// ── Archivo de 90 dias del cliente externo ──────────────────────────────────
+// Se registra ANTES de '/:jobId': los dos son de un segmento, asi que decide el
+// orden de registro. Un descuido aqui haria que 'history' se leyera como un id
+// de job y la ruta devolviera 404 en vez de la lista.
+
+// GET /api/report/history — que hay guardado, sin los bytes.
+router.get('/history', async (req: Request, res: Response): Promise<void> => {
+  // Para un tenant, la politica ya forzo su propio client_id (own:'query') y
+  // rechazo con 403 si mando el de otro. Un admin lo manda explicito, que es lo
+  // que sostiene la vista remota.
+  const clientId = typeof req.query.client_id === 'string' ? req.query.client_id : '';
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta client_id.' });
+    return;
+  }
+  const rows = await listArchive(clientId);
+  const ms = RETENCION_DIAS * 24 * 60 * 60 * 1000;
+  res.json({
+    retencion_dias: RETENCION_DIAS,
+    items: rows.map(r => ({
+      ...r,
+      period_label: periodKeyLabel(r.period_key),
+      // La caducidad la calcula el servidor con la MISMA cuenta que usa la
+      // purga: el navegador no vuelve a derivar la ventana por su lado.
+      expires_at:   new Date(Date.parse(r.created_at) + ms).toISOString(),
+    })),
+  });
+});
+
+// GET /api/report/history/:id/download — los bytes de un documento guardado.
+router.get('/history/:id/download', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as AuthedRequest).user;
+  // null = admin, sin filtro. El filtro del tenant va DENTRO del SQL para que
+  // "no existe" y "no es tuyo" respondan lo mismo: un 403 confirmaria que el
+  // documento de otro cliente existe. Misma regla que el middleware con un job
+  // ajeno.
+  const cid = user?.role === 'client' ? (user.client_id ?? '') : null;
+  const hit = await readArchive(req.params.id, cid);
+  if (!hit) {
+    res.status(404).json({ error: 'Documento no encontrado.' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${hit.filename.replace(/"/g, '')}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(hit.pdf);
+});
+
 router.get('/previous', async (req: Request, res: Response): Promise<void> => {
   const parsed = PreviousQuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -391,13 +437,19 @@ router.get('/radar-preflight', async (req: Request, res: Response): Promise<void
 // Sirve al visualizador Y al botón de descarga: leer no consume (jobs/vault.ts),
 // y `Content-Disposition` no afecta al fetch que hace PDF.js, así que una sola
 // ruta cubre los dos usos. La política ya validó que el job sea de quien lo pide.
-router.get('/:jobId/download', (req: Request, res: Response): void => {
+router.get('/:jobId/download', async (req: Request, res: Response): Promise<void> => {
   const job = getJob(req.params.jobId);
   if (!job) {
     res.status(404).json({ error: `Job '${req.params.jobId}' not found` });
     return;
   }
-  const hit = pdfVault.read(req.params.jobId);
+  // La guarda efimera primero y el archivo despues. Para un cliente externo
+  // esto convierte el 410 en una descarga: su PDF sigue existiendo 90 dias, y
+  // el remedio que ofrecia el error ("genera el reporte de nuevo") era pagarle
+  // otra vez a Claude por un documento que no se habia perdido. El archivo usa
+  // el id del job como clave justo para que esto sea una linea.
+  const hit = pdfVault.read(req.params.jobId)
+    ?? await readArchive(job.id, job.client_id);
   if (!hit) {
     // 410 y no 404: el job existe, el archivo ya no. La UI usa el texto tal cual.
     res.status(410).json({ error: 'El documento ya no está disponible: pasaron los 30 minutos o el servidor se reinició. Genera el reporte de nuevo.' });
@@ -406,7 +458,7 @@ router.get('/:jobId/download', (req: Request, res: Response): void => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${hit.filename.replace(/"/g, '')}"`);
   res.setHeader('Cache-Control', 'no-store');
-  res.send(hit.buf);
+  res.send('buf' in hit ? hit.buf : hit.pdf);
 });
 
 // GET /api/report/:jobId — poll job status

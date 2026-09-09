@@ -506,6 +506,15 @@ Dockerfile · .env.example
   (no hay reanudación de jobs a medias).
 - **Estado "running" de automatizaciones es en memoria:** correcto para una sola instancia; con
   múltiples réplicas no se comparte (cada proceso ve su propio set).
+- **Archivo de 90 días (solo clientes externos):** el PDF se guarda en `report_archive` (`bytea`)
+  además de la guarda efímera. `GET /api/report/:jobId/download` cae al archivo cuando la guarda
+  expira, así que un reinicio ya no obliga a regenerar el reporte. La compuerta es `plan.archivo`
+  en `clients/manager.ts` — un cliente gestionado nunca entra, su copia está en Drive.
+- **La purga es una promesa, no mantenimiento:** `jobs/purge.ts` corre cada hora y borra el
+  archivo y los registros de `jobs` del cliente externo pasados los 90 días. `/api/health` publica
+  si el tick está vivo (`archivo.retencion`). La ventana se mueve con `PDF_ARCHIVE_DAYS`, útil para
+  probar la purga sin esperar tres meses. **No** se purgan `report_metrics` ni `radar_sidecars`:
+  son lo que sostiene el comparativo periodo-a-periodo.
 - **Costo:** cada corrida consume tokens de Claude **y** publica en el Google Chat del cliente
   (en automatizaciones y en disparo manual). El disparo manual pide confirmación en la UI.
 - **`claude-sonnet-4-6`** está fijado en `claude/individual.ts` y `claude/general.ts`; cambiar el

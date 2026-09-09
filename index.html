@@ -125,6 +125,19 @@
       transform:rotate(-45deg);transition:transform 0.2s cubic-bezier(.16,1,.3,1);}
     .radar-adv[open] > summary{margin-bottom:16px;}
     .radar-adv[open] > summary::before{transform:rotate(45deg);}
+    /* Archivo de 90 dias del cliente externo. */
+    .hist-list{display:flex;flex-direction:column;gap:2px;}
+    .hist-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background .15s;text-align:left;background:none;border:none;width:100%;font-family:'Inter',sans-serif;color:var(--fg);}
+    .hist-row:hover{background:var(--surface2);}
+    .hist-row i{font-size:15px;color:var(--muted);flex-shrink:0;}
+    .hist-main{flex:1 1 auto;min-width:0;}
+    .hist-name{display:block;font-size:var(--t-ui);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .hist-meta{display:block;font-size:var(--t-ui);color:var(--muted);letter-spacing:0.02em;margin-top:2px;}
+    .hist-ttl{font-size:var(--t-ui);color:var(--faint);flex-shrink:0;white-space:nowrap;}
+    .hist-dl{flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:6px;line-height:0;}
+    .hist-dl:hover{color:var(--fg);background:var(--bg);}
+    .hist-empty{font-size:var(--t-sec);color:var(--muted);line-height:1.6;padding:4px 2px;}
+    .hist-note{font-size:var(--t-sec);color:var(--faint);margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border);line-height:1.5;}
     .card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:24px;transition:border-color 0.25s;}
     .card:hover{border-color:var(--border2);}
     /* Dos roles distintos y no dos gustos: .card-kicker rotula una SECCIÓN
@@ -371,6 +384,9 @@
     /* Vista por rol: lo marcado data-admin desaparece para el cliente externo.
        Esto es ergonomía, NO seguridad: la política real vive en el servidor. */
     body[data-role="client"] [data-admin]{display:none!important;}
+    /* Y su espejo: lo que solo existe para el tenant. El admin en vista remota
+       recibe data-role="client", asi que puede verlo y probarlo sin JS extra. */
+    body:not([data-role="client"]) [data-client-only]{display:none!important;}
     /* Vista remota: el admin mirando el dashboard de un cliente. Se avisa
        siempre, porque desde dentro la vista es indistinguible de la real. */
     #preview-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
@@ -870,6 +886,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         <button class="btn-secondary" onclick="generateReport('general')" id="btn-general">Generar Reporte Completo (todos)</button>
       </div>
     </div>
+
+      <!-- Archivo de 90 dias: solo el cliente externo. El admin no lo necesita,
+           sus PDF viven en la carpeta de Drive que le creamos. -->
+      <div class="card hist-card" data-client-only>
+        <div class="section-label">Documentos guardados</div>
+        <div id="hist-analisis" class="hist-list"></div>
+      </div>
     </div>
 
     <!-- Visualizador del documento. Los bytes salen de la guarda efímera del
@@ -1229,6 +1252,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         <button class="btn-primary" id="radar-upload-btn" onclick="uploadRadarFile()" style="margin-top:18px;"><i class="ti ti-file-analytics"></i> Generar desde archivo</button>
         <div id="radar-upload-status" class="radar-status">Sube un archivo markdown para comenzar el análisis.</div>
       </details>
+
+      <!-- Archivo de 90 dias: solo el cliente externo. El admin no lo necesita,
+           sus PDF viven en la carpeta de Drive que le creamos. -->
+      <div class="card hist-card" data-client-only>
+        <div class="section-label">Documentos guardados</div>
+        <div id="hist-radar" class="hist-list"></div>
+      </div>
       </div>
       <!-- El visor se monta aqui al entrar en la pestaña: hay uno solo en toda
            la app y viaja entre Reportes y Radar (setTab -> _mountViewer). -->
@@ -3015,7 +3045,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       }
       if (esCliente()) {
         document.body.dataset.role = 'client';
-        _APP_TABS = ['reports', 'calls', 'settings'];
+        _APP_TABS = ['reports', 'radar', 'calls', 'settings'];
       }
       return me;
     })
@@ -3438,6 +3468,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       // es transitorio, y el visor es lo que queda en pantalla al cerrarlo.
       if(combined&&combined.viewable){
         openInViewer(job_id, combined, displayPeriod);
+        void renderHistorial('analisis');
       }else{
         setViewerState('error', { mensaje: job.error || 'El reporte terminó sin documento que mostrar.' });
       }
@@ -4211,6 +4242,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     if (tab === 'automation') { renderScheduleList(); startSchedulePolling(); }
     if (tab === 'dashboard' && document.getElementById('dash-client-select').value) renderDashboard();
     if (tab === 'radar')      populateRadarSelectors();
+    if (tab === 'reports' || tab === 'radar') void renderHistorial(tab === 'radar' ? 'radar' : 'analisis');
     _mountViewer(tab);
     if (tab === 'calls')      renderCalls();
   }
@@ -4404,7 +4436,11 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
           '<strong>No se detectó Radar del periodo anterior.</strong> Este será el primero, sin comparativa.');
       }
 
-      if (data.has_folder) {
+      // Un cliente externo no tiene Drive y su entrega es la descarga: ni el
+      // distintivo de carpeta ni el bloqueo por falta de ella significan nada.
+      if (esCliente()) {
+        setRadarBadge('rconf-folder-badge', 'hidden');
+      } else if (data.has_folder) {
         setRadarBadge('rconf-folder-badge', 'yes', '<i class=\"ti ti-folder\"></i>',
           `<strong>Carpeta de Radar configurada.</strong> <a href="${data.folder_url}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>`);
       } else {
@@ -4412,7 +4448,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
           '<strong>Falta la carpeta de Drive del Radar.</strong> Agrégala en Ajustes → Carpeta Drive de Radar; sin ella el reporte no se puede entregar.');
       }
 
-      okBtn.disabled = n === 0 || !data.has_folder;
+      okBtn.disabled = n === 0 || (!esCliente() && !data.has_folder);
     } catch (e) {
       if (seq !== _radarPreflightSeq) return;
       console.warn('[radar preflight]', e);
@@ -4452,6 +4488,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         _downloadBase64(data.pdfBase64, archivo, 'application/pdf');
         void showPdfInViewer(_b64ToBytes(data.pdfBase64), archivo, data.driveUrl);
       }
+      void renderHistorial('radar');
       status.innerHTML = '<span style="color:var(--success);font-size:var(--t-sec);">✓ Radar generado y descargado.'
         + (data.driveUrl ? ` <a href="${data.driveUrl}" target="_blank" style="color:var(--fg);">Abrir en Drive ↗</a>` : '') + '</span>';
     } catch (e) {
@@ -4504,6 +4541,63 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     } finally {
       btn.disabled = false; btn.textContent = old;
     }
+  }
+
+
+  // ── Archivo de 90 dias ─────────────────────────────────────────────────────
+  // Solo lo ve el cliente externo (data-client-only en la card). El PDF vive en
+  // la base 90 dias y despues se borra sin excepcion: la lista lo dice, porque
+  // descargar a tiempo es responsabilidad suya y esa frase es la mitad de la
+  // funcion.
+  const _histFecha = iso => new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const _histPeso  = b => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+  const _histDias  = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86400000));
+
+  async function renderHistorial(kind) {
+    const cont = document.getElementById('hist-' + kind);
+    if (!cont || !esCliente()) return;
+    try {
+      const qs = _tenantQS();
+      const data = await fetch(`${REPORT_API}/history${qs ? '?' + qs : ''}`).then(r => r.json());
+      const items = (data.items || []).filter(d => d.kind === kind);
+      const dias = data.retencion_dias || 90;
+      if (!items.length) {
+        cont.innerHTML = `<div class="hist-empty">Aquí aparecen tus documentos de los últimos ${dias} días. Descárgalos: después de ${dias} días se borran.</div>`;
+        return;
+      }
+      const icono = kind === 'radar' ? 'ti-radar' : 'ti-file-analytics';
+      cont.innerHTML = items.map(d => `
+        <button class="hist-row" onclick="abrirDelHistorial('${_esc(d.id)}','${_esc(d.filename)}')">
+          <i class="ti ${icono}"></i>
+          <span class="hist-main">
+            <span class="hist-name">${_esc(d.period_label || d.period_key)}</span>
+            <span class="hist-meta">${_histFecha(d.created_at)} &middot; ${_histPeso(d.size_bytes)}</span>
+          </span>
+          <span class="hist-ttl">se borra en ${_histDias(d.expires_at)} d</span>
+          <span class="hist-dl" title="Descargar" onclick="event.stopPropagation();descargarDelHistorial('${_esc(d.id)}')"><i class="ti ti-download"></i></span>
+        </button>`).join('')
+        + `<div class="hist-note">Se conservan ${dias} días. Descarga lo que quieras guardar.</div>`;
+    } catch (e) {
+      cont.innerHTML = `<div class="hist-empty" style="color:var(--danger);">No se pudo cargar el historial: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  // Los bytes van directos al visor compartido de la derecha: showPdfInViewer ya
+  // acepta bytes crudos (se escribio para el pdfBase64 de Radar), asi que aqui
+  // no hay codigo de visor nuevo. Y el boton "Descargar PDF" del visor funciona
+  // solo, porque downloadReport prefiere el blob que acaba de crear _viewerPinta.
+  async function abrirDelHistorial(id, filename) {
+    try {
+      const r = await fetch(`${REPORT_API}/history/${encodeURIComponent(id)}/download`);
+      if (!r.ok) throw new Error(r.status === 404 ? 'El documento ya no está disponible.' : `HTTP ${r.status}`);
+      await showPdfInViewer(new Uint8Array(await r.arrayBuffer()), filename, null);
+    } catch (e) {
+      setViewerState('error', { mensaje: e.message });
+    }
+  }
+
+  function descargarDelHistorial(id) {
+    window.location.href = `${REPORT_API}/history/${encodeURIComponent(id)}/download`;
   }
 
   // ── Clients CRUD ───────────────────────────────────────────────────────────

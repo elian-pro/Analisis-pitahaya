@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { callsDbInfo } from '../calls/db';
 import { sweeperCorriendo } from '../calls/sweeper';
+import { purgaCorriendo } from '../jobs/purge';
+import { RETENCION_DIAS } from '../jobs/archive';
 
 const router = Router();
 
@@ -25,7 +27,7 @@ router.get('/', (_req, res) => {
     // `features` es lo que distingue una versión de otra sin necesidad de un
     // número de build: si esta clave no viene en la respuesta, lo desplegado es
     // anterior al pipeline de llamadas.
-    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta', 'analisis-automatico'],
+    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta', 'analisis-automatico', 'archivo-90-dias'],
     proceso: {
       arrancadoEn: calls.arrancadoEn,
       uptimeMin:   calls.uptimeMin,
@@ -38,6 +40,13 @@ router.get('/', (_req, res) => {
       dbUrl:      calls.configurada,
       geminiKey:  Boolean(process.env.GEMINI_API_KEY),
       openaiKey:  Boolean(process.env.OPENAI_API_KEY),
+    },
+    // Borrar los PDF a los 90 dias es una promesa al cliente externo, no
+    // mantenimiento: si el tick no esta vivo, los documentos se acumulan mas
+    // alla del plazo pactado y desde fuera no se notaria.
+    archivo: {
+      retencion: purgaCorriendo() ? 'activa' : 'parada',
+      dias:      RETENCION_DIAS,
     },
     // Si la fila de "Traer oferta" no aparece, esto responde por qué sin
     // necesidad de entrar con sesión. Booleano: la llave nunca sale de aquí.

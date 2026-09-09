@@ -5,6 +5,10 @@ import { readCalls } from '../calls/read';
 import { monthLabel, previousMonth, uploadPdfNamed, radarFilename, findRadarSidecar, uploadRadarSidecar } from '../google/drive';
 import { resolveRadarPrompt, type RadarCall, type RadarPeriodMeta } from '../claude/radar';
 import { parseRadarSidecar } from './sidecar';
+import { saveRadarSidecar, findRadarSidecarInDb } from './sidecarStore';
+import { archivePdf } from '../jobs/archive';
+import { planDeEntrega } from '../clients/manager';
+import { randomUUID } from 'node:crypto';
 import { processRadarReport } from './process';
 import type { RadarReportData } from '../schemas/radar';
 
@@ -48,7 +52,8 @@ function monthBounds(month: string): { from: string; to: string } {
 
 export interface RadarDbResult {
   reportData:    RadarReportData;
-  driveUrl:      string;
+  // null cuando el cliente no tiene carpeta de Drive: su entrega es la descarga.
+  driveUrl:      string | null;
   pdfBuffer:     Buffer;
   input_tokens:  number;
   output_tokens: number;
@@ -67,9 +72,8 @@ interface RadarPeriod {
 
 // ── Núcleo compartido ────────────────────────────────────────────────────────
 async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<RadarDbResult> {
-  if (!client.radar_folder_id) {
-    throw new Error(`El cliente '${client.name}' no tiene carpeta de Drive para el Radar (radar_folder_id).`);
-  }
+  // Sin carpeta NO se aborta: un cliente externo no tiene Drive y su entrega es
+  // la descarga. La carpeta decide si ademas se sube, nada mas.
 
   const minDur   = client.radar_min_duration_seconds    ?? RADAR_MIN_DURATION_DEFAULT;
   const maxChars = client.radar_transcripcion_max_chars ?? RADAR_MAX_CHARS_DEFAULT;
@@ -127,9 +131,13 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
     throw new Error(`No hay llamadas de más de ${minDur} s en ${period.periodLabel} para '${client.name}'.`);
   }
 
-  // Sidecar del período anterior (comparativo). Carpeta: la de sidecars si existe, si no la de Radar.
+  // Sidecar del período anterior (comparativo). La base primero y Drive como
+  // respaldo, igual que el comparativo de los reportes de desempeño: un cliente
+  // externo no tiene carpeta, y sin la base su Radar saldria como linea base
+  // todos los meses.
   const sidecarFolder = client.radar_sidecar_folder_id || client.radar_folder_id;
-  const prevText = await findRadarSidecar(sidecarFolder, period.prevPeriodKey);
+  const prevText = await findRadarSidecarInDb(client.id, period.prevPeriodKey)
+    ?? (sidecarFolder ? await findRadarSidecar(sidecarFolder, period.prevPeriodKey) : undefined);
   const prevSidecar = prevText ? parseRadarSidecar(prevText) : null;
 
   const meta: RadarPeriodMeta = {
@@ -152,12 +160,28 @@ async function runRadarCore(client: ClientConfig, period: RadarPeriod): Promise<
 
   // La etiqueta del periodo distingue los dos cortes de un mismo mes, así que
   // el PDF de la 1ª quincena no pisa al de la 2ª.
-  const driveUrl = await uploadPdfNamed(
-    client.radar_folder_id,
-    radarFilename(clientFileLabel(client), period.periodLabel),
-    result.pdfBuffer,
-  );
-  await uploadRadarSidecar(sidecarFolder, period.periodKey, result.sidecarJson);
+  const filename = radarFilename(clientFileLabel(client), period.periodLabel);
+  const driveUrl = client.radar_folder_id
+    ? await uploadPdfNamed(client.radar_folder_id, filename, result.pdfBuffer)
+    : null;
+
+  // El sidecar va SIEMPRE a la base; a Drive solo si hay carpeta. Es lo que
+  // hace que el mes que viene haya comparativo aunque no exista Drive.
+  await saveRadarSidecar(client.id, period.periodKey, result.sidecarJson);
+  if (sidecarFolder) {
+    await uploadRadarSidecar(sidecarFolder, period.periodKey, result.sidecarJson);
+  }
+
+  // Archivar aqui y no en cada llamador: los CUATRO caminos que generan un
+  // Radar (el runner de reportes, las dos ramas del scheduler y la ruta manual)
+  // pasan por aqui. Guardarlo en cada uno serian cuatro diffs y el quinto
+  // llamador naceria roto. Radar no tiene job, asi que la clave es un uuid.
+  if (planDeEntrega(client).archivo) {
+    await archivePdf({
+      id: randomUUID(), clientId: client.id, kind: 'radar',
+      periodKey: period.periodKey, filename, pdf: result.pdfBuffer,
+    });
+  }
 
   return {
     reportData:    result.reportData,

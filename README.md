@@ -133,12 +133,20 @@ Postgres (en su servidor, conexión cifrada con `TENANT_DB_SECRET`) con el
 esquema estándar del pipeline. **La conecta él mismo** desde sus Ajustes, con
 "Guardar y preparar", que crea las tablas del pipeline en su base; el guard
 anti-SSRF de `src/calls/tenant.ts` rechaza hosts que resuelvan a direcciones
-internas. El sweeper transcribe y analiza sus llamadas igual que las de Callpicker. Su PDF **no toca
-Drive ni disco**: vive 30 minutos en memoria y expira solo por tiempo, así que
-el visualizador de la pestaña Reportes y el botón de descarga leen el mismo
-buffer sin consumirlo. Por eso
-no tiene Automatización, y por eso el servicio debe correr en **una sola
-instancia**.
+internas. El sweeper transcribe y analiza sus llamadas igual que las de Callpicker.
+
+Su PDF **no toca Drive**: recién generado vive 30 minutos en memoria, así que el
+visualizador de la pestaña Reportes y el botón de descarga leen el mismo buffer
+sin consumirlo. Y desde el archivo de 90 días **sí se guarda en la base**
+(`report_archive`, `bytea`): un reinicio ya no le pierde el reporte, y la ruta
+de descarga cae al archivo cuando la guarda efímera expira. Pasados 90 días se
+borra sin excepción — descargarlo a tiempo es responsabilidad del cliente, y así
+se lo dice la pestaña. Lo mismo con su Radar, que además guarda el sidecar del
+comparativo en `radar_sidecars` porque no tiene carpeta de Drive donde ponerlo.
+
+El servicio sigue debiendo correr en **una sola instancia**: el archivo resuelve
+los bytes del cliente externo, pero la guarda efímera de un cliente gestionado y
+el `Map` de jobs siguen viviendo en el proceso.
 
 ---
 

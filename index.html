@@ -2212,6 +2212,15 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   let currentClient     = null;
   let advisorRoster     = [];
   let allClients        = [];
+  // Los selectores de la vista de admin solo listan clientes GESTIONADOS: los de
+  // Zebra, cuyas llamadas viven en nuestra base o en su hoja. Un cliente externo
+  // trae su propia base y su propio dashboard, y se entra a el por vista remota
+  // (Ajustes -> Clientes -> ver como), no eligiendolo aqui como si fuera uno mas.
+  //
+  // Filtra la LISTA del selector, nunca allClients: de ese array vive la
+  // pantalla de Ajustes, que si tiene que enseñarlos (y ya los separa), y la
+  // propia vista remota, que necesita encontrarlos por id.
+  const _gestionados = () => allClients.filter(c => c.calls_source !== 'cliente_pg');
   let sci               = 0;
   let currentPeriodType = 'monthly';
 
@@ -2467,7 +2476,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       const res=await fetch('/api/clients');
       if(!res.ok) throw new Error('No se pudo cargar clientes');
       allClients=await res.json();
-      allClients.forEach(c=>{
+      _gestionados().forEach(c=>{
         const o=document.createElement('option');
         o.value=c.id;
         o.textContent=c.name;
@@ -3519,13 +3528,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     if (!sel) return;
     const prev = sel.value;
     sel.innerHTML = '<option value="">Todos los clientes (general)</option>';
-    allClients.forEach(c => {
+    _gestionados().forEach(c => {
       const o = document.createElement('option');
       o.value = c.id;
       o.textContent = c.name;
       sel.appendChild(o);
     });
-    sel.value = allClients.some(c => c.id === prev) ? prev : '';
+    sel.value = _gestionados().some(c => c.id === prev) ? prev : '';
     _tokenClient = sel.value;
   }
 
@@ -3844,13 +3853,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     if (!sel) return;
     const prev = sel.value;
     sel.innerHTML = '<option value="">Selecciona un cliente</option>';
-    allClients.forEach(c => {
+    _gestionados().forEach(c => {
       const o = document.createElement('option');
       o.value = c.id;
       o.textContent = c.name;
       sel.appendChild(o);
     });
-    sel.value = allClients.some(c => c.id === prev) ? prev : '';
+    sel.value = _gestionados().some(c => c.id === prev) ? prev : '';
   }
 
   function onDashClientChange() {
@@ -4330,12 +4339,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       document.getElementById('radar-flow-label').textContent = 'Generar desde un cliente';
       let clients = [];
       try { clients = await fetch(CLIENTS_API).then(r => r.json()); } catch { clients = []; }
-      _radarClients = clients;
+      // Solo gestionados: a un cliente externo se entra por vista remota.
+      _radarClients = clients.filter(c => c.calls_source !== 'cliente_pg');
       // Selector de cliente (flujo A) y cliente opcional (flujo B)
       const uSel = document.getElementById('radar-upload-client');
       cSel.innerHTML = '';
       uSel.innerHTML = '<option value="">— Sin cliente —</option>';
-      clients.forEach(c => {
+      _radarClients.forEach(c => {
         cSel.appendChild(new Option(c.name, c.id));
         uSel.appendChild(new Option(c.name, c.id));
       });
@@ -7192,7 +7202,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     clientSel.innerHTML = '<option value="">— Selecciona un cliente —</option>';
     try {
       const clients = await fetch(CLIENTS_API).then(r => r.json());
-      clients.forEach(c => {
+      // Un cliente externo no tiene Automatizacion: planDeEntrega le quita
+      // Drive y Chat, que son las dos entregas de una automatizacion. Ofrecerlo
+      // aqui era prometer algo que al dispararse no tenia donde entregar.
+      clients.filter(c => c.calls_source !== 'cliente_pg').forEach(c => {
         const o = document.createElement('option');
         o.value = c.id; o.textContent = c.name;
         clientSel.appendChild(o);

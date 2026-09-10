@@ -21,7 +21,7 @@ import { recordTokens } from '../tokens/store';
 import { costoUSD } from '../tokens/pricing';
 import { pdfVault } from './vault';
 import { recordReportMetrics, previousReportTextFromDb } from '../metrics/store';
-import { archivePdf, RETENCION_DIAS } from './archive';
+import { archivePdf } from './archive';
 
 async function loadClient(clientId: string) {
   const client = await getClient(clientId);
@@ -229,15 +229,21 @@ export async function runJob(job: Job): Promise<void> {
     pdfVault.put(job.id, mergedBuffer, filename);
     console.log(`[runner] Step 7: PDF en guarda efimera (${filename}, 30 min)`);
 
-    // Copia duradera SOLO del cliente externo: el gestionado ya tiene la suya
-    // en Drive. La clave es el id del job a proposito, para que la ruta de
-    // descarga pueda caer aqui cuando expire la guarda. No lanza nunca.
+    // Copia duradera SOLO del cliente externo, y en SU base: el gestionado ya
+    // tiene la suya en Drive. La clave es el id del job a proposito, para que
+    // la ruta de descarga pueda caer ahi cuando expire la guarda.
+    //
+    // No lanza nunca, pero el fallo NO se traga: pasados los 30 minutos de la
+    // guarda esta es la unica copia que le queda, asi que si su base no
+    // respondio hay que decirselo y pedirle que descargue ahora.
+    let archivoError: string | undefined;
     if (plan.archivo) {
-      await archivePdf({
+      const r = await archivePdf({
         id: job.id, clientId: job.client_id, kind: 'analisis',
         periodKey, filename, pdf: mergedBuffer,
       });
-      console.log(`[runner] Step 7: PDF archivado (${RETENCION_DIAS} dias)`);
+      if (r.ok) console.log('[runner] Step 7: PDF guardado en la base del cliente');
+      else      archivoError = r.motivo;
     }
 
     let combinedUrl: string | undefined;
@@ -339,6 +345,7 @@ export async function runJob(job: Job): Promise<void> {
         viewable: true as const,
         filename,
         advisors: individualResults.map(r => r.asesor),
+        ...(archivoError ? { archivo_error: archivoError } : {}),
       },
       ...(radarResult && { radar: { driveUrl: radarResult.driveUrl } }),
       tokens: tokenSummary,

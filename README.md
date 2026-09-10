@@ -135,18 +135,25 @@ esquema estándar del pipeline. **La conecta él mismo** desde sus Ajustes, con
 anti-SSRF de `src/calls/tenant.ts` rechaza hosts que resuelvan a direcciones
 internas. El sweeper transcribe y analiza sus llamadas igual que las de Callpicker.
 
-Su PDF **no toca Drive**: recién generado vive 30 minutos en memoria, así que el
-visualizador de la pestaña Reportes y el botón de descarga leen el mismo buffer
-sin consumirlo. Y desde el archivo de 90 días **sí se guarda en la base**
-(`report_archive`, `bytea`): un reinicio ya no le pierde el reporte, y la ruta
-de descarga cae al archivo cuando la guarda efímera expira. Pasados 90 días se
-borra sin excepción — descargarlo a tiempo es responsabilidad del cliente, y así
-se lo dice la pestaña. Lo mismo con su Radar, que además guarda el sidecar del
-comparativo en `radar_sidecars` porque no tiene carpeta de Drive donde ponerlo.
+Su PDF **no toca Drive ni la base de Zebra**: recién generado vive 30 minutos en
+memoria, así que el visualizador de la pestaña Reportes y el botón de descarga
+leen el mismo buffer sin consumirlo; y la copia duradera se guarda **en su
+propia base** (`<esquema>.reportes`, `bytea`), junto al sidecar del comparativo
+de Radar (`<esquema>.radar_sidecars`). Zebra no conserva ningún documento suyo,
+así que no hay plazo de borrado: cuánto guarda lo decide él, en su disco. La
+ruta de descarga por job cae a su base cuando la guarda efímera expira, de modo
+que un reinicio ya no le obliga a regenerar el reporte.
 
-El servicio sigue debiendo correr en **una sola instancia**: el archivo resuelve
-los bytes del cliente externo, pero la guarda efímera de un cliente gestionado y
-el `Map` de jobs siguen viviendo en el proceso.
+Eso es coherente con lo que ya pasaba: `ensureTenantSchema` crea en su base la
+tabla `analisis`, donde el pipeline escribe la transcripción literal de cada
+llamada y el veredicto de IA. El contenido sensible siempre estuvo en su
+servidor; el PDF es un render de eso mismo.
+
+Lo que sí sigue en la base de Zebra: su roster de asesores, sus jobs, el log de
+tokens y `report_metrics` (que incluye el texto del sidecar de sus reportes).
+
+El servicio sigue debiendo correr en **una sola instancia**: la guarda efímera y
+el `Map` de jobs viven en el proceso.
 
 ---
 

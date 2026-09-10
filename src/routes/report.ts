@@ -5,8 +5,9 @@ import { getClient, clientFileLabel } from '../clients/manager';
 import { createJob, getJob, updateJob } from '../jobs/store';
 import { runJob } from '../jobs/runner';
 import { pdfVault } from '../jobs/vault';
-import { listArchive, readArchive, RETENCION_DIAS } from '../jobs/archive';
+import { listArchive, readArchive } from '../jobs/archive';
 import type { AuthedRequest } from '../auth/middleware';
+import { humanizeError } from '../humanizeError';
 import { findSidecarFolder, findPreviousPeriodKey, findRadarSidecar, monthLabel, previousMonth, uploadPdfNamed, radarFilename } from '../google/drive';
 import { listAdvisors } from '../advisors/store';
 import { previousPeriodKeyFromDb } from '../metrics/store';
@@ -282,29 +283,38 @@ router.get('/history', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: 'Falta client_id.' });
     return;
   }
-  const rows = await listArchive(clientId);
-  const ms = RETENCION_DIAS * 24 * 60 * 60 * 1000;
-  res.json({
-    retencion_dias: RETENCION_DIAS,
-    items: rows.map(r => ({
-      ...r,
-      period_label: periodKeyLabel(r.period_key),
-      // La caducidad la calcula el servidor con la MISMA cuenta que usa la
-      // purga: el navegador no vuelve a derivar la ventana por su lado.
-      expires_at:   new Date(Date.parse(r.created_at) + ms).toISOString(),
-    })),
-  });
+  // Los documentos viven en la base del propio cliente, asi que "sin base
+  // conectada" no es un error: es un estado que la pantalla sabe explicar y
+  // convertir en el siguiente paso (conectarla en Ajustes).
+  try {
+    const rows = await listArchive(clientId);
+    res.json({ items: rows.map(r => ({ ...r, period_label: periodKeyLabel(r.period_key) })) });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (/no tiene su base de datos/i.test(msg)) {
+      res.json({ items: [], sin_base: true });
+      return;
+    }
+    res.status(502).json({ error: humanizeError(msg) });
+  }
 });
 
 // GET /api/report/history/:id/download — los bytes de un documento guardado.
 router.get('/history/:id/download', async (req: Request, res: Response): Promise<void> => {
   const user = (req as AuthedRequest).user;
-  // null = admin, sin filtro. El filtro del tenant va DENTRO del SQL para que
-  // "no existe" y "no es tuyo" respondan lo mismo: un 403 confirmaria que el
-  // documento de otro cliente existe. Misma regla que el middleware con un job
-  // ajeno.
-  const cid = user?.role === 'client' ? (user.client_id ?? '') : null;
-  const hit = await readArchive(req.params.id, cid);
+  // El cliente es obligatorio: sin el no hay base que abrir. Para un tenant
+  // manda su propia sesion; un admin en vista remota lo pasa en la query, que
+  // es lo mismo que hace el listado. Ya no hay caso "admin sin filtro": con una
+  // base por cliente el aislamiento es estructural, no una clausula que haya
+  // que acordarse de poner.
+  const cid = user?.role === 'client'
+    ? (user.client_id ?? '')
+    : (typeof req.query.client_id === 'string' ? req.query.client_id : '');
+  if (!cid) {
+    res.status(400).json({ error: 'Falta client_id.' });
+    return;
+  }
+  const hit = await readArchive(cid, req.params.id);
   if (!hit) {
     res.status(404).json({ error: 'Documento no encontrado.' });
     return;
@@ -449,7 +459,7 @@ router.get('/:jobId/download', async (req: Request, res: Response): Promise<void
   // otra vez a Claude por un documento que no se habia perdido. El archivo usa
   // el id del job como clave justo para que esto sea una linea.
   const hit = pdfVault.read(req.params.jobId)
-    ?? await readArchive(job.id, job.client_id);
+    ?? await readArchive(job.client_id, job.id);
   if (!hit) {
     // 410 y no 404: el job existe, el archivo ya no. La UI usa el texto tal cual.
     res.status(410).json({ error: 'El documento ya no está disponible: pasaron los 30 minutos o el servidor se reinició. Genera el reporte de nuevo.' });

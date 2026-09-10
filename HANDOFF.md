@@ -506,15 +506,16 @@ Dockerfile · .env.example
   (no hay reanudación de jobs a medias).
 - **Estado "running" de automatizaciones es en memoria:** correcto para una sola instancia; con
   múltiples réplicas no se comparte (cada proceso ve su propio set).
-- **Archivo de 90 días (solo clientes externos):** el PDF se guarda en `report_archive` (`bytea`)
-  además de la guarda efímera. `GET /api/report/:jobId/download` cae al archivo cuando la guarda
-  expira, así que un reinicio ya no obliga a regenerar el reporte. La compuerta es `plan.archivo`
-  en `clients/manager.ts` — un cliente gestionado nunca entra, su copia está en Drive.
-- **La purga es una promesa, no mantenimiento:** `jobs/purge.ts` corre cada hora y borra el
-  archivo y los registros de `jobs` del cliente externo pasados los 90 días. `/api/health` publica
-  si el tick está vivo (`archivo.retencion`). La ventana se mueve con `PDF_ARCHIVE_DAYS`, útil para
-  probar la purga sin esperar tres meses. **No** se purgan `report_metrics` ni `radar_sidecars`:
-  son lo que sostiene el comparativo periodo-a-periodo.
+- **Los documentos del cliente externo viven en SU base, no en la nuestra:** `<esquema>.reportes`
+  y `<esquema>.radar_sidecars`, creadas por `ensureReportTables` (`calls/tenant.ts`) tanto desde
+  "Guardar y preparar" como en perezoso antes de cada escritura — un cliente aprovisionado antes de
+  que existieran no vuelve a pulsar el botón. `GET /api/report/:jobId/download` cae a su base cuando
+  la guarda efímera expira. La compuerta es `plan.archivo` en `clients/manager.ts`; un gestionado
+  nunca entra, su copia está en Drive. **Zebra no purga nada**: es el disco del cliente.
+- **Si su base no responde al generar, el reporte se entrega igual** y `archivePdf` devuelve el
+  fallo en vez de tragárselo: viaja en `job.results.combined.archivo_error` y la UI le pide que
+  descargue el PDF en esos 30 minutos, porque era su única copia. Un fallo silencioso perdía el
+  reporte sin que nadie se enterara.
 - **Costo:** cada corrida consume tokens de Claude **y** publica en el Google Chat del cliente
   (en automatizaciones y en disparo manual). El disparo manual pide confirmación en la UI.
 - **`claude-sonnet-4-6`** está fijado en `claude/individual.ts` y `claude/general.ts`; cambiar el

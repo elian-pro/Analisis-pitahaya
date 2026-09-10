@@ -6,6 +6,7 @@ import { dbEnabled, dbGet, dbUpsert, dbDelete, TENANT_DB_TABLE } from '../config
 import { encryptSecret, decryptSecret } from '../config/secrets';
 import { loadClients, getClient, type ClientConfig } from '../clients/manager';
 import type { Cuenta } from './registry';
+import { quoteIdent } from './db';
 import { callsDb } from './db';
 import type { CallsConfig } from './config';
 
@@ -229,7 +230,7 @@ export async function configDeTenant(cuenta: Cuenta): Promise<CallsConfig | unde
 // La base la crea Zebra desde cero: estas dos tablas SON el contrato. Idempotente.
 
 export async function ensureTenantSchema(pool: Pool, schema: string): Promise<void> {
-  const esq = '"' + schema.replace(/"/g, '""') + '"';
+  const esq = quoteIdent(schema);
   await pool.query(`CREATE SCHEMA IF NOT EXISTS ${esq}`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${esq}.llamadas (
@@ -278,4 +279,50 @@ export async function ensureTenantSchema(pool: Pool, schema: string): Promise<vo
   await pool.query(`
     CREATE INDEX IF NOT EXISTS analisis_pendientes_idx ON ${esq}.analisis (estado, intentos)
      WHERE estado IN ('pendiente','transcrita','fallida')`);
+  await ensureReportTables(pool, schema);
+}
+
+/**
+ * Las tablas de los documentos entregados: el PDF de cada reporte y el sidecar
+ * del comparativo de Radar. Van en la base del CLIENTE y no en la de Zebra, que
+ * es donde estuvieron un dia: su transcripcion y el analisis de cada llamada ya
+ * viven aqui (tabla `analisis`), y el PDF no es mas que un render de eso mismo.
+ * Guardarlo en nuestra base era la unica pieza que se salia del patron.
+ *
+ * Aparte de ensureTenantSchema porque tambien se llama en perezoso antes de
+ * escribir: un cliente aprovisionado antes de que estas tablas existieran no
+ * vuelve a pulsar "Guardar y preparar", y CREATE TABLE IF NOT EXISTS no altera
+ * lo ya creado. Son dos consultas idempotentes delante de una operacion que
+ * tarda un minuto en un LLM: no merece cachear el estado.
+ */
+export async function ensureReportTables(pool: Pool, schema: string): Promise<void> {
+  const esq = quoteIdent(schema);
+  // Sin columna client_id: la BASE es el cliente. Eso convierte el aislamiento
+  // en estructural — no hay un WHERE que se pueda olvidar. Quien lea el SELECT
+  // sin filtro la va a echar de menos, y esta es la razon.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ${esq}.reportes (
+      id          TEXT        PRIMARY KEY,
+      kind        TEXT        NOT NULL,
+      period_key  TEXT        NOT NULL,
+      filename    TEXT        NOT NULL,
+      size_bytes  INTEGER     NOT NULL,
+      pdf         BYTEA       NOT NULL,
+      creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS reportes_creado_idx ON ${esq}.reportes (creado_en DESC)`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ${esq}.radar_sidecars (
+      period_key TEXT        PRIMARY KEY,
+      sidecar    TEXT        NOT NULL,
+      creado_en  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+}
+
+/** Pool y esquema de un cliente externo, listos para consultar. */
+export async function tenantTarget(clientId: string): Promise<{ pool: Pool; esquema: string }> {
+  const cfg = await getTenantDbConfig(clientId);
+  if (!cfg) throw new Error(`El cliente '${clientId}' no tiene su base de datos configurada todavía.`);
+  return { pool: await tenantPool(clientId, cfg), esquema: cfg.schema || TENANT_SCHEMA_DEFAULT };
 }

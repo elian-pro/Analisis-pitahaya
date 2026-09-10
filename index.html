@@ -133,7 +133,6 @@
     .hist-main{flex:1 1 auto;min-width:0;}
     .hist-name{display:block;font-size:var(--t-ui);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .hist-meta{display:block;font-size:var(--t-ui);color:var(--muted);letter-spacing:0.02em;margin-top:2px;}
-    .hist-ttl{font-size:var(--t-ui);color:var(--faint);flex-shrink:0;white-space:nowrap;}
     .hist-dl{flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:6px;line-height:0;}
     .hist-dl:hover{color:var(--fg);background:var(--bg);}
     .hist-empty{font-size:var(--t-sec);color:var(--muted);line-height:1.6;padding:4px 2px;}
@@ -3194,12 +3193,19 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   }
 
   // El link del reporte terminado: Drive para gestionados; para el cliente
-  // externo, descarga efímera: vive 30 min y luego el backend responde 410.
+  // externo, descarga.
+  //
+  // La coletilla dice la verdad de cada caso, y son dos distintas: si se guardo
+  // en su base, el documento sigue ahi y el plazo no existe; si NO se pudo
+  // guardar, entonces si vive 30 minutos y hay que descargarlo ahora, porque
+  // esa era su unica copia.
   function _combinedLinkHtml(combined, labelHtml, style){
     if (combined.download) {
+      const nota = combined.archivo_error
+        ? '<span style="font-size:var(--t-ui);color:var(--danger);">Descárgalo ahora · 30 minutos</span>'
+        : '<span style="font-size:var(--t-ui);color:var(--faint);">Guardado en tu base de datos</span>';
       return `<a href="/api/report/${encodeURIComponent(currentJobId)}/download" class="result-link" style="${style}">`+
-             `<span><i class="ti ti-download ti-lead"></i>${labelHtml}</span>`+
-             `<span style="font-size:var(--t-ui);color:var(--faint);">Disponible 30 minutos</span></a>`;
+             `<span><i class="ti ti-download ti-lead"></i>${labelHtml}</span>${nota}</a>`;
     }
     return `<a href="${combined.driveUrl}" target="_blank" class="result-link" style="${style}"><span>${labelHtml}</span><span class="result-arrow">→</span></a>`;
   }
@@ -3227,6 +3233,14 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       const n=combined.advisors?.length||individual.length;
       document.getElementById('modal-subtitle').textContent=`${n} asesor(es) analizados — Reporte listo`;
       html=_combinedLinkHtml(combined, `Reporte Completo — ${_displayPeriod}`, 'margin-top:0;border-color:rgba(212,175,55,0.4);');
+      // El reporte se entrego, pero no se pudo guardar en su base. No es un
+      // fallo del reporte y por eso no es un error rojo de arriba; es un aviso
+      // con una accion, porque en 30 minutos ya no habra donde recuperarlo.
+      if (combined.archivo_error) {
+        html += '<div class="error-box" style="margin-top:10px;"><i class="ti ti-alert-triangle ti-lead"></i>'
+              + 'No se pudo guardar en tu base de datos, así que no aparecerá en tus documentos guardados. '
+              + '<strong>Descarga el PDF ahora:</strong> los bytes solo viven 30 minutos.</div>';
+      }
     }else{
       document.getElementById('modal-subtitle').textContent=`${individual.length} reporte(s) generado(s)`;
       individual.forEach(r=>{
@@ -4545,14 +4559,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   }
 
 
-  // ── Archivo de 90 dias ─────────────────────────────────────────────────────
-  // Solo lo ve el cliente externo (data-client-only en la card). El PDF vive en
-  // la base 90 dias y despues se borra sin excepcion: la lista lo dice, porque
-  // descargar a tiempo es responsabilidad suya y esa frase es la mitad de la
-  // funcion.
+  // ── Documentos guardados ───────────────────────────────────────────────────
+  // Solo lo ve el cliente externo (data-client-only en la card). Sus PDF viven
+  // en SU propia base de datos, no en la nuestra, asi que no hay plazo de
+  // borrado: cuanto conserva lo decide el. La nota se lo dice porque para este
+  // segmento eso no es un detalle tecnico, es lo que compro.
   const _histFecha = iso => new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const _histPeso  = b => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
-  const _histDias  = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86400000));
 
   async function renderHistorial(kind) {
     const cont = document.getElementById('hist-' + kind);
@@ -4562,10 +4575,16 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       const r = await fetch(`${REPORT_API}/history${qs ? '?' + qs : ''}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
+      // Sin base conectada no hay historial que ensenar, pero tampoco es un
+      // vacio inexplicable: es el siguiente paso que le toca dar.
+      if (data.sin_base) {
+        cont.innerHTML = '<div class="hist-empty">Conecta tu base de datos para guardar tus reportes.'
+          + ' <a href="#" onclick="event.preventDefault();setTab(\'settings\')" style="color:var(--fg);">Ir a Ajustes</a></div>';
+        return;
+      }
       const items = (data.items || []).filter(d => d.kind === kind);
-      const dias = data.retencion_dias || 90;
       if (!items.length) {
-        cont.innerHTML = `<div class="hist-empty">Aquí aparecen tus documentos de los últimos ${dias} días. Descárgalos: después de ${dias} días se borran.</div>`;
+        cont.innerHTML = '<div class="hist-empty">Aquí aparecerán los reportes que generes. Se guardan en tu propia base de datos.</div>';
         return;
       }
       const icono = kind === 'radar' ? 'ti-radar' : 'ti-file-analytics';
@@ -4574,12 +4593,11 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
           <i class="ti ${icono}"></i>
           <span class="hist-main">
             <span class="hist-name">${_esc(d.period_label || d.period_key)}</span>
-            <span class="hist-meta">${_histFecha(d.created_at)} &middot; ${_histPeso(d.size_bytes)}</span>
+            <span class="hist-meta">${_histFecha(d.creado_en)} &middot; ${_histPeso(d.size_bytes)}</span>
           </span>
-          <span class="hist-ttl">se borra en ${_histDias(d.expires_at)} d</span>
           <span class="hist-dl" title="Descargar" onclick="event.stopPropagation();descargarDelHistorial('${_esc(d.id)}')"><i class="ti ti-download"></i></span>
         </button>`).join('')
-        + `<div class="hist-note">Se conservan ${dias} días. Descarga lo que quieras guardar.</div>`;
+        + '<div class="hist-note">Tus reportes se guardan en tu propia base de datos.</div>';
     } catch (e) {
       // Un "Unexpected token '<'" no le dice nada al cliente y encima parece
       // culpa suya. El detalle va a la consola, que es donde sirve.

@@ -1,28 +1,35 @@
-import { pool, dbEnabled, REPORT_ARCHIVE_TABLE } from '../config/db';
+import { tenantTarget, ensureReportTables } from '../calls/tenant';
+import { quoteIdent } from '../calls/db';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Archivo de PDF de los clientes externos. Vive al lado de vault.ts porque son
-// el mismo dominio y hay que leerlos juntos: la guarda es la ventana de 30
-// minutos para TODOS, esto es la copia duradera solo para quien no tiene Drive.
+// Los reportes entregados a un cliente externo, guardados EN SU PROPIA BASE.
 //
-// Por qué existe: planDeEntrega le da al cliente externo {drive:false,
-// vault:true}, o sea que su ÚNICA entrega eran esos 30 minutos. Un reinicio
-// antes de que descargara perdía el reporte, y regenerarlo se vuelve a pagar en
-// tokens. El equipo decidió conservarlos 90 días y dejar la descarga a cargo
-// del cliente.
+// Vive al lado de vault.ts porque son el mismo dominio y hay que leerlos
+// juntos: la guarda es la ventana de 30 minutos en memoria para todos, esto es
+// la copia duradera de quien no tiene Drive.
+//
+// Por qué en su base y no en la nuestra: `ensureTenantSchema` ya crea ahí la
+// tabla `analisis`, donde Zebra escribe la transcripción literal de cada
+// llamada y el veredicto de IA llamada por llamada. El contenido sensible ya
+// está en su servidor; el PDF no es más que un render de eso mismo. Tenerlo en
+// la base de Zebra era la única pieza que se salía del patrón, y encima la más
+// fácil de señalar: el documento entero en un solo blob.
+//
+// Consecuencia buscada: Zebra no guarda ningún PDF del cliente, así que no hay
+// plazo de borrado que prometer ni que incumplir. Cuánto conserva es decisión
+// suya, en su disco.
+//
+// Y una consecuencia de regalo: el aislamiento pasa a ser estructural. Ya no
+// hay un `AND client_id = $2` que alguien pueda olvidar — no hay dónde
+// equivocarse, porque la base ES el cliente.
 //
 // La compuerta de quién entra aquí NO está en este archivo: es plan.archivo,
-// en clients/manager.ts. Aquí no se decide, solo se guarda.
+// en clients/manager.ts.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Ventana de retención. Vive aquí, y no en purge.ts, para que el corte que
- *  borra y el `expires_at` que se le enseña al cliente sean la MISMA cuenta. */
-export const RETENCION_DIAS = Number(process.env.PDF_ARCHIVE_DAYS || 90);
 
 // node-pg materializa el bytea entero en un Buffer: no hay streaming. A 1-3 MB
 // por reporte estamos cuatro órdenes de magnitud por debajo, pero un tope duro
-// evita que un caso raro se lleve el proceso por delante. Mismo criterio que
-// PdfVault con su techo de bytes.
+// evita que un caso raro se lleve el proceso por delante.
 const MAX_BYTES = 50 * 1024 * 1024;
 
 export type ArchiveKind = 'analisis' | 'radar';   // mismo vocabulario que ReportKind (schedules/runner.ts)
@@ -33,78 +40,93 @@ export interface ArchiveRow {
   period_key: string;
   filename:   string;
   size_bytes: number;
-  created_at: string;
+  creado_en:  string;
 }
 
+/** Qué pasó al intentar guardar. `ok:false` NO es una excepción: es un aviso. */
+export interface ArchiveResult { ok: boolean; motivo?: string }
+
 /**
- * Guarda el PDF. **Nunca lanza**: ese es todo su contrato de fallo. Archivar es
- * un extra sobre una entrega que ya ocurrió; si la base está caída, el cliente
- * ya tiene su descarga y lo último que debe pasar es que el reporte falle por
- * no poder guardarse una copia. Mismo razonamiento que recordReportMetrics.
+ * Guarda el PDF en la base del cliente. **Nunca lanza**: archivar es un extra
+ * sobre una entrega que ya ocurrió, y si su base no responde lo último que debe
+ * pasar es que el reporte falle.
  *
- * `id` es el id del JOB para los reportes: eso es lo que permite que la ruta de
- * descarga existente caiga aquí cuando la guarda efímera expira, sin política
- * nueva. Regenerar el mismo job reemplaza la fila en vez de duplicarla, igual
- * que hace la guarda, y estrena los 90 días.
+ * Pero sí DEVUELVE el fallo, y eso importa: para un cliente externo esta es la
+ * única copia duradera pasados los 30 minutos de la guarda efímera. Tragárselo
+ * en silencio era perder el reporte sin que nadie se enterara, así que el
+ * llamador se lo dice al cliente y le pide que descargue.
+ *
+ * `id` es el id del JOB para los reportes: eso permite que la ruta de descarga
+ * existente caiga aquí cuando la guarda expira, sin política nueva. Regenerar
+ * el mismo job reemplaza la fila en vez de duplicarla.
  */
 export async function archivePdf(a: {
   id: string; clientId: string; kind: ArchiveKind;
   periodKey: string; filename: string; pdf: Buffer;
-}): Promise<void> {
-  if (!dbEnabled || !pool) return;
+}): Promise<ArchiveResult> {
   if (a.pdf.length > MAX_BYTES) {
-    console.warn(`[archive] ${a.filename} pesa ${a.pdf.length} B y no cabe (tope ${MAX_BYTES} B): no se archiva`);
-    return;
+    const motivo = `el PDF pesa ${a.pdf.length} B y no cabe (tope ${MAX_BYTES} B)`;
+    console.warn(`[archive] ${a.filename}: ${motivo}`);
+    return { ok: false, motivo };
   }
   try {
+    const { pool, esquema } = await tenantTarget(a.clientId);
+    // Perezoso: un cliente aprovisionado antes de que estas tablas existieran
+    // no ha vuelto a pulsar "Guardar y preparar".
+    await ensureReportTables(pool, esquema);
     await pool.query(
-      `INSERT INTO ${REPORT_ARCHIVE_TABLE} (id, client_id, kind, period_key, filename, size_bytes, pdf)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO ${quoteIdent(esquema)}.reportes
+         (id, kind, period_key, filename, size_bytes, pdf)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET
          pdf = EXCLUDED.pdf, filename = EXCLUDED.filename,
-         size_bytes = EXCLUDED.size_bytes, created_at = now()`,
-      [a.id, a.clientId, a.kind, a.periodKey, a.filename, a.pdf.length, a.pdf],
+         size_bytes = EXCLUDED.size_bytes, creado_en = now()`,
+      [a.id, a.kind, a.periodKey, a.filename, a.pdf.length, a.pdf],
     );
+    return { ok: true };
   } catch (e) {
-    // Se registra fuerte: un fallo sistemático aquí se ve, desde fuera,
-    // exactamente igual que un cliente que nunca ha generado nada.
-    console.warn(`[archive] no se pudo archivar ${a.kind} ${a.clientId}/${a.periodKey}: ${(e as Error).message}`);
+    const motivo = (e as Error).message;
+    console.warn(`[archive] no se pudo guardar ${a.kind} de ${a.clientId}/${a.periodKey}: ${motivo}`);
+    return { ok: false, motivo };
   }
 }
 
-/** Lo que hay archivado de un cliente, lo más nuevo primero. Sin los bytes. */
+/** Lo que hay guardado en su base, lo más nuevo primero. Sin los bytes. */
 export async function listArchive(clientId: string, limit = 100): Promise<ArchiveRow[]> {
-  if (!dbEnabled || !pool) return [];
-  // Nunca SELECT *: la columna pdf arrastraría cientos de MB por un pool de 5
+  const { pool, esquema } = await tenantTarget(clientId);
+  await ensureReportTables(pool, esquema);
+  // Nunca SELECT *: la columna pdf arrastraría megas por un pool de 2
   // conexiones solo para pintar una lista. Enumerar columnas no es estilo, es
   // la diferencia entre tocar el TOAST y no tocarlo.
   const { rows } = await pool.query<ArchiveRow>(
-    `SELECT id, kind, period_key, filename, size_bytes, created_at
-       FROM ${REPORT_ARCHIVE_TABLE}
-      WHERE client_id = $1
-      ORDER BY created_at DESC
-      LIMIT $2`,
-    [clientId, limit],
+    `SELECT id, kind, period_key, filename, size_bytes, creado_en
+       FROM ${quoteIdent(esquema)}.reportes
+      ORDER BY creado_en DESC
+      LIMIT $1`,
+    [limit],
   );
   return rows;
 }
 
 /**
- * Los bytes de un documento. `clientId` null = admin, sin filtro.
- *
- * El filtro va DENTRO del SQL a propósito: así "no existe" y "no es tuyo" son
- * indistinguibles desde una sola consulta, y el llamador responde 404 en los dos
- * casos. Es la misma regla deliberada que el middleware aplica a un job ajeno:
- * un 403 confirmaría que el documento de otro cliente existe.
+ * Los bytes de un documento suyo. El cliente es obligatorio: sin él no hay base
+ * que abrir, así que el caso "admin sin filtro" que tenía la versión anterior
+ * ya no existe ni tiene sentido.
  */
 export async function readArchive(
-  id: string, clientId: string | null,
+  clientId: string, id: string,
 ): Promise<{ filename: string; pdf: Buffer } | undefined> {
-  if (!dbEnabled || !pool) return undefined;
-  const { rows } = await pool.query<{ filename: string; pdf: Buffer }>(
-    `SELECT filename, pdf FROM ${REPORT_ARCHIVE_TABLE}
-      WHERE id = $1 AND ($2::text IS NULL OR client_id = $2)`,
-    [id, clientId],
-  );
-  return rows[0];
+  try {
+    const { pool, esquema } = await tenantTarget(clientId);
+    const { rows } = await pool.query<{ filename: string; pdf: Buffer }>(
+      `SELECT filename, pdf FROM ${quoteIdent(esquema)}.reportes WHERE id = $1`,
+      [id],
+    );
+    return rows[0];
+  } catch (e) {
+    // Una base caída no es un 500 útil aquí: el llamador responde 404 y el
+    // cliente ve "el documento ya no está disponible", que es lo que le pasa.
+    console.warn(`[archive] no se pudo leer ${clientId}/${id}: ${(e as Error).message}`);
+    return undefined;
+  }
 }

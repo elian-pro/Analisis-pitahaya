@@ -8,7 +8,6 @@ import { seedClientsFromFileIfEmpty } from './clients/manager';
 import { seedSchedulesFromFileIfEmpty } from './schedules/store';
 import { seedTokenLogFromFileIfEmpty } from './tokens/store';
 import { initJobs } from './jobs/store';
-import { startPdfPurge } from './jobs/purge';
 import healthRouter from './routes/health';
 import advisorsRouter from './routes/advisors';
 import reportRouter from './routes/report';
@@ -111,9 +110,6 @@ async function bootstrap(): Promise<void> {
     // origen se procesa es su interruptor de Ajustes, no una variable que nadie
     // ve: sin fila de configuración o con el switch apagado, el tick no lo toca.
     if (callsDbEnabled()) startCallsSweeper();
-    // Retencion del archivo de PDF: borrar a los 90 dias es una promesa al
-    // cliente externo, no un detalle de mantenimiento.
-    if (dbEnabled) startPdfPurge();
   });
 }
 

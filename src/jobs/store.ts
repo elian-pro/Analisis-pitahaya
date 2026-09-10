@@ -20,7 +20,10 @@ export interface JobResult {
   // download: la descarga efímera es su ÚNICA entrega (cliente externo).
   // viewable: hay bytes en la guarda para el visualizador; lo tienen todos
   //   durante 30 min, vía GET /api/report/:jobId/download.
-  combined?:  { driveUrl?: string; download?: true; viewable?: true; filename?: string; advisors: string[] };
+  // archivo_error: no se pudo guardar en la base del cliente externo. Pasados
+  //   los 30 min esta era su única copia, así que la UI se lo dice y le pide
+  //   que descargue ya; un fallo silencioso perdía el reporte sin avisar.
+  combined?:  { driveUrl?: string; download?: true; viewable?: true; filename?: string; advisors: string[]; archivo_error?: string };
   radar?:     { driveUrl: string | null };   // Radar de Objeciones (aparte, no va en el merge). null = sin Drive
   tokens?:    TokenSummary;
 }

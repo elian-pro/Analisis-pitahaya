@@ -53,8 +53,6 @@ export const ADVISORS_TABLE = 'advisors';
 export const APP_USERS_TABLE = 'app_users';   // usuarios externos (rol client)
 export const TENANT_DB_TABLE = 'tenant_db';   // conexion a la base de cada cliente externo (password cifrada)
 export const CALLS_TABLE = 'calls';
-export const RADAR_SIDECARS_TABLE = 'radar_sidecars';   // comparativo de Radar sin Drive
-export const REPORT_ARCHIVE_TABLE = 'report_archive';   // PDF de clientes externos (90 dias)
 
 /**
  * Creates the tables if they don't exist. Safe to run on every boot.
@@ -134,56 +132,13 @@ export async function ensureSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS report_metrics_client_period_idx
        ON ${REPORT_METRICS_TABLE} (client_id, period_start)`,
   );
-  // Sidecar de Radar por periodo. Un cliente externo no tiene Drive, que es de
-  // donde runRadarCore leia el sidecar anterior: sin esta tabla, su Radar sale
-  // "primer periodo, sin comparativa" TODOS los meses. Misma forma que
-  // report_metrics (clave natural, texto), y por el mismo motivo: es lo que
-  // sostiene el comparativo periodo-a-periodo cuando no hay Drive.
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS ${RADAR_SIDECARS_TABLE} (
-       client_id   TEXT        NOT NULL,
-       period_key  TEXT        NOT NULL,
-       sidecar     TEXT        NOT NULL,
-       created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-       PRIMARY KEY (client_id, period_key)
-     )`,
-  );
-  // Archivo de PDF entregados a clientes externos, 90 dias (jobs/archive.ts).
-  // Columnas reales y no `data JSONB`: un bytea dentro de jsonb seria base64
-  // (~33% mas grande) y no se podria borrar por fecha sin parsearlo.
-  // `id` es el id del JOB para los reportes, a proposito: asi la ruta de
-  // descarga existente puede caer aqui cuando la guarda efimera expira, sin
-  // superficie de permisos nueva. Radar no tiene job y usa un uuid.
-  // `size_bytes` se materializa en vez de usar octet_length(pdf): sobre una
-  // columna TOASTeada, octet_length obliga a leer el PDF entero para listarlo.
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS ${REPORT_ARCHIVE_TABLE} (
-       id          TEXT        PRIMARY KEY,
-       client_id   TEXT        NOT NULL,
-       kind        TEXT        NOT NULL,
-       period_key  TEXT        NOT NULL,
-       filename    TEXT        NOT NULL,
-       size_bytes  INTEGER     NOT NULL,
-       pdf         BYTEA       NOT NULL,
-       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-     )`,
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS report_archive_client_idx
-       ON ${REPORT_ARCHIVE_TABLE} (client_id, created_at DESC)`,
-  );
-  // La purga barre por fecha sin filtrar por cliente; ese es su unico acceso.
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS report_archive_purge_idx
-       ON ${REPORT_ARCHIVE_TABLE} (created_at)`,
-  );
   // Las llamadas NO viven en esta base. La entrada (Callpicker) escribe en una
   // instancia Postgres distinta, con un schema por cliente
   // (Midstorage_callpicker.llamadas), y el analisis va al lado de sus datos, en
   // esa misma instancia. Crear la tabla aqui la dejaba huerfana en la base
   // equivocada, sin poder cruzarse con las llamadas que tiene que leer.
   // El pipeline usa su propio pool; ver calls/.
-  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors, app_users, tenant_db, radar_sidecars, report_archive)');
+  console.log('[db] Schema ready (clients, schedules, jobs, token_log, report_metrics, advisors, app_users, tenant_db)');
 }
 
 // ── Generic keyed-jsonb helpers ─────────────────────────────────────────────

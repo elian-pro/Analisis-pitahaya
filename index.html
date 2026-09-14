@@ -417,7 +417,16 @@
     .icon-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
     .schedule-card{--when-w:236px;position:relative;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:border-color .15s;}
     .schedule-card:hover{border-color:var(--border2);}
-    .schedule-card.disabled{opacity:0.5;}
+    /* La atenuacion va en el CONTENIDO, nunca en la tarjeta. Con opacity en la
+       tarjeta, CSS crea un contexto de apilamiento y el z-index:600 del menu
+       queda atrapado dentro: el desplegable de una automatizacion pausada se
+       pintaba DEBAJO de las tarjetas siguientes y no se podia usar. Encima
+       heredaba el 0.5, asi que ademas se leia a medias.
+       El estado y los controles se quedan nitidos a proposito: una fila inerte
+       tiene que seguir diciendo por que lo esta, y poder reactivarse. */
+    .schedule-card.disabled .sched-icon,
+    .schedule-card.disabled .sched-main,
+    .schedule-card.disabled .sched-when-col{opacity:0.5;}
     /* Avatar del tipo de automatización: la forma del icono (barras / radar /
        mensaje) es lo que distingue de un vistazo. La paleta es monocroma por
        diseño, así que el color queda reservado a estado (verde/rojo), no a tipo. */
@@ -445,7 +454,10 @@
        light gets a thicker, stronger stroke for presence on white.
        pathLength=100 normalises the dash math to 0–100 at any card size. */
     .schedule-card.running{position:relative;border-color:transparent;box-shadow:0 0 16px -5px color-mix(in srgb, var(--accent) 42%, transparent);}
-    .schedule-card.running.disabled{opacity:1;}  /* keep the animation fully visible even if paused (manual run) */
+    /* Disparada a mano estando pausada: la animacion y el contenido a pleno. */
+    .schedule-card.running.disabled .sched-icon,
+    .schedule-card.running.disabled .sched-main,
+    .schedule-card.running.disabled .sched-when-col{opacity:1;}
     .zr-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible;}
     .zr-svg rect{x:1px;y:1px;width:calc(100% - 2px);height:calc(100% - 2px);rx:11px;ry:11px;
       fill:none;stroke:var(--accent);vector-effect:non-scaling-stroke;stroke-linecap:round;}

@@ -1487,8 +1487,8 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         <div class="form-section-title">Fuente de las llamadas</div>
         <div class="form-group">
           <select class="form-control" id="cf-calls-source" onchange="onFuenteChange()">
-            <option value="sheets">Google Sheets</option>
             <option value="postgres">Postgres · Callpicker</option>
+            <option value="sheets">Google Sheets</option>
           </select>
           <div class="form-hint">
             Con Postgres, los reportes y el Radar dejan de leer la hoja y usan las
@@ -5392,9 +5392,9 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     document.getElementById('cf-radar-name-text').textContent  = '';
     document.getElementById('cf-sheet-chip').classList.remove('show');
     document.getElementById('cf-spreadsheet-row').style.display = '';
-    // Cliente nuevo: fuente Sheets, que es como se han dado de alta siempre.
+    // Cliente nuevo: Postgres. Sheets queda para los que ya leían de la hoja.
     const _fSel = document.getElementById('cf-calls-source');
-    if (_fSel) { _fSel.value = 'sheets'; void onFuenteChange(); }
+    if (_fSel) { _fSel.value = 'postgres'; void onFuenteChange(); }
     document.getElementById('cf-sheet-hint').style.display = '';
     document.getElementById('cf-radar-on').checked = false;
     _wizRadarToggle();
@@ -6140,14 +6140,26 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const obligatorias = ['cf-col-fecha','cf-col-asesor','cf-col-calif','cf-col-analisis','cf-col-transcripcion'];
     const mapeadas = obligatorias.filter(id => g(id)).length;
 
-    const rows = [
-      ['Cliente',     nombre ? _esc(nombre) : miss('Sin nombre')],
-      ['Carpetas',    carpetas],
-      ['Fuente',      g('cf-spreadsheet-id')
+    // Con Postgres no hay hoja ni columnas que mapear: la fuente es el origen,
+    // y su tabla de análisis se crea al guardar si aún no existe.
+    const esq = _esquemaSel();
+    const desdeSel = document.getElementById('cf-pg-desde');
+    const fuenteRows = fuenteActual() === 'postgres'
+      ? [['Fuente', esq
+          ? `Postgres · ${_esc(esq.esquema)}<br>` + (esq.habilitado
+              ? `Ya activo · ${_num(esq.ya_analizadas)} analizadas`
+              : `La tabla de análisis se crea al guardar · ${_esc(desdeSel.selectedOptions[0]?.textContent || '')}`)
+          : miss('Sin origen elegido')]]
+      : [['Fuente',   g('cf-spreadsheet-id')
                         ? `${_esc(document.getElementById('cf-sheet-chip-title').textContent || 'Hoja conectada')}`
                           + ` · pestaña ${g('cf-sheet-name') ? _esc(g('cf-sheet-name')) : miss('sin elegir')}`
                         : miss('Sin hoja de Google')],
-      ['Columnas',    `${mapeadas} de 5 obligatorias mapeadas` + (mapeadas < 5 ? ' · ' + miss('faltan') : '')],
+         ['Columnas', `${mapeadas} de 5 obligatorias mapeadas` + (mapeadas < 5 ? ' · ' + miss('faltan') : '')]];
+
+    const rows = [
+      ['Cliente',     nombre ? _esc(nombre) : miss('Sin nombre')],
+      ['Carpetas',    carpetas],
+      ...fuenteRows,
       ['Contexto',    g('cf-contexto-negocio')
                         ? `${g('cf-contexto-negocio').length} caracteres`
                         : miss('Sin contexto del negocio')],

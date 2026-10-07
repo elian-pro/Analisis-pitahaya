@@ -653,7 +653,7 @@
    Redeclarar los tokens del tema claro recolorea chips, interruptor y enlaces
    sin tocar sus reglas. En tema claro la tarjeta ya es blanca, asi que ahi es
    el resto el que se apaga. */
-.client-row.origen.vinculado{--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;color:var(--fg)}
+.client-row.origen.vinculado{color-scheme:light;--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;color:var(--fg)}
 body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--surface2)}
 .chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
 .chip-row span{font-size:var(--t-label);letter-spacing:.02em;padding:3px 8px;border-radius:999px;
@@ -3686,6 +3686,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         }
       });
     });
+    // Los de Ajustes avanzados se crean por origen, así que van por clase.
+    document.querySelectorAll('.origen-av .inline-cal').forEach(cal => {
+      if (!cal.parentElement.contains(e.target)) cal.style.display = 'none';
+    });
   });
 
   function setTokenClient() {
@@ -5203,7 +5207,20 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       + `<div class="origen-av-body" id="${id}">`
         + `<div class="form-group" style="margin-bottom:10px;">`
           + `<label class="form-label">Analizar desde</label>`
-          + `<input class="form-control-sm" type="date" data-campo="desde" value="${_esc(c.desde || '')}" style="max-width:190px;">`
+          + `<div class="field" id="${id}-desde-field" style="position:relative;margin:0;width:fit-content;">`
+            + `<input type="hidden" id="${id}-desde" data-campo="desde" value="${_esc(c.desde || '')}">`
+            + `<div onclick="toggleDateCal('${id}','desde',event)" style="font-family:'Inter',sans-serif;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:9px 13px;font-size:var(--t-body);min-width:190px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;">`
+              + `<span id="${id}-desde-display-text" style="color:var(--${c.desde ? 'fg' : 'muted'});">${c.desde ? _dateLabel(c.desde) : 'Selecciona fecha'}</span><span style="font-size:9px;color:var(--faint);flex-shrink:0;">▾</span>`
+            + `</div>`
+            + `<div id="${id}-desde-cal" class="inline-cal" style="display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:500;">`
+              + `<div class="inline-cal-head">`
+                + `<button type="button" class="cal-nav-btn" onclick="dateCalNav('${id}','desde',-1,event)">‹</button>`
+                + `<div class="mini-cal-title" id="${id}-desde-cal-title" style="margin-bottom:0;"></div>`
+                + `<button type="button" class="cal-nav-btn" onclick="dateCalNav('${id}','desde',1,event)">›</button>`
+              + `</div>`
+              + `<div class="cal-rows" id="${id}-desde-cal-rows"></div>`
+            + `</div>`
+          + `</div>`
           + `<div class="form-hint">Las llamadas anteriores a esta fecha no se transcriben. Moverla hacia atrás encola el histórico que quede en medio.</div>`
         + `</div>`
         + `<div class="form-group" style="margin-bottom:10px;">`

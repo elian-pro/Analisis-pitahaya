@@ -5701,6 +5701,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     return document.getElementById('cf-calls-source')?.value || 'sheets';
   }
 
+  async function onFuenteChange() {
+    const pg = fuenteActual() === 'postgres';
+    document.getElementById('cf-sheets-wrap').style.display = pg ? 'none' : '';
+    document.getElementById('cf-pg-wrap').style.display     = pg ? '' : 'none';
+    if (pg) await _fillEsquemas();
+  }
+
   const _num = n => Number(n).toLocaleString('es-MX');
 
   async function _fillEsquemas() {

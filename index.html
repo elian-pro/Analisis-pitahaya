@@ -229,6 +229,7 @@
     .btn-secondary:hover:not(:disabled){background:var(--surface2);}
     .btn-secondary:disabled{opacity:0.35;cursor:not-allowed;}
     .btn-sm{padding:7px 14px;font-size:var(--t-ui);font-weight:500;border:0.5px solid transparent;border-radius:100px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.12em;}
+    .btn-sm:disabled{opacity:0.55;cursor:progress;}
     .btn-sm-green{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
     .btn-sm-green:hover{opacity:0.88;}
     .btn-sm-cancel{background:transparent;border-color:var(--border2);color:var(--muted);}
@@ -6360,7 +6361,18 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     }
   }
 
+  // Bloquea el botón mientras guarda: cada alta lleva un id aleatorio y crea
+  // carpetas en Drive, así que un doble clic dejaba dos clientes iguales.
   async function saveClient() {
+    const btn = document.getElementById('wiz-save');
+    if (btn.disabled) return;
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try { await _saveClient(); }
+    finally { btn.disabled = false; btn.textContent = label; }
+  }
+
+  async function _saveClient() {
     // Valida paso por paso y salta al primero que tenga huecos, para que el
     // usuario vea el campo en rojo y no un error abstracto.
     for (let step = 1; step <= 3; step++) {

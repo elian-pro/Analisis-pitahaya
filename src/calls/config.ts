@@ -141,41 +141,56 @@ export function debeBarrer(cfg?: CallsConfig): boolean {
  */
 export async function ensureAnalisisTable(esquema: string): Promise<boolean> {
   const esq = quoteIdent(esquema);
-  const { rows } = await callsDb().query(
-    `SELECT 1 FROM information_schema.tables
-      WHERE table_schema = $1 AND table_name = 'analisis'`, [esquema]);
-  if (rows.length > 0) return false;   // ya existía
+  // Comprobar y crear va bajo un lock por esquema: sin él, dos activaciones a
+  // la vez (un doble clic en Guardar) pasaban las dos la comprobación y la
+  // segunda reventaba con "duplicate key ... pg_type_typname_nsp_index". El
+  // lock se suelta solo con la transacción, y el DDL de Postgres es transaccional.
+  const db = await callsDb().connect();
+  try {
+    await db.query('BEGIN');
+    await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`analisis:${esquema}`]);
+    const { rows } = await db.query(
+      `SELECT 1 FROM information_schema.tables
+        WHERE table_schema = $1 AND table_name = 'analisis'`, [esquema]);
+    if (rows.length > 0) { await db.query('COMMIT'); return false; }   // ya existía
 
-  await callsDb().query(`
-    CREATE TABLE ${esq}.analisis (
-      cuenta        TEXT NOT NULL,
-      call_id       TEXT NOT NULL,
-      estado        TEXT NOT NULL DEFAULT 'pendiente'
-                    CHECK (estado IN ('pendiente','descartada','transcrita','analizada','fallida')),
-      transcripcion TEXT,
-      tipo_contacto TEXT,
-      presentacion  TEXT,
-      precalif      TEXT,
-      exploracion   TEXT,
-      agenda        TEXT,
-      analisis      TEXT,
-      calif_global  INTEGER GENERATED ALWAYS AS (
-        CASE WHEN analisis = 'Buzón de voz' THEN NULL
-        ELSE (CASE WHEN presentacion ~* '^s[ií]' THEN 10 ELSE 0 END)
-           + (CASE WHEN precalif     ~* '^s[ií]' THEN 25 ELSE 0 END)
-           + (CASE WHEN exploracion  ~* '^s[ií]' THEN 30 ELSE 0 END)
-           + (CASE WHEN agenda       ~* '^s[ií]' THEN 35 ELSE 0 END)
-        END) STORED,
-      error         TEXT,
-      intentos      INTEGER NOT NULL DEFAULT 0,
-      procesado_at  TIMESTAMPTZ,
-      creado_en     TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (cuenta, call_id)
-    )`);
-  await callsDb().query(
-    `CREATE INDEX IF NOT EXISTS analisis_pendientes_idx ON ${esq}.analisis (estado, intentos)
-      WHERE estado IN ('pendiente','transcrita','fallida')`);
-  return true;
+    await db.query(`
+      CREATE TABLE ${esq}.analisis (
+        cuenta        TEXT NOT NULL,
+        call_id       TEXT NOT NULL,
+        estado        TEXT NOT NULL DEFAULT 'pendiente'
+                      CHECK (estado IN ('pendiente','descartada','transcrita','analizada','fallida')),
+        transcripcion TEXT,
+        tipo_contacto TEXT,
+        presentacion  TEXT,
+        precalif      TEXT,
+        exploracion   TEXT,
+        agenda        TEXT,
+        analisis      TEXT,
+        calif_global  INTEGER GENERATED ALWAYS AS (
+          CASE WHEN analisis = 'Buzón de voz' THEN NULL
+          ELSE (CASE WHEN presentacion ~* '^s[ií]' THEN 10 ELSE 0 END)
+             + (CASE WHEN precalif     ~* '^s[ií]' THEN 25 ELSE 0 END)
+             + (CASE WHEN exploracion  ~* '^s[ií]' THEN 30 ELSE 0 END)
+             + (CASE WHEN agenda       ~* '^s[ií]' THEN 35 ELSE 0 END)
+          END) STORED,
+        error         TEXT,
+        intentos      INTEGER NOT NULL DEFAULT 0,
+        procesado_at  TIMESTAMPTZ,
+        creado_en     TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (cuenta, call_id)
+      )`);
+    await db.query(
+      `CREATE INDEX IF NOT EXISTS analisis_pendientes_idx ON ${esq}.analisis (estado, intentos)
+        WHERE estado IN ('pendiente','transcrita','fallida')`);
+    await db.query('COMMIT');
+    return true;
+  } catch (e) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    db.release();
+  }
 }
 
 export interface EsquemaInfo {

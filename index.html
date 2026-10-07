@@ -649,6 +649,12 @@
 .origen-av[open]>summary::before{content:'▾ '}
 .origen-av>summary:hover{color:var(--muted)}
 .origen-av-body{margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)}
+/* Un origen que algun cliente lee es el que importa: va arriba y en blanco.
+   Redeclarar los tokens del tema claro recolorea chips, interruptor y enlaces
+   sin tocar sus reglas. En tema claro la tarjeta ya es blanca, asi que ahi es
+   el resto el que se apaga. */
+.client-row.origen.vinculado{--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;color:var(--fg)}
+body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--surface2)}
 .chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
 .chip-row span{font-size:var(--t-label);letter-spacing:.02em;padding:3px 8px;border-radius:999px;
   border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap}
@@ -5125,7 +5131,10 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         return;
       }
       el.innerHTML = '';
-      cuentas.forEach(c => el.appendChild(_origenRow(c)));
+      // Vinculados primero; sort es estable, asi que dentro de cada grupo se
+      // conserva el orden que manda el servidor.
+      const vinc = c => c.clientes.length ? 0 : 1;
+      [...cuentas].sort((x, y) => vinc(x) - vinc(y)).forEach(c => el.appendChild(_origenRow(c)));
       // Cuántas llamadas esperan en los orígenes que aún no se han activado: es
       // el dato que decide si encender uno cuesta una tarde de Gemini. Va aparte
       // porque sale de /esquemas, que escanea las tablas enteras.
@@ -5137,7 +5146,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
   function _origenRow(c) {
     const row = document.createElement('div');
-    row.className = 'client-row origen';
+    row.className = 'client-row origen' + (c.clientes.length ? ' vinculado' : '');
     const pendientes = c.counts?.sin_procesar || 0;
 
     // En rojo SOLO si el origen esta procesando llamadas que nadie lee: ahi si

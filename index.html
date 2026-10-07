@@ -664,7 +664,7 @@ body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--sur
   border-radius:999px;border:1px solid var(--line,#2a2a2a);background:rgba(255,255,255,.03)}
 /* Columnas más ajustadas que antes: con el panel de detalle al lado, la lista
    vive en media pantalla y las fijas se comían el nombre del asesor. */
-.calls-row{display:grid;grid-template-columns:128px minmax(0,1fr) 56px 92px 48px auto;gap:14px;
+.calls-row{display:grid;grid-template-columns:128px minmax(0,1fr) 56px 92px 48px 98px;gap:14px;
   align-items:center;padding:11px 8px;border-bottom:1px solid var(--line,#2a2a2a);font-size:var(--t-body)}
 .calls-row>div{min-width:0}
 .calls-row.item>div:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -708,12 +708,15 @@ body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--sur
   transition:opacity .13s ease, transform .2s cubic-bezier(.16,1,.3,1)}
 .calls-cols.abierto .calls-detail-card{opacity:1;transform:none;pointer-events:auto;
   transition:opacity .22s ease .12s, transform .28s cubic-bezier(.16,1,.3,1) .08s}
-/* A todo ancho la lista enseña MÁS dato (el prospecto) en vez de dejar la
-   columna del asesor con cientos de píxeles de hueco; al contraerse, se va. */
-.calls-list-card .calls-row{grid-template-columns:128px minmax(0,1fr) 56px 92px 48px auto}
-.col-prospecto{display:none}
-.calls-cols.ancha .calls-list-card .calls-row{grid-template-columns:150px 190px minmax(0,1fr) 78px 108px 62px auto}
-.calls-cols.ancha .col-prospecto{display:block}
+/* Cada fila es su propia grid, así que NINGUNA columna puede ser auto: el
+   encabezado no lleva botón y su última columna medía 0, lo que corría todos
+   los títulos respecto a las celdas. 98px es lo que mide "Reintentar".
+   A todo ancho las columnas respiran. Con la ficha abierta la lista suelta
+   Calif., que ya está en la cabecera de la ficha, para que el asesor se lea. */
+.calls-list-card .calls-row{grid-template-columns:128px minmax(0,1fr) 74px 92px 98px}
+.calls-list-card .calls-row>:nth-child(5){display:none}
+.calls-cols.ancha .calls-list-card .calls-row{grid-template-columns:150px minmax(0,1fr) 78px 108px 62px 98px}
+.calls-cols.ancha .calls-list-card .calls-row:not(.compacta)>:nth-child(5){display:block}
 .calls-list-card{min-width:0}
 .calls-detail-card{padding:0;overflow:hidden;display:flex;flex-direction:column;
   position:sticky;top:88px;max-height:calc(100vh - 120px);min-width:0}
@@ -768,7 +771,9 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 /* La ocultación de columnas depende del ANCHO DE LA LISTA, no del viewport: con
    el panel al lado, la lista mide ~55% de la pantalla y el media query por
    viewport describía un ancho que ya no tiene. */
-.calls-row.compacta{grid-template-columns:110px 1fr 90px;font-size:var(--t-sec)}
+/* Prefijado para ganarle en especificidad a la plantilla de .ancha, que si no
+   le imponía 150px de fecha y cortaba al asesor con la ficha abierta. */
+.calls-cols .calls-list-card .calls-row.compacta{grid-template-columns:110px minmax(0,1fr) 84px;font-size:var(--t-sec)}
 .calls-row.compacta>:nth-child(n+4){display:none}
   </style>
 </head>
@@ -7715,15 +7720,13 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       calls.forEach(c => _callsPorId.set(c.call_id, c));
 
       box.innerHTML =
-        `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div class="col-prospecto">Prospecto</div>
-         <div>Duración</div><div>Estado</div><div>Calif.</div><div></div></div>` +
+        `<div class="calls-row head"><div>Fecha</div><div>Asesor</div><div>Duración</div><div>Estado</div><div>Calif.</div><div></div></div>` +
         calls.map(c => {
           const est = c.estado || 'sin_procesar';
           return `
           <div class="calls-row item" data-cid="${_esc(c.call_id)}" onclick="toggleCall('${_esc(slug)}','${_esc(c.call_id)}')">
             <div>${_esc(_fechaHora(c.fecha))}</div>
             <div>${_esc(c.asesor || '—')}</div>
-            <div class="col-prospecto">${_esc([c.contraparte_numero, c.ciudad].filter(Boolean).join(' · ') || '—')}</div>
             <div>${_dur(c.duracion_seg)}</div>
             <div><span class="calls-est est-${_esc(est)}">${_esc(_CALL_EST[est] || est)}</span></div>
             <div>${c.calif_global ?? '—'}</div>
@@ -7759,7 +7762,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     _callSel = { slug, call_id: callId };
     const cols = document.querySelector('.calls-cols');
     clearTimeout(_colapsoT);
-    cols.classList.remove('ancha');   // la lista pierde el prospecto mientras encoge
+    cols.classList.remove('ancha');   // la lista aprieta sus columnas mientras encoge
     cols.classList.add('abierto');
 
     document.querySelectorAll('#calls-list .calls-row.item').forEach(r =>
@@ -7821,7 +7824,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     // parpadeo que parecía un fallo. Se limpia cuando ya no se ve.
     _colapsoT = setTimeout(() => {
       if (_callSel) return;            // se volvió a abrir durante la animación
-      cols?.classList.add('ancha');    // y la lista recupera su columna con sitio ya
+      cols?.classList.add('ancha');    // y las suelta cuando ya hay sitio
       document.getElementById('cd-title').textContent = 'Ninguna llamada seleccionada';
       document.getElementById('cd-meta').innerHTML = '';
       document.getElementById('cd-score').hidden = true;
@@ -7883,11 +7886,9 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const compacta = box.clientWidth > 0 && box.clientWidth < 520;
     box.querySelectorAll('.calls-row').forEach(r => r.classList.toggle('compacta', compacta));
   }
-  let _colsT = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(_colsT);
-    _colsT = setTimeout(_ajustarColumnas, 150);
-  });
+  // Por el tamaño de la lista y no por la ventana: al abrir una llamada la
+  // lista encoge sin que la ventana cambie, y el asesor quedaba en "S…".
+  new ResizeObserver(_ajustarColumnas).observe(document.getElementById('calls-list'));
 
   // La petición no vuelve hasta que Gemini transcribió el audio y OpenAI lo
   // analizó: 20 s en una llamada corta y más de un minuto en una de 15 minutos.

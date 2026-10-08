@@ -173,6 +173,34 @@ export async function probeTenantDb(cfg: TenantDbConfig): Promise<{ ms: number; 
   }
 }
 
+/**
+ * El fallo de conexión a la base del cliente, en lo que tiene que revisar.
+ *
+ * Con un host que resuelve a varias IPs (IPv4 + IPv6) y todas fallan, Node
+ * lanza un AggregateError con el mensaje VACÍO: el detalle vive en `.errors`.
+ * Sin esto la ruta devolvía 502 sin texto y la pantalla solo decía "HTTP 502".
+ */
+export function errorDeConexion(e: unknown, host: string, port: number): string {
+  const err = e as Error & { code?: string; errors?: Array<Error & { code?: string }> };
+  const code = err.code ?? err.errors?.[0]?.code;
+  const donde = `${host}:${port}`;
+  if (code === 'ECONNREFUSED') {
+    return `La base rechazó la conexión en ${donde}. Revisa el puerto y que Postgres acepte conexiones de fuera (listen_addresses y firewall).`;
+  }
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+    return `No existe el host ${host}. Revisa que esté bien escrito.`;
+  }
+  if (code === 'ETIMEDOUT' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH'
+      || /connection timeout/i.test(err.message)) {
+    return `${donde} no respondió. Suele ser un firewall que no deja entrar al servidor de Zebra Reports, o el puerto equivocado.`;
+  }
+  const raw = err.message || err.errors?.map(x => x.message).join('; ') || code || String(e);
+  if (/does not support SSL/i.test(raw)) {
+    return 'La base no acepta conexiones cifradas. Desmarca SSL y vuelve a probar.';
+  }
+  return raw;   // los de Postgres (contraseña, base inexistente, pg_hba) ya se leen
+}
+
 /** El pool que corresponde a una cuenta: el del tenant o el de Callpicker. */
 export async function poolDe(cuenta: Cuenta): Promise<Pool> {
   return cuenta.tenant ? tenantPool(cuenta.slug) : callsDb();

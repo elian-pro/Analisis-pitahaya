@@ -3,11 +3,10 @@ import { z } from 'zod';
 import type { AuthedRequest } from '../auth/middleware';
 import {
   getTenantDbConfig, saveTenantDbConfig, sealPassword, tenantPool, probeTenantDb,
-  ensureTenantSchema, TENANT_SCHEMA_DEFAULT, type TenantDbConfig,
+  ensureTenantSchema, errorDeConexion, TENANT_SCHEMA_DEFAULT, type TenantDbConfig,
 } from '../calls/tenant';
 import { getClient } from '../clients/manager';
 import { dbEnabled } from '../config/db';
-import { humanizeError } from '../humanizeError';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Conexión a la base Postgres de un cliente externo. El admin la configura y
@@ -79,13 +78,15 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: 'Falta la contraseña de la base.' });
     return;
   }
-  const cfg: TenantDbConfig = {
-    host: d.host.trim(), port: d.port, database: d.database.trim(), user: d.user.trim(),
-    ssl: d.ssl, schema: d.schema, desde: d.desde ?? previa?.desde ?? null,
-    password_enc: d.password ? sealPassword(d.password) : previa!.password_enc,
-    probado_en: previa?.probado_en ?? null,
-  };
+  // Cifrar va DENTRO del try: sin TENANT_DB_SECRET lanza, y una ruta async de
+  // Express 4 que lanza fuera de un try tumba el proceso (el proxy da 502 mudo).
   try {
+    const cfg: TenantDbConfig = {
+      host: d.host.trim(), port: d.port, database: d.database.trim(), user: d.user.trim(),
+      ssl: d.ssl, schema: d.schema, desde: d.desde ?? previa?.desde ?? null,
+      password_enc: d.password ? sealPassword(d.password) : previa!.password_enc,
+      probado_en: previa?.probado_en ?? null,
+    };
     await saveTenantDbConfig(clientId, cfg);
     res.json({ ok: true, ...redacted(cfg) });
   } catch (e) {
@@ -106,8 +107,14 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
   let cfg = stored;
   void user;
   if (b?.host) {
-    const password_enc = typeof b.password === 'string' && b.password
-      ? sealPassword(b.password) : stored?.password_enc;
+    let password_enc: string | undefined;
+    try {
+      password_enc = typeof b.password === 'string' && b.password
+        ? sealPassword(b.password) : stored?.password_enc;
+    } catch (e) {
+      res.status(500).json({ ok: false, error: (e as Error).message });
+      return;
+    }
     if (!password_enc) {
       res.status(400).json({ error: 'Falta la contraseña de la base.' });
       return;
@@ -131,7 +138,7 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
     }
     res.json({ ok: true, ...r });
   } catch (e) {
-    res.status(502).json({ ok: false, error: humanizeError((e as Error).message) });
+    res.status(502).json({ ok: false, error: errorDeConexion(e, cfg.host, cfg.port) });
   }
 });
 
@@ -151,7 +158,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     await ensureTenantSchema(await tenantPool(clientId, cfg), cfg.schema);
     res.json({ ok: true, schema: cfg.schema });
   } catch (e) {
-    res.status(502).json({ error: humanizeError((e as Error).message) });
+    res.status(502).json({ error: errorDeConexion(e, cfg.host, cfg.port) });
   }
 });
 

@@ -689,6 +689,9 @@ body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--sur
 .tdb-ok-dest span{color:var(--muted);font-weight:400}
 .tdb-ok-meta{display:flex;flex-wrap:wrap;gap:4px 18px;margin:12px 0 0;font-size:var(--t-sec);color:var(--muted)}
 .tdb-ok-meta b{color:var(--fg);font-weight:500}
+.tdb-ok-llamadas{margin-top:6px;font-size:var(--t-sec);color:var(--muted);line-height:1.5}
+.tdb-ok-llamadas b{color:var(--fg);font-weight:500;font-variant-numeric:tabular-nums}
+.tdb-ok-llamadas a{color:var(--fg);text-underline-offset:3px}
 .tdb-ok-aviso{display:flex;gap:8px;align-items:flex-start;margin-top:16px;padding:9px 12px;border-radius:8px;
   font-size:var(--t-sec);line-height:1.5;color:var(--warn);background:var(--warn-bg);border:0.5px solid var(--warn-border)}
 .tdb-ok-aviso i{font-size:15px;line-height:1.4;flex-shrink:0}
@@ -1146,6 +1149,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
           <div class="tdb-ok-estado" id="tdb-ok-estado">Conectada</div>
           <div class="tdb-ok-dest" id="tdb-ok-dest"></div>
           <div class="tdb-ok-meta" id="tdb-ok-meta"></div>
+          <div class="tdb-ok-llamadas" id="tdb-ok-llamadas"></div>
           <div class="tdb-ok-aviso" id="tdb-ok-aviso" hidden>
             <i class="ti ti-lock-open" aria-hidden="true"></i>
             <span>Sin SSL: los datos viajan sin cifrar. Cuando puedan, que lo activen en su Postgres y marca la casilla al editar.</span>
@@ -4875,6 +4879,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         const estado = document.getElementById('tdb-ok-estado');
         estado.classList.remove('mal'); estado.textContent = 'Conectada';
         _tdbModo('conectada');
+        void _tdbLlamadas(d.schema || 'zebra');
       }
       el.innerHTML =
         `<span style="color:${ok ? 'var(--success)' : 'var(--faint)'};">●</span> ` +
@@ -4930,6 +4935,33 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
   // Cada paso con su resultado, y en el que falla, qué hacer. Si falla el SSL
   // se ofrece conectar sin él, pero lo decide una persona: baja la seguridad.
+  // "Conectada" no dice si se está procesando algo. Mismos contadores que la
+  // pestaña Llamadas (mismo endpoint, mismo umbral), en una línea.
+  async function _tdbLlamadas(schema) {
+    const el = document.getElementById('tdb-ok-llamadas');
+    el.textContent = '';
+    const q = new URLSearchParams({ limit: '1' });
+    if (_preview) q.set('cuenta', _preview.id);   // en vista remota la sesión es de admin
+    try {
+      const r = await fetch(`${CALLS_API}?${q}`);
+      const { counts = {} } = await r.json();
+      if (!r.ok) return;
+      const n = k => counts[k] || 0;
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      if (!total) {
+        el.textContent = `Aún sin llamadas: aparecerán aquí en cuanto su sistema escriba en ${schema}.llamadas.`;
+        return;
+      }
+      const pend = n('sin_procesar') + n('pendiente') + n('transcrita');
+      el.innerHTML = [
+        `<b>${_num(total)}</b> llamadas`,
+        `<b>${_num(n('analizada'))}</b> analizadas`,
+        pend ? `<b>${_num(pend)}</b> por procesar` : 'al día',
+        ...(n('fallida') ? [`<b>${_num(n('fallida'))}</b> fallidas`] : []),
+      ].join(' · ') + ` · <a href="#" onclick="event.preventDefault();setTab('calls')">Ver llamadas →</a>`;
+    } catch { /* la línea es informativa: sin ella el resumen sigue sirviendo */ }
+  }
+
   function _tdbModo(modo) {
     document.getElementById('tdb-ok').hidden   = modo !== 'conectada';
     document.getElementById('tdb-edit').hidden = modo === 'conectada';

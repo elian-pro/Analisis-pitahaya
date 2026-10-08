@@ -129,9 +129,14 @@ un endpoint de admin respondería igual desde ahí; quien los aplica es
 `src/auth/policy.ts`, y eso solo se comprueba entrando con un acceso real.
 
 Un **cliente externo** usa la fuente `calls_source: 'cliente_pg'`: su base
-Postgres (en su servidor, conexión cifrada con `TENANT_DB_SECRET`) con el
-esquema estándar del pipeline. **La conecta él mismo** desde sus Ajustes, con
-"Guardar y preparar", que crea las tablas del pipeline en su base; el guard
+Postgres (en su servidor) con el esquema estándar del pipeline. Se conecta desde
+sus Ajustes (normalmente lo hace el equipo, en vista remota): la tarjeta dice qué
+hace falta antes de empezar, "Probar conexión" diagnostica por pasos (host →
+puerto → SSL → credenciales → permisos → estructura) con el arreglo del que
+falle, y "Guardar y preparar" crea las tablas del pipeline en su base. La
+contraseña se guarda cifrada con `TENANT_DB_SECRET` o, si no existe, con una
+clave derivada de `AUTH_SESSION_SECRET`: **rotar esa variable obliga a
+reescribir la contraseña de cada base de cliente**. El guard
 anti-SSRF de `src/calls/tenant.ts` rechaza hosts que resuelvan a direcciones
 internas. El sweeper transcribe y analiza sus llamadas igual que las de Callpicker.
 

@@ -148,57 +148,195 @@ setInterval(() => {
   for (const [id, e] of pools) if (t - e.ultimoUso > IDLE_EVICT_MS) evictPool(id);
 }, IDLE_EVICT_MS).unref();
 
+// ── Diagnóstico por pasos ────────────────────────────────────────────────────
+// Quien conecta una base no tiene por qué preguntarle a nadie qué falla: cada
+// paso dice si pasó y, si no, qué hay que cambiar. Se para en el primero que
+// falla, porque los siguientes dependen de él.
+
+export type PasoId = 'host' | 'puerto' | 'ssl' | 'credenciales' | 'permisos' | 'estructura';
+
+export interface Paso {
+  id:       PasoId;
+  /** true pasó · false falló · null no se comprobó o es solo informativo. */
+  ok:       boolean | null;
+  detalle:  string;
+  arreglo?: string;
+  /** Para que la pantalla ofrezca la acción concreta (p. ej. "Conectar sin SSL"). */
+  codigo?:  'ssl_no_soportado';
+}
+
+export const PASOS: PasoId[] = ['host', 'puerto', 'ssl', 'credenciales', 'permisos', 'estructura'];
+
+interface Contexto { host: string; port: number; database?: string; ip?: string | null }
+
 /**
- * Prueba una conexión SIN pasar por el caché de pools: sirve para credenciales
- * aún no guardadas (wizard) y para no dejar cacheada una config fallida.
+ * A qué paso pertenece un fallo y qué hacer con él. Pura, para poder probarla
+ * sin red. `enCurso` es el paso que se estaba comprobando: lo que no se
+ * reconoce se le atribuye a él.
+ *
+ * Con un host que resuelve a varias IPs (IPv4 + IPv6) y todas fallan, Node
+ * lanza un AggregateError con el mensaje VACÍO: el código vive en `.errors`.
  */
-export async function probeTenantDb(cfg: TenantDbConfig): Promise<{ ms: number; schema_ready: boolean }> {
-  await assertHostAllowed(cfg.host);
+export function clasificarFallo(e: unknown, ctx: Contexto, enCurso: PasoId): Omit<Paso, 'ok'> {
+  const err = e as Error & { code?: string; errors?: Array<Error & { code?: string }> };
+  const code = err.code ?? err.errors?.[0]?.code;
+  const raw = err.message || err.errors?.map(x => x.message).join('; ') || code || String(e);
+  const donde = `${ctx.host}:${ctx.port}`;
+  const desde = ctx.ip ? `la IP ${ctx.ip}` : 'la IP del servidor de Zebra Reports';
+
+  if (/dirección interna/.test(raw)) {
+    return { id: 'host', detalle: raw, arreglo: 'Usa la dirección pública de la base, no una de red interna.' };
+  }
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+    return { id: 'host', detalle: `No existe el host ${ctx.host}.`, arreglo: 'Revisa que esté bien escrito.' };
+  }
+  if (code === 'ECONNREFUSED') {
+    return { id: 'puerto', detalle: `La base rechazó la conexión en ${donde}.`,
+      arreglo: `Revisa el puerto y que Postgres acepte conexiones de fuera (listen_addresses = '*').` };
+  }
+  if (code === 'ETIMEDOUT' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH'
+      || /connection timeout|no respondió/i.test(raw)) {
+    return { id: 'puerto', detalle: `${donde} no respondió.`,
+      arreglo: `Abre el puerto ${ctx.port} en el firewall de la base para ${desde}, o revisa que sea el puerto correcto.` };
+  }
+  if (/does not support SSL/i.test(raw)) {
+    return { id: 'ssl', codigo: 'ssl_no_soportado', detalle: 'La base no acepta conexiones cifradas (SSL).',
+      arreglo: 'Conéctate sin SSL o pide que lo activen en su Postgres.' };
+  }
+  if (code === '28P01') {
+    return { id: 'credenciales', detalle: 'Usuario o contraseña incorrectos.',
+      arreglo: 'Revisa los dos: la contraseña distingue mayúsculas.' };
+  }
+  if (code === '3D000') {
+    return { id: 'credenciales', detalle: `No existe la base "${ctx.database ?? ''}".`,
+      arreglo: 'Revisa el nombre exacto de la base (distingue mayúsculas).' };
+  }
+  if (code === '28000') {
+    return { id: 'credenciales', detalle: raw,
+      arreglo: `Añade en pg_hba.conf una regla que deje entrar a este usuario desde ${desde}.` };
+  }
+  return { id: enCurso, detalle: raw };
+}
+
+/** El fallo en una frase, para las rutas que no pintan pasos (/provision). */
+export function errorDeConexion(e: unknown, host: string, port: number): string {
+  const f = clasificarFallo(e, { host, port }, 'credenciales');
+  return [f.detalle, f.arreglo].filter(Boolean).join(' ');
+}
+
+// La IP con la que este servidor sale a internet: es la que el cliente tiene que
+// dejar entrar. Se pregunta una vez; si el servicio no contesta, los textos
+// hablan de "la IP del servidor" sin número y se reintenta la próxima vez.
+let _ipSalida: string | undefined;
+export async function ipSalida(): Promise<string | null> {
+  if (_ipSalida) return _ipSalida;
+  try {
+    const r = await fetch('https://api.ipify.org', { signal: AbortSignal.timeout(3000) });
+    const ip = (await r.text()).trim();
+    if (r.ok && net.isIP(ip)) _ipSalida = ip;
+  } catch { /* sin IP los textos siguen sirviendo */ }
+  return _ipSalida ?? null;
+}
+
+/** TCP pelado, antes de hablar Postgres: separa "no llego" de "no me deja entrar". */
+function abrirPuerto(host: string, port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const sock = net.connect({ host, port });
+    sock.setTimeout(5000, () => { sock.destroy(); reject(Object.assign(new Error('no respondió'), { code: 'ETIMEDOUT' })); });
+    sock.once('connect', () => { sock.destroy(); resolve(); });
+    sock.once('error', reject);
+  });
+}
+
+/**
+ * Prueba una conexión paso a paso SIN pasar por el caché de pools: sirve para
+ * credenciales aún no guardadas y para no dejar cacheada una config fallida.
+ */
+export async function probeTenantDb(cfg: TenantDbConfig): Promise<{ ok: boolean; pasos: Paso[]; ms: number }> {
+  const t0 = Date.now();
+  const ctx: Contexto = { host: cfg.host, port: cfg.port, database: cfg.database, ip: await ipSalida() };
+  const pasos: Paso[] = [];
+  const hecho = (id: PasoId, ok: boolean | null, detalle: string) => pasos.push({ id, ok, detalle });
+  const fin = () => {
+    for (const id of PASOS) if (!pasos.some(p => p.id === id)) pasos.push({ id, ok: null, detalle: 'Sin comprobar' });
+    return { ok: !pasos.some(p => p.ok === false), pasos, ms: Date.now() - t0 };
+  };
+  let enCurso: PasoId = 'host';
+  const falla = (e: unknown) => {
+    const c = clasificarFallo(e, ctx, enCurso);
+    // Un paso ya superado no se repite: si el fallo apunta a él (el puerto dejó
+    // de responder entre la sonda TCP y pg), cuenta para el que estaba en curso.
+    const f = pasos.some(p => p.id === c.id) ? { ...c, id: enCurso } : c;
+    for (const id of PASOS.slice(0, PASOS.indexOf(f.id))) {
+      if (!pasos.some(p => p.id === id)) pasos.push({ id, ok: null, detalle: 'Sin comprobar' });
+    }
+    pasos.push({ ...f, ok: false });
+    return fin();
+  };
+
+  try { await assertHostAllowed(cfg.host); } catch (e) { return falla(e); }
+  hecho('host', true, `${cfg.host} resuelve a una dirección pública`);
+
+  enCurso = 'puerto';
+  try { await abrirPuerto(cfg.host, cfg.port); } catch (e) { return falla(e); }
+  hecho('puerto', true, `El puerto ${cfg.port} responde`);
+
+  enCurso = cfg.ssl ? 'ssl' : 'credenciales';
+  if (!cfg.ssl) hecho('ssl', null, 'Desactivado: los datos viajan sin cifrar');
+
+  let password: string;
+  try { password = decryptSecret(cfg.password_enc); } catch {
+    enCurso = 'credenciales';
+    return falla(new Error('No se pudo leer la contraseña guardada (cambió la clave del servidor). Vuelve a escribirla.'));
+  }
   const pool = new Pool({
-    host: cfg.host, port: cfg.port, database: cfg.database, user: cfg.user,
-    password: decryptSecret(cfg.password_enc),
+    host: cfg.host, port: cfg.port, database: cfg.database, user: cfg.user, password,
     ssl: cfg.ssl ? { rejectUnauthorized: false } : undefined,
     max: 1, connectionTimeoutMillis: 5000, statement_timeout: 10_000,
   });
   pool.on('error', () => {});
-  const t0 = Date.now();
   try {
-    await pool.query('SELECT 1');
-    const { rows } = await pool.query(
-      `SELECT count(*)::int AS n FROM information_schema.tables
-        WHERE table_schema = $1 AND table_name IN ('llamadas','analisis')`, [cfg.schema]);
-    return { ms: Date.now() - t0, schema_ready: rows[0].n === 2 };
+    const client = await pool.connect();
+    try {
+      if (cfg.ssl) hecho('ssl', true, 'Conexión cifrada');
+      hecho('credenciales', true, `Entra como ${cfg.user} en ${cfg.database}`);
+
+      enCurso = 'permisos';
+      const { rows: [r] } = await client.query(
+        `SELECT n.oid IS NOT NULL                                   AS esq_existe,
+                has_database_privilege(current_database(), 'CREATE') AS crea_en_base,
+                CASE WHEN n.oid IS NULL THEN NULL
+                     ELSE has_schema_privilege(n.oid, 'CREATE') END   AS crea_en_esq,
+                (SELECT count(*)::int FROM information_schema.tables
+                  WHERE table_schema = $1 AND table_name IN ('llamadas','analisis')) AS tablas
+           FROM (SELECT 1) uno LEFT JOIN pg_namespace n ON n.nspname = $1`, [cfg.schema]);
+      const listo = r.tablas === 2;
+      // Con la estructura ya creada basta poder escribir el análisis; sin ella,
+      // hay que poder crearla (en el esquema si existe, en la base si no).
+      const puede = listo
+        ? (await client.query(
+            `SELECT has_table_privilege($1, 'INSERT, UPDATE') AS ok`,
+            [`${quoteIdent(cfg.schema)}.analisis`])).rows[0].ok
+        : r.esq_existe ? r.crea_en_esq : r.crea_en_base;
+      if (!puede) {
+        pasos.push({ id: 'permisos', ok: false,
+          detalle: listo ? `${cfg.user} no puede escribir en ${cfg.schema}.analisis.`
+                         : `${cfg.user} no puede crear tablas${r.esq_existe ? ` en el esquema ${cfg.schema}` : ' en la base'}.`,
+          arreglo: listo ? `Dale INSERT y UPDATE sobre ${cfg.schema}.analisis.`
+                         : r.esq_existe ? `Dale CREATE sobre el esquema ${cfg.schema}.`
+                                        : `Dale CREATE sobre la base ${cfg.database}, o crea antes el esquema ${cfg.schema} y dale CREATE sobre él.` });
+        return fin();
+      }
+      hecho('permisos', true, listo ? 'Puede escribir el análisis' : 'Puede crear las tablas del pipeline');
+      hecho('estructura', listo ? true : null,
+        listo ? `Tablas de ${cfg.schema} listas` : `Las tablas se crean al pulsar "Guardar y preparar"`);
+      return fin();
+    } finally { client.release(); }
+  } catch (e) {
+    return falla(e);
   } finally {
     void pool.end().catch(() => {});
   }
-}
-
-/**
- * El fallo de conexión a la base del cliente, en lo que tiene que revisar.
- *
- * Con un host que resuelve a varias IPs (IPv4 + IPv6) y todas fallan, Node
- * lanza un AggregateError con el mensaje VACÍO: el detalle vive en `.errors`.
- * Sin esto la ruta devolvía 502 sin texto y la pantalla solo decía "HTTP 502".
- */
-export function errorDeConexion(e: unknown, host: string, port: number): string {
-  const err = e as Error & { code?: string; errors?: Array<Error & { code?: string }> };
-  const code = err.code ?? err.errors?.[0]?.code;
-  const donde = `${host}:${port}`;
-  if (code === 'ECONNREFUSED') {
-    return `La base rechazó la conexión en ${donde}. Revisa el puerto y que Postgres acepte conexiones de fuera (listen_addresses y firewall).`;
-  }
-  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
-    return `No existe el host ${host}. Revisa que esté bien escrito.`;
-  }
-  if (code === 'ETIMEDOUT' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH'
-      || /connection timeout/i.test(err.message)) {
-    return `${donde} no respondió. Suele ser un firewall que no deja entrar al servidor de Zebra Reports, o el puerto equivocado.`;
-  }
-  const raw = err.message || err.errors?.map(x => x.message).join('; ') || code || String(e);
-  if (/does not support SSL/i.test(raw)) {
-    return 'La base no acepta conexiones cifradas. Desmarca SSL y vuelve a probar.';
-  }
-  return raw;   // los de Postgres (contraseña, base inexistente, pg_hba) ya se leen
 }
 
 /** El pool que corresponde a una cuenta: el del tenant o el de Callpicker. */

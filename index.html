@@ -657,6 +657,27 @@
 .client-row.origen.vinculado{color-scheme:light;--bg:#FAFAF7;--surface:#FFFFFF;--surface2:#F4F3EE;--border:#E5E4DE;--border2:#C8C7C0;--fg:#0A0A0A;--muted:#6B6B66;--faint:#A8A7A0;--accent:#0A0A0A;--on-accent:#FFFFFF;--danger:#C2342F;color:var(--fg)}
 body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--surface2)}
 .chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
+/* Base del cliente externo: lo que hace falta ANTES de empezar, y qué paso
+   falla al probar. Es lo que evita tener que preguntar qué significa un error. */
+.tdb-req{font-size:var(--t-sec);color:var(--muted);line-height:1.55;margin:0 0 18px;padding:0 0 16px;border-bottom:0.5px solid var(--border)}
+.tdb-req-t{color:var(--fg);font-weight:500;margin-bottom:6px}
+.tdb-req ul{margin:0;padding-left:18px}
+.tdb-req li+li{margin-top:3px}
+.tdb-ip{font:inherit;font-weight:500;font-variant-numeric:tabular-nums;color:var(--fg);background:var(--surface2);
+  border:0.5px solid var(--border2);border-radius:6px;padding:0 6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.tdb-ip:hover{border-color:var(--fg)}
+.tdb-ip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tdb-pasos{margin-top:14px;display:flex;flex-direction:column;gap:9px}
+.tdb-paso{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;font-size:var(--t-sec);line-height:1.5}
+.tdb-paso>i{font-size:15px;line-height:1.35}
+.tdb-paso.ok>i{color:var(--success)}
+.tdb-paso.mal>i{color:var(--danger)}
+.tdb-paso.nada>i,.tdb-paso.nada .tdb-paso-t{color:var(--faint)}
+.tdb-paso-t{color:var(--fg);font-weight:500}
+.tdb-paso-d{color:var(--muted);font-weight:400}
+.tdb-paso.nada .tdb-paso-d{color:var(--faint)}
+.tdb-paso-a{color:var(--fg);margin-top:2px}
+.tdb-paso .btn-sm{margin-top:8px}
 .chip-row span{font-size:var(--t-label);letter-spacing:.02em;padding:3px 8px;border-radius:999px;
   border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap}
 .calls-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
@@ -1105,6 +1126,14 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       <div class="card" style="margin-bottom:16px;">
         <div class="card-kicker" style="margin-bottom:12px;"><i class="ti ti-database ti-lead"></i>Tu base de datos</div>
         <div id="tenant-db-status" style="font-size:var(--t-body);color:var(--muted);margin:10px 0 16px;">Cargando…</div>
+        <div class="tdb-req">
+          <div class="tdb-req-t">Antes de conectar, la base tiene que:</div>
+          <ul>
+            <li>Tener un host público y dejar entrar por su puerto a <span id="tdb-ip-wrap">la IP del servidor de Zebra Reports</span>.</li>
+            <li>Tener un usuario que pueda crear tablas (permiso CREATE sobre la base). No hace falta usar "postgres".</li>
+            <li>Aceptar SSL si puede: sin él, los datos viajan sin cifrar.</li>
+          </ul>
+        </div>
         <div class="form-grid-2">
           <div class="form-group" style="grid-column:1/-1;">
             <label class="form-label">Host *</label>
@@ -1132,11 +1161,11 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
           <input type="checkbox" id="tdb-ssl" checked> Conexión con SSL
         </label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button class="btn-sm btn-sm-cancel" onclick="testTenantDb(this)">Probar conexión</button>
+          <button class="btn-sm btn-sm-cancel" id="tdb-probar" onclick="testTenantDb(this)">Probar conexión</button>
           <button class="btn-sm btn-sm-green" onclick="saveTenantDb(this)">Guardar y preparar</button>
           <span id="tdb-result" style="font-size:var(--t-sec);color:var(--muted);"></span>
         </div>
-        <div class="form-hint" style="margin-top:10px;">Usa un usuario con permiso de lectura y escritura: guardamos ahí el análisis de cada llamada.</div>
+        <div class="tdb-pasos" id="tdb-pasos" hidden></div>
       </div>
       <div class="card" id="tenant-account-card">
         <div class="card-kicker" style="margin-bottom:12px;"><i class="ti ti-user ti-lead"></i>Tu cuenta</div>
@@ -4768,10 +4797,17 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     document.getElementById('tenant-account-card').style.display = _preview ? 'none' : '';
     document.getElementById('tenant-account-email').textContent = ME?.email || '';
     const el = document.getElementById('tenant-db-status');
+    document.getElementById('tdb-pasos').hidden = true;
+    _tdbSay('', 'var(--muted)');
     try {
       const r = await fetch(`/api/tenant/db?${_tenantQS()}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      if (d.ip_salida) {
+        document.getElementById('tdb-ip-wrap').innerHTML =
+          `<button type="button" class="tdb-ip" onclick="_tdbCopiarIp('${_esc(d.ip_salida)}')" title="Copiar">`
+          + `${_esc(d.ip_salida)}<i class="ti ti-copy" aria-hidden="true"></i></button>`;
+      }
       if (!d.configured) {
         _tdbPasswordSet = false;
         el.innerHTML = `<span style="color:var(--muted);">●</span> Sin conectar · llena los datos y pulsa Guardar`;
@@ -4831,6 +4867,45 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     out.style.color = color;
   }
 
+  function _tdbCopiarIp(ip) {
+    navigator.clipboard?.writeText(ip).then(() => _showToast(`IP ${ip} copiada`), () => {});
+  }
+
+  const _TDB_PASO = { host: 'Host', puerto: 'Puerto', ssl: 'SSL', credenciales: 'Usuario y contraseña',
+                      permisos: 'Permisos', estructura: 'Tablas' };
+
+  // Cada paso con su resultado, y en el que falla, qué hacer. Si falla el SSL
+  // se ofrece conectar sin él, pero lo decide una persona: baja la seguridad.
+  function _tdbPintarPasos(pasos) {
+    const box = document.getElementById('tdb-pasos');
+    box.hidden = false;
+    box.innerHTML = pasos.map(p => {
+      const [cls, icon] = p.ok === true ? ['ok', 'check'] : p.ok === false ? ['mal', 'x'] : ['nada', 'circle'];
+      return `<div class="tdb-paso ${cls}"><i class="ti ti-${icon}" aria-hidden="true"></i><div>`
+        + `<div class="tdb-paso-t">${_TDB_PASO[p.id] || _esc(p.id)} <span class="tdb-paso-d">· ${_esc(p.detalle)}</span></div>`
+        + (p.ok === false && p.arreglo ? `<div class="tdb-paso-a">${_esc(p.arreglo)}</div>` : '')
+        + (p.codigo === 'ssl_no_soportado'
+            ? `<button type="button" class="btn-sm btn-sm-cancel" onclick="_tdbSinSsl()">Probar sin SSL</button>`
+            : '')
+        + `</div></div>`;
+    }).join('');
+  }
+
+  async function _tdbDiagnosticar(p) {
+    const r = await fetch('/api/tenant/db/test', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody(p)),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !Array.isArray(d.pasos)) throw new Error(d.error || `HTTP ${r.status}`);
+    _tdbPintarPasos(d.pasos);
+    return d;
+  }
+
+  function _tdbSinSsl() {
+    document.getElementById('tdb-ssl').checked = false;
+    testTenantDb(document.getElementById('tdb-probar'));
+  }
+
   async function testTenantDb(btn) {
     const p = _tdbPayload();
     const faltan = _tdbFaltantes(p);
@@ -4838,26 +4913,26 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     const original = btn.textContent;
     btn.disabled = true; btn.textContent = 'Probando…'; _tdbSay('', 'var(--muted)');
     try {
-      const r = await fetch('/api/tenant/db/test', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody(p)),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      _tdbSay(`Conectada en ${d.ms} ms` + (d.schema_ready ? ' · lista' : ' · falta preparar'), 'var(--success)');
+      const d = await _tdbDiagnosticar(p);
+      _tdbSay(d.ok ? 'Todo en orden: ya puedes guardar' : '', 'var(--success)');
     } catch (e) {
       _tdbSay(e.message, 'var(--danger)');
     } finally { btn.disabled = false; btn.textContent = original; }
   }
 
   // Guardar y preparar en un solo gesto: una conexión guardada sin las tablas
-  // del pipeline no sirve para nada, así que no son dos botones.
+  // del pipeline no sirve para nada, así que no son dos botones. Diagnostica
+  // ANTES de guardar: no se guarda una conexión que se sabe que no funciona.
   async function saveTenantDb(btn) {
     const p = _tdbPayload();
     const faltan = _tdbFaltantes(p);
     if (faltan.length) { _tdbSay(`Falta ${faltan.join(', ')}`, 'var(--danger)'); return; }
     const original = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Guardando…'; _tdbSay('', 'var(--muted)');
+    btn.disabled = true; btn.textContent = 'Probando…'; _tdbSay('', 'var(--muted)');
     try {
+      const diag = await _tdbDiagnosticar(p);
+      if (!diag.ok) { _tdbSay('Corrige el paso marcado y vuelve a guardar', 'var(--danger)'); return; }
+      btn.textContent = 'Guardando…';
       const r = await fetch('/api/tenant/db', {
         method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody(p)),
       });
@@ -4870,8 +4945,8 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       const pd = await pr.json().catch(() => ({}));
       if (!pr.ok) throw new Error(pd.error || `HTTP ${pr.status}`);
       document.getElementById('tdb-password').value = '';
+      await renderClientSettings();
       _tdbSay('Conectada y lista', 'var(--success)');
-      renderClientSettings();
     } catch (e) {
       _tdbSay(e.message, 'var(--danger)');
     } finally { btn.disabled = false; btn.textContent = original; }

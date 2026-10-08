@@ -5,18 +5,24 @@ import crypto from 'crypto';
 // AES-256-GCM de node:crypto: autenticado (alterar el blob rompe el descifrado)
 // y sin dependencias. Formato: v1.<iv>.<tag>.<ciphertext> en base64url.
 //
-// La clave viene de TENANT_DB_SECRET (64 hex = 32 bytes) y se resuelve al USAR,
-// no al importar, para que el módulo sea testeable sin entorno completo.
-// OJO: perder la clave vuelve irrecuperables las contraseñas guardadas; habría
-// que pedirlas de nuevo a cada cliente.
+// La clave viene de TENANT_DB_SECRET (64 hex = 32 bytes) si está definida. Si
+// no, se DERIVA de AUTH_SESSION_SECRET (obligatoria en producción, ver
+// server.ts), para que conectar la base de un cliente no exija tocar EasyPanel.
+// Se resuelve al USAR, no al importar, para que el módulo sea testeable.
+// OJO: perder o CAMBIAR la clave vuelve irrecuperables las contraseñas
+// guardadas. Sin TENANT_DB_SECRET, rotar AUTH_SESSION_SECRET (p. ej. para
+// cerrar todas las sesiones) obliga a reescribir la contraseña de cada base.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function key(): Buffer {
   const raw = (process.env.TENANT_DB_SECRET ?? '').trim();
-  if (!/^[0-9a-fA-F]{64}$/.test(raw)) {
-    throw new Error('TENANT_DB_SECRET debe ser 64 caracteres hex (32 bytes). Genera uno: openssl rand -hex 32');
+  if (/^[0-9a-fA-F]{64}$/.test(raw)) return Buffer.from(raw, 'hex');
+  const session = (process.env.AUTH_SESSION_SECRET ?? '').trim();
+  if (session) {
+    // La etiqueta separa esta clave de la de las cookies: misma raíz, usos distintos.
+    return Buffer.from(crypto.hkdfSync('sha256', session, '', 'zebra-tenant-db-v1', 32));
   }
-  return Buffer.from(raw, 'hex');
+  throw new Error('No hay clave para cifrar la contraseña de la base: el servidor necesita AUTH_SESSION_SECRET (o TENANT_DB_SECRET).');
 }
 
 export function encryptSecret(plain: string): string {

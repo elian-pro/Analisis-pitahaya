@@ -25,7 +25,7 @@ router.get('/', (_req, res) => {
     // `features` es lo que distingue una versión de otra sin necesidad de un
     // número de build: si esta clave no viene en la respuesta, lo desplegado es
     // anterior al pipeline de llamadas.
-    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta', 'analisis-automatico'],
+    features: ['calls-pipeline', 'calls-diagnostico', 'zcis-oferta', 'analisis-automatico', 'tenant-diagnostico'],
     proceso: {
       arrancadoEn: calls.arrancadoEn,
       uptimeMin:   calls.uptimeMin,

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AuthedRequest } from '../auth/middleware';
 import {
   getTenantDbConfig, saveTenantDbConfig, sealPassword, tenantPool, probeTenantDb,
-  ensureTenantSchema, errorDeConexion, TENANT_SCHEMA_DEFAULT, type TenantDbConfig,
+  ensureTenantSchema, errorDeConexion, ipSalida, TENANT_SCHEMA_DEFAULT, type TenantDbConfig,
 } from '../calls/tenant';
 import { getClient } from '../clients/manager';
 import { dbEnabled } from '../config/db';
@@ -35,8 +35,10 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: 'Falta client_id.' });
     return;
   }
-  const cfg = await getTenantDbConfig(clientId);
-  res.json(cfg ? { configured: true, ...redacted(cfg) } : { configured: false });
+  // La IP de salida va siempre: es el requisito que la tarjeta enseña ANTES de
+  // que haya nada configurado (el cliente tiene que dejarla entrar).
+  const [cfg, ip_salida] = await Promise.all([getTenantDbConfig(clientId), ipSalida()]);
+  res.json(cfg ? { configured: true, ip_salida, ...redacted(cfg) } : { configured: false, ip_salida });
 });
 
 const SaveSchema = z.object({
@@ -94,8 +96,9 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Prueba la conexión ANTES de generar nada: el error de credenciales se ve aquí
-// y no dentro de un job de cinco minutos.
+// Prueba la conexión ANTES de generar nada, paso a paso. Responde 200 aunque la
+// base falle: que la base del cliente no deje entrar no es un error de este
+// servidor, y la pantalla necesita los pasos para decir qué arreglar.
 router.post('/test', async (req: Request, res: Response): Promise<void> => {
   const user = (req as AuthedRequest).user;
   const clientId = resolveClientId(req as AuthedRequest);
@@ -133,12 +136,12 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
   }
   try {
     const r = await probeTenantDb(cfg);
-    if (stored && cfg === stored && clientId) {
+    if (r.ok && stored && cfg === stored && clientId) {
       await saveTenantDbConfig(clientId, { ...stored, probado_en: new Date().toISOString() });
     }
-    res.json({ ok: true, ...r });
+    res.json(r);
   } catch (e) {
-    res.status(502).json({ ok: false, error: errorDeConexion(e, cfg.host, cfg.port) });
+    res.status(500).json({ ok: false, error: (e as Error).message });
   }
 });
 
@@ -156,6 +159,8 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
   }
   try {
     await ensureTenantSchema(await tenantPool(clientId, cfg), cfg.schema);
+    // Preparar es la prueba más completa que hay: si llegó aquí, conecta y escribe.
+    await saveTenantDbConfig(clientId, { ...cfg, probado_en: new Date().toISOString() });
     res.json({ ok: true, schema: cfg.schema });
   } catch (e) {
     res.status(502).json({ error: errorDeConexion(e, cfg.host, cfg.port) });

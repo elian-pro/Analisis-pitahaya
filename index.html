@@ -678,6 +678,23 @@ body[data-theme="light"] .client-row.origen:not(.vinculado){background:var(--sur
 .tdb-paso.nada .tdb-paso-d{color:var(--faint)}
 .tdb-paso-a{color:var(--fg);margin-top:2px}
 .tdb-paso .btn-sm{margin-top:8px}
+/* Conectada: un resumen, no un formulario. El formulario solo aparece al
+   editar; con la base funcionando lo que importa es a dónde y desde cuándo. */
+.tdb-ok-estado{display:flex;align-items:center;gap:8px;font-size:var(--t-sec);font-weight:500;color:var(--success);margin:4px 0 10px}
+.tdb-ok-estado.mal{color:var(--danger)}
+.tdb-ok-estado::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 0 3px color-mix(in srgb, currentColor 18%, transparent)}
+.tdb-ok-dest{font-size:var(--t-head);font-weight:600;letter-spacing:var(--tk-head);color:var(--fg);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.3}
+.tdb-ok-dest span{color:var(--muted);font-weight:400}
+.tdb-ok-meta{display:flex;flex-wrap:wrap;gap:4px 18px;margin:12px 0 0;font-size:var(--t-sec);color:var(--muted)}
+.tdb-ok-meta b{color:var(--fg);font-weight:500}
+.tdb-ok-aviso{display:flex;gap:8px;align-items:flex-start;margin-top:16px;padding:9px 12px;border-radius:8px;
+  font-size:var(--t-sec);line-height:1.5;color:var(--warn);background:var(--warn-bg);border:0.5px solid var(--warn-border)}
+.tdb-ok-aviso i{font-size:15px;line-height:1.4;flex-shrink:0}
+.tdb-ok-acciones{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:18px}
+/* display:flex le gana al [hidden] del navegador: sin esto, ocultar no oculta. */
+.tdb-pasos[hidden],.tdb-ok-aviso[hidden]{display:none}
 .chip-row span{font-size:var(--t-label);letter-spacing:.02em;padding:3px 8px;border-radius:999px;
   border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap}
 .calls-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
@@ -1125,6 +1142,22 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     <div id="settings-client" style="display:none;max-width:560px;">
       <div class="card" style="margin-bottom:16px;">
         <div class="card-kicker" style="margin-bottom:12px;"><i class="ti ti-database ti-lead"></i>Tu base de datos</div>
+        <div id="tdb-ok" hidden>
+          <div class="tdb-ok-estado" id="tdb-ok-estado">Conectada</div>
+          <div class="tdb-ok-dest" id="tdb-ok-dest"></div>
+          <div class="tdb-ok-meta" id="tdb-ok-meta"></div>
+          <div class="tdb-ok-aviso" id="tdb-ok-aviso" hidden>
+            <i class="ti ti-lock-open" aria-hidden="true"></i>
+            <span>Sin SSL: los datos viajan sin cifrar. Cuando puedan, que lo activen en su Postgres y marca la casilla al editar.</span>
+          </div>
+          <div class="tdb-ok-acciones">
+            <button class="btn-sm btn-sm-cancel" onclick="retestTenantDb(this)">Probar de nuevo</button>
+            <button class="btn-sm btn-sm-cancel" onclick="_tdbModo('editar')">Editar conexión</button>
+            <span id="tdb-ok-result" style="font-size:var(--t-sec);color:var(--muted);"></span>
+          </div>
+          <div class="tdb-pasos" id="tdb-ok-pasos" hidden></div>
+        </div>
+        <div id="tdb-edit">
         <div id="tenant-db-status" style="font-size:var(--t-body);color:var(--muted);margin:10px 0 16px;">Cargando…</div>
         <div class="tdb-req">
           <div class="tdb-req-t">Antes de conectar, la base tiene que:</div>
@@ -1163,9 +1196,11 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <button class="btn-sm btn-sm-cancel" id="tdb-probar" onclick="testTenantDb(this)">Probar conexión</button>
           <button class="btn-sm btn-sm-green" onclick="saveTenantDb(this)">Guardar y preparar</button>
+          <button class="btn-sm btn-sm-cancel" id="tdb-cancelar" onclick="renderClientSettings()" hidden>Cancelar</button>
           <span id="tdb-result" style="font-size:var(--t-sec);color:var(--muted);"></span>
         </div>
         <div class="tdb-pasos" id="tdb-pasos" hidden></div>
+        </div><!-- /tdb-edit -->
       </div>
       <div class="card" id="tenant-account-card">
         <div class="card-kicker" style="margin-bottom:12px;"><i class="ti ti-user ti-lead"></i>Tu cuenta</div>
@@ -4798,7 +4833,11 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
     document.getElementById('tenant-account-email').textContent = ME?.email || '';
     const el = document.getElementById('tenant-db-status');
     document.getElementById('tdb-pasos').hidden = true;
+    document.getElementById('tdb-ok-pasos').hidden = true;
+    document.getElementById('tdb-ok-result').textContent = '';
     _tdbSay('', 'var(--muted)');
+    _tdbModo('editar');
+    document.getElementById('tdb-cancelar').hidden = true;
     try {
       const r = await fetch(`/api/tenant/db?${_tenantQS()}`);
       const d = await r.json();
@@ -4822,6 +4861,21 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
       document.getElementById('tdb-ssl').checked    = !!d.ssl;
       document.getElementById('tdb-pass-note').textContent = _tdbPasswordSet ? '· guardada' : '';
       const ok = !!d.probado_en;
+      // Guardada y probada: resumen. Guardada sin probar: formulario, que es
+      // donde se ve qué falla. Editar desde el resumen deja volver sin tocar nada.
+      document.getElementById('tdb-cancelar').hidden = !ok;
+      if (ok) {
+        document.getElementById('tdb-ok-dest').innerHTML =
+          `${_esc(d.host)}<span>:${d.port} / </span>${_esc(d.database)}`;
+        document.getElementById('tdb-ok-meta').innerHTML =
+          `<span>Usuario <b>${_esc(d.user)}</b></span>`
+          + `<span>Tablas en <b>${_esc(d.schema || 'zebra')}</b></span>`
+          + `<span id="tdb-ok-probada">Probada ${_fmtRelative(d.probado_en)}</span>`;
+        document.getElementById('tdb-ok-aviso').hidden = !!d.ssl;
+        const estado = document.getElementById('tdb-ok-estado');
+        estado.classList.remove('mal'); estado.textContent = 'Conectada';
+        _tdbModo('conectada');
+      }
       el.innerHTML =
         `<span style="color:${ok ? 'var(--success)' : 'var(--faint)'};">●</span> ` +
         `<code style="font-family:'Inter',sans-serif;font-size:var(--t-sec);">${_esc(d.host)}:${d.port}/${_esc(d.database)}</code>` +
@@ -4876,8 +4930,41 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
 
   // Cada paso con su resultado, y en el que falla, qué hacer. Si falla el SSL
   // se ofrece conectar sin él, pero lo decide una persona: baja la seguridad.
-  function _tdbPintarPasos(pasos) {
-    const box = document.getElementById('tdb-pasos');
+  function _tdbModo(modo) {
+    document.getElementById('tdb-ok').hidden   = modo !== 'conectada';
+    document.getElementById('tdb-edit').hidden = modo === 'conectada';
+  }
+
+  // Con la conexión guardada: el servidor prueba la que tiene (sin credenciales
+  // en el cuerpo) y, si pasa, renueva "probada". Los pasos solo salen si falla.
+  async function retestTenantDb(btn) {
+    const out = document.getElementById('tdb-ok-result');
+    const box = document.getElementById('tdb-ok-pasos');
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Probando…'; out.textContent = ''; box.hidden = true;
+    try {
+      const r = await fetch('/api/tenant/db/test', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(_tenantBody()),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !Array.isArray(d.pasos)) throw new Error(d.error || `HTTP ${r.status}`);
+      // El estado de arriba dice la verdad de la ÚLTIMA prueba, no la de guardar.
+      const estado = document.getElementById('tdb-ok-estado');
+      estado.classList.toggle('mal', !d.ok);
+      estado.textContent = d.ok ? 'Conectada' : 'No responde';
+      if (d.ok) {
+        out.style.color = 'var(--success)'; out.textContent = `Todo en orden · ${d.ms} ms`;
+        document.getElementById('tdb-ok-probada').textContent = 'Probada hace un momento';
+      } else {
+        out.style.color = 'var(--danger)'; out.textContent = 'Algo cambió en la base';
+        _tdbPintarPasos(d.pasos, box);
+      }
+    } catch (e) {
+      out.style.color = 'var(--danger)'; out.textContent = e.message;
+    } finally { btn.disabled = false; btn.textContent = original; }
+  }
+
+  function _tdbPintarPasos(pasos, box = document.getElementById('tdb-pasos')) {
     box.hidden = false;
     box.innerHTML = pasos.map(p => {
       const [cls, icon] = p.ok === true ? ['ok', 'check'] : p.ok === false ? ['mal', 'x'] : ['nada', 'circle'];
@@ -4902,6 +4989,7 @@ body.preview .viewer-card,body.preview .calls-detail-card{top:132px}
   }
 
   function _tdbSinSsl() {
+    _tdbModo('editar');   // desde el resumen: el cambio se prueba en el formulario
     document.getElementById('tdb-ssl').checked = false;
     testTenantDb(document.getElementById('tdb-probar'));
   }
